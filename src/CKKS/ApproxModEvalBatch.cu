@@ -70,7 +70,7 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
                                    FIDESlib::CKKS::Context& cc_,
                                    const std::vector<Ciphertext*>& ctxs,
                                    const std::vector<std::vector<double>>& weightsPerSlot) {
-	CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
+	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
 	assert(ctxs.size() == weightsPerSlot.size());
 	uint32_t n = static_cast<uint32_t>(ctxs.size());
 	assert(n > 0);
