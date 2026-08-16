@@ -64,6 +64,19 @@ Plaintext makePerSlotPlaintext(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
  * weightsPerSlot[i] is a per-slot vector (one weight per slot of ctxs[i]).
  * Mirrors Ciphertext::evalLinearWSumMutable, but with per-slot (plaintext)
  * weights instead of scalar weights. The result is written into `out`.
+ *
+ * IMPORTANT: exactly like Ciphertext::evalLinearWSumMutable, the caller is
+ * expected to have already set the TARGET level on `out` (via dropToLevel /
+ * growToLevel) before calling this function. Unlike the scalar version,
+ * however, multPt/addMultPt require the ciphertext and plaintext operands to
+ * sit at the SAME level (there is no per-limb "elem" projection like
+ * ElemForEvalMult does for scalar weights): Ciphertext::multPt(c, b, ...)
+ * starts with `this->copy(c)`, which would silently discard whatever level
+ * `out` had been dropped/grown to. To avoid that mismatch (and the resulting
+ * out-of-bounds RNS-limb access when ctxs[i] and out end up with a different
+ * number of limbs), we explicitly align a local copy of each ctxs[i] to
+ * out's target level before multiplying, and encode each per-slot plaintext
+ * weight at that same target level.
  */
 void evalLinearWSumMutablePtBatch(Ciphertext& out,
                                    lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
@@ -75,15 +88,35 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 	uint32_t n = static_cast<uint32_t>(ctxs.size());
 	assert(n > 0);
 
+	// Target level: whatever the caller already set on `out` via
+	// dropToLevel/growToLevel. If `out` has never been initialized (fresh
+	// Ciphertext, getLevel() == -1), fall back to ctxs[0]'s level, mirroring
+	// evalLinearWSumMutable's own fallback.
+	int32_t targetLevel = out.getLevel();
+	if (targetLevel < 0) {
+		targetLevel = ctxs[0]->getLevel();
+	}
+
+	std::vector<Ciphertext> aligned;
+	aligned.reserve(n);
+	for (uint32_t i = 0; i < n; ++i) {
+		aligned.emplace_back(cc_);
+		aligned.back().copy(*ctxs[i]);
+		if (aligned.back().NoiseLevel == 2)
+			aligned.back().rescale();
+		aligned.back().growToLevel(targetLevel);
+		aligned.back().dropToLevel(targetLevel);
+	}
+
 	std::vector<Plaintext> weightPts;
 	weightPts.reserve(n);
 	for (uint32_t i = 0; i < n; ++i) {
-		weightPts.emplace_back(makePerSlotPlaintext(cc, cc_, weightsPerSlot[i], *ctxs[i]));
+		weightPts.emplace_back(makePerSlotPlaintext(cc, cc_, weightsPerSlot[i], aligned[i]));
 	}
 
-	out.multPt(*ctxs[0], weightPts[0], false);
+	out.multPt(aligned[0], weightPts[0], false);
 	for (uint32_t i = 1; i < n; ++i) {
-		out.addMultPt(*ctxs[i], weightPts[i], false);
+		out.addMultPt(aligned[i], weightPts[i], false);
 	}
 
 	if (out.cc.rescaleTechnique == FIDESlib::CKKS::FIXEDMANUAL) {
