@@ -1671,16 +1671,18 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatch(
     const Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b) {
 	FIDESlib::CudaNvtxRange r("API");
  
-	// Fall back to CPU. Requires the batched Chebyshev fork of OpenFHE
-	// (AdvancedSHECKKSRNS::EvalChebyshevSeriesPSBatch), e.g.
-	// lorenzorovida/openfhe-development-chebyshevSIMD.
+	// NOTE: unlike EvalChebyshevSeries, there is no CPU fallback here: plain
+	// OpenFHE has no per-slot Chebyshev evaluator. Only
+	// lorenzorovida/openfhe-development-chebyshevSIMD provides
+	// lbcrypto::CryptoContext<DCRTPoly>::EvalChebyshevSeriesPSBatch on the
+	// CPU side. If you need CPU support, either link against that fork and
+	// re-enable the branch below, or run this only with devices configured.
 	if (this->devices.empty()) {
-		auto& context               = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl                = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto res                    = context->EvalChebyshevSeriesPSBatch(ctImpl, batchOfCoeffs, a, b);
-		Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		result->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(res);
-		return result;
+		OPENFHE_THROW(
+		    "EvalChebyshevSeriesPSBatch has no CPU fallback with the OpenFHE "
+		    "library currently linked. Configure at least one GPU device, or "
+		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+		    "to enable the CPU path.");
 	}
  
 	// GPU path.
@@ -1698,14 +1700,12 @@ void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchInPlace(
     Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b) {
 	FIDESlib::CudaNvtxRange r("API");
  
-	// Fall back to CPU.
 	if (this->devices.empty()) {
-		auto& context = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		EnsureMutableCpuCiphertext(ct);
-		auto& ctImpl = std::any_cast<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto res     = context->EvalChebyshevSeriesPSBatch(ctImpl, batchOfCoeffs, a, b);
-		ct->cpu      = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(res);
-		return;
+		OPENFHE_THROW(
+		    "EvalChebyshevSeriesPSBatchInPlace has no CPU fallback with the OpenFHE "
+		    "library currently linked. Configure at least one GPU device, or "
+		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+		    "to enable the CPU path.");
 	}
  
 	// GPU path.
@@ -1715,6 +1715,7 @@ void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchInPlace(
 	auto res_gpu  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
 	FIDESlib::CKKS::evalChebyshevSeriesPSBatch(context, *res_gpu, batchOfCoeffs, a, b);
 }
+
 
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::Rescale(const Ciphertext<DCRTPoly>& ciphertext) {
