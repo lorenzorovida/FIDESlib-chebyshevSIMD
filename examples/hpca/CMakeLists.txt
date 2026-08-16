@@ -56,3 +56,7 @@ target_link_libraries (04_optimizations PRIVATE fideslib::fideslib)
 add_executable (05_gaussian)
 target_sources(05_gaussian PRIVATE src/05_gaussian.cpp)
 target_link_libraries (05_gaussian PRIVATE fideslib::fideslib)
+
+add_executable (06_chebyshev_batch)
+target_sources(06_chebyshev_batch PRIVATE src/06_chebyshev_batch.cpp)
+target_link_libraries (06_chebyshev_batch PRIVATE fideslib::fideslib)

@@ -10,6 +10,7 @@
 #include "CKKS/Plaintext.cuh"
 #include "CKKS/forwardDefs.cuh"
 #include "CKKS/openfhe-interface/RawCiphertext.cuh"
+#include "CKKS/ApproxModEvalBatch.cuh"
 #include "CudaUtils.cuh"
 #include "Definitions.hpp"
 #include "PolyApprox.cuh"
@@ -1665,6 +1666,56 @@ std::vector<double> CryptoContextImpl<DCRTPoly>::GetChebyshevCoefficients(std::f
 	FIDESlib::CudaNvtxRange r("API");
 	return FIDESlib::CKKS::get_chebyshev_coefficients(func, a, b, degree);
 }
+
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatch(
+    const Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b) {
+	FIDESlib::CudaNvtxRange r("API");
+ 
+	// Fall back to CPU. Requires the batched Chebyshev fork of OpenFHE
+	// (AdvancedSHECKKSRNS::EvalChebyshevSeriesPSBatch), e.g.
+	// lorenzorovida/openfhe-development-chebyshevSIMD.
+	if (this->devices.empty()) {
+		auto& context               = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ctImpl                = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+		auto res                    = context->EvalChebyshevSeriesPSBatch(ctImpl, batchOfCoeffs, a, b);
+		Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
+		result->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(res);
+		return result;
+	}
+ 
+	// GPU path.
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
+ 
+	auto& context               = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
+	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	FIDESlib::CKKS::evalChebyshevSeriesPSBatch(context, *res_gpu, batchOfCoeffs, a, b);
+ 
+	return result;
+}
+ 
+void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchInPlace(
+    Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b) {
+	FIDESlib::CudaNvtxRange r("API");
+ 
+	// Fall back to CPU.
+	if (this->devices.empty()) {
+		auto& context = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		EnsureMutableCpuCiphertext(ct);
+		auto& ctImpl = std::any_cast<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+		auto res     = context->EvalChebyshevSeriesPSBatch(ctImpl, batchOfCoeffs, a, b);
+		ct->cpu      = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(res);
+		return;
+	}
+ 
+	// GPU path.
+	this->LoadCiphertext(ct);
+ 
+	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	auto res_gpu  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
+	FIDESlib::CKKS::evalChebyshevSeriesPSBatch(context, *res_gpu, batchOfCoeffs, a, b);
+}
+
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::Rescale(const Ciphertext<DCRTPoly>& ciphertext) {
 	FIDESlib::CudaNvtxRange r("API");

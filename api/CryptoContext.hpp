@@ -176,6 +176,19 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	Ciphertext<DCRTPoly> EvalChebyshevSeries(const Ciphertext<DCRTPoly>& ct, std::vector<double>& coeffs, double a, double b);
 	void EvalChebyshevSeriesInPlace(Ciphertext<DCRTPoly>& ct, std::vector<double>& coeffs, double a, double b);
 	static std::vector<double> GetChebyshevCoefficients(std::function<double(double)>& func, double a, double b, size_t degree);
+ 
+	// Batched (SIMD) Chebyshev series evaluation: evaluates a DIFFERENT
+	// polynomial per slot. batchOfCoeffs[j] holds the Chebyshev coefficients
+	// applied to slot j; batchOfCoeffs.size() must equal ct's slot count, and
+	// every inner vector must have the same size (same degree).
+	Ciphertext<DCRTPoly> EvalChebyshevSeriesPSBatch(const Ciphertext<DCRTPoly>& ct,
+	                                                 const std::vector<std::vector<double>>& batchOfCoeffs,
+	                                                 double a, double b);
+	void EvalChebyshevSeriesPSBatchInPlace(Ciphertext<DCRTPoly>& ct,
+	                                        const std::vector<std::vector<double>>& batchOfCoeffs,
+	                                        double a, double b);
+
+
 
 	Ciphertext<DCRTPoly> Rescale(const Ciphertext<DCRTPoly>& ciphertext);
 	void RescaleInPlace(Ciphertext<DCRTPoly>& ciphertext);
