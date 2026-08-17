@@ -47,14 +47,30 @@ namespace {
  * This is the batched-coefficient equivalent of a bare scalar constant in the
  * non-batched algorithm: instead of a single double reused on every slot, we
  * need one double per slot.
+ *
+ * IMPORTANT: level convention mismatch. FIDESlib's core Ciphertext::getLevel()
+ * counts DOWN from cc.L (a freshly-encrypted ciphertext has getLevel() == L,
+ * and getLevel() decreases as depth is consumed) — see api/Ciphertext.cpp's
+ * GetLevel(), which explicitly does `maxDepth - ct_gpu->getLevel()` to convert
+ * to the OpenFHE-style level. lbcrypto::CryptoContext::MakeCKKSPackedPlaintext,
+ * on the other hand, uses the OpenFHE convention: level COUNTS UP from 0 (a
+ * freshly-encrypted ciphertext is at level 0, and level increases as depth is
+ * consumed). Passing like.getLevel() directly encodes the plaintext with a
+ * drastically wrong number of RNS limbs (e.g. requesting level == L, which
+ * OpenFHE reads as "L levels of depth already consumed", i.e. almost no
+ * limbs left) — this silently produces a plaintext whose limb count does not
+ * match the ciphertext it is meant to be combined with, and multPt/addMultPt
+ * then read/write out of bounds. We convert explicitly via cc.L before
+ * calling into OpenFHE.
  */
 Plaintext makePerSlotPlaintext(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
                                 FIDESlib::CKKS::Context& cc_,
                                 const std::vector<double>& values,
                                 const Ciphertext& like) {
-	auto pt = cc->MakeCKKSPackedPlaintext(values, /*noiseScaleDeg=*/1,
-	                                       /*level=*/like.getLevel(), nullptr,
-	                                       /*slots=*/like.slots);
+	uint32_t openfheLevel = static_cast<uint32_t>(like.cc.L - like.getLevel());
+	auto pt               = cc->MakeCKKSPackedPlaintext(values, /*noiseScaleDeg=*/1,
+	                                                      /*level=*/openfheLevel, nullptr,
+	                                                      /*slots=*/like.slots);
 	FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 	return Plaintext(cc_, raw);
 }
