@@ -9,7 +9,6 @@
 #include <iostream>
 // Uncomment to trace level/NoiseLevel at key checkpoints, mirrored in
 // ApproxModEvalBatch.cu, for side-by-side debugging against the batch port.
-#define DEBUG_CHEBYSHEV_TRACE 0
 #if defined(__clang__)
 #include <experimental/source_location>
 using sc = std::experimental::source_location;
@@ -364,15 +363,8 @@ Ciphertext<DCRTPoly> AdvancedSHECKKSRNS::InnerEvalChebyshevPS(ConstCiphertext<DC
 		}
 		if (cc.rescaleTechnique == FIXEDMANUAL && out.NoiseLevel == 2)
 			cu.rescale();
-#ifdef DEBUG_CHEBYSHEV_TRACE
-		std::cout << "[SCALAR] inner before mult(qu): cu level=" << cu.getLevel() << " noise=" << cu.NoiseLevel << " | qu level=" << qu.getLevel()
-				  << " noise=" << qu.NoiseLevel << " | su level=" << su.getLevel() << " noise=" << su.NoiseLevel << std::endl;
-#endif
 		cu.mult(qu, false);
 		cu.add(su); // cu aliases out
-#ifdef DEBUG_CHEBYSHEV_TRACE
-		std::cout << "[SCALAR] inner after combine: level=" << cu.getLevel() << " noise=" << cu.NoiseLevel << std::endl;
-#endif
 	}
 }
 
@@ -571,10 +563,6 @@ const std::vector<double>& coefficients, double a, double b) const {
 		if (T[i - 1]->NoiseLevel == 2)
 			T[i - 1]->rescale();
 	}
-#ifdef DEBUG_CHEBYSHEV_TRACE
-	for (size_t i = 0; i < k; i++)
-		std::cout << "[SCALAR] T[" << i << "] level=" << T[i]->getLevel() << " noise=" << T[i]->NoiseLevel << std::endl;
-#endif
 
 	if (cc.rescaleTechnique == CKKS::FIXEDMANUAL) {
 
@@ -628,10 +616,6 @@ const std::vector<double>& coefficients, double a, double b) const {
 		if (cc.rescaleTechnique == FIXEDMANUAL && T2[i]->NoiseLevel == 2)
 			T2[i]->rescale();
 	}
-#ifdef DEBUG_CHEBYSHEV_TRACE
-	for (size_t i = 0; i < m; i++)
-		std::cout << "[SCALAR] T2[" << i << "] level=" << T2[i]->getLevel() << " noise=" << T2[i]->NoiseLevel << std::endl;
-#endif
 
 	if constexpr (PRINT) {
 		for (size_t j = 0; j < m; ++j) {
@@ -687,9 +671,7 @@ const std::vector<double>& coefficients, double a, double b) const {
 		if constexpr (sync)
 			cudaDeviceSynchronize();
 	}
-#ifdef DEBUG_CHEBYSHEV_TRACE
-	std::cout << "[SCALAR] T2km1 level=" << T2km1.getLevel() << " noise=" << T2km1.NoiseLevel << std::endl;
-#endif
+
 	if constexpr (PRINT) {
 		std::cout << "T2kmi cheby " << T2km1.getLevel() << " " << T2km1.NoiseLevel << std::endl;
 		for (auto& i : T2km1.c0.GPU.at(0).limb) {
@@ -719,14 +701,8 @@ const std::vector<double>& coefficients, double a, double b) const {
 		innerEvalChebyshevPS(ctxt, ctxt, f2, k, m, T, T2, 0, m);
 		// ctxt.copy(out);
 	}
-#ifdef DEBUG_CHEBYSHEV_TRACE
-	std::cout << "[SCALAR] after innerEvalChebyshevPS (before final sub): level=" << ctxt.getLevel() << " noise=" << ctxt.NoiseLevel << std::endl;
-#endif
 
 	ctxt.sub(T2km1);
-#ifdef DEBUG_CHEBYSHEV_TRACE
-	std::cout << "[SCALAR] FINAL: level=" << ctxt.getLevel() << " noise=" << ctxt.NoiseLevel << std::endl;
-#endif
 	/*
 
 	Ciphertext<DCRTPoly> result;
