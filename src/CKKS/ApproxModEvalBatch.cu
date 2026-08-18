@@ -157,26 +157,25 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 /**
  * Adds, per-slot, `values[j]` to `ctxt` (per-slot version of addScalar).
  *
- * IMPORTANT: unlike Ciphertext::addScalar(double), which internally computes
- * the correctly-scaled modular constant via
+ * Unlike Ciphertext::addScalar(double), which internally computes the
+ * correctly-scaled modular constant via
  * cc.ElemForEvalAddOrSub(level, c, this->NoiseLevel) -- i.e. it adapts to
- * whatever NoiseLevel `this` currently has (1 or 2) -- a Plaintext built by
- * MakeCKKSPackedPlaintext(..., noiseScaleDeg=1, ...) is always encoded
- * assuming NoiseLevel == 1. Ciphertext::addPt(const Plaintext&) does not
- * renormalize a mismatch away (its assert(NoiseLevel == b.NoiseLevel) is
- * compiled out in release builds), so adding this plaintext to a ciphertext
- * that is currently at NoiseLevel == 2 silently combines values encoded at
- * different scales, producing a constant per-slot additive error. We
- * therefore force ctxt to NoiseLevel == 1 (via rescale) before building and
- * adding the plaintext, regardless of rescaleTechnique -- mirroring what
- * addScalar achieves dynamically.
+ * whatever NoiseLevel `this` currently has (1 or 2) without consuming an
+ * extra rescale -- a Plaintext must be encoded with a specific
+ * noiseScaleDeg. makePerSlotPlaintext already reads `like.NoiseLevel`
+ * dynamically and encodes accordingly (see its doc comment), so this
+ * function does NOT force a rescale of `ctxt` first: doing so would consume
+ * an extra NoiseLevel step relative to the scalar original, desynchronizing
+ * every subsequent level/NoiseLevel-dependent decision in the caller (this
+ * was the root cause of a NoiseLevel==0 "double rescale" bug: callers such as
+ * the q/s evaluation branches that unconditionally rescale once afterward,
+ * mirroring the scalar original's own single rescale, would otherwise
+ * rescale a `ctxt` that had already been silently rescaled here).
  */
 void addPerSlotScalar(Ciphertext& ctxt,
                        lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
                        FIDESlib::CKKS::Context& cc_,
                        const std::vector<double>& values) {
-	if (ctxt.NoiseLevel == 2)
-		ctxt.rescale();
 	Plaintext pt = makePerSlotPlaintext(cc, cc_, values, ctxt);
 	ctxt.addPt(pt);
 }
