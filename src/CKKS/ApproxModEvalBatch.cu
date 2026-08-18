@@ -27,6 +27,10 @@
 #include "CKKS/Context.cuh"
 #include "CKKS/Plaintext.cuh"
 #include "CudaUtils.cuh"
+#include <iostream>
+// Uncomment to trace level/NoiseLevel at key checkpoints, mirrored in
+// ApproxModEval.cu, for side-by-side debugging against the scalar original.
+#define DEBUG_CHEBYSHEV_TRACE 1
 
 #if defined(__clang__)
 #include <experimental/source_location>
@@ -442,8 +446,15 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 	}
 	if (ccd.rescaleTechnique == FIXEDMANUAL && out.NoiseLevel == 2)
 		cu.rescale();
+#ifdef DEBUG_CHEBYSHEV_TRACE
+	std::cout << "[BATCH] inner before mult(qu): cu level=" << cu.getLevel() << " noise=" << cu.NoiseLevel << " | qu level=" << qu.getLevel()
+			  << " noise=" << qu.NoiseLevel << " | su level=" << su.getLevel() << " noise=" << su.NoiseLevel << std::endl;
+#endif
 	cu.mult(qu, false);
 	cu.add(su); // cu aliases out
+#ifdef DEBUG_CHEBYSHEV_TRACE
+	std::cout << "[BATCH] inner after combine: level=" << cu.getLevel() << " noise=" << cu.NoiseLevel << std::endl;
+#endif
 }
 
 } // namespace
@@ -515,6 +526,9 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatch(lbcrypto::CryptoContext<lbcrypto
 	T[0]->copy(ctxt);
 	if (T[0]->NoiseLevel == 2)
 		T[0]->rescale();
+#ifdef DEBUG_CHEBYSHEV_TRACE
+	std::cout << "[BATCH] after T[0] copy+rescale: level=" << T[0]->getLevel() << " noise=" << T[0]->NoiseLevel << std::endl;
+#endif
 
 	for (uint32_t i = 2; i <= k; i++) {
 		if (i % 2 == 1) {
@@ -540,6 +554,10 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatch(lbcrypto::CryptoContext<lbcrypto
 		if (T[i - 1]->NoiseLevel == 2)
 			T[i - 1]->rescale();
 	}
+#ifdef DEBUG_CHEBYSHEV_TRACE
+	for (size_t i = 0; i < k; i++)
+		std::cout << "[BATCH] T[" << i << "] level=" << T[i]->getLevel() << " noise=" << T[i]->NoiseLevel << std::endl;
+#endif
 
 	if (ccd.rescaleTechnique == CKKS::FIXEDMANUAL) {
 		for (size_t i = 1; i < k; i++) {
@@ -559,6 +577,10 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatch(lbcrypto::CryptoContext<lbcrypto
 		if (ccd.rescaleTechnique == FIXEDMANUAL && T2[i]->NoiseLevel == 2)
 			T2[i]->rescale();
 	}
+#ifdef DEBUG_CHEBYSHEV_TRACE
+	for (size_t i = 0; i < m; i++)
+		std::cout << "[BATCH] T2[" << i << "] level=" << T2[i]->getLevel() << " noise=" << T2[i]->NoiseLevel << std::endl;
+#endif
 
 	// computes T_{k(2*m - 1)}(y)
 	Ciphertext T2km1(cc_);
@@ -577,9 +599,19 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatch(lbcrypto::CryptoContext<lbcrypto
 		if (T2[0]->NoiseLevel == 2 && i < m - 1)
 			T2km1.rescale();
 	}
+#ifdef DEBUG_CHEBYSHEV_TRACE
+	std::cout << "[BATCH] T2km1 level=" << T2km1.getLevel() << " noise=" << T2km1.NoiseLevel << std::endl;
+#endif
 
 	// --- Batched Paterson-Stockmeyer evaluation ---
 	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m);
+#ifdef DEBUG_CHEBYSHEV_TRACE
+	std::cout << "[BATCH] after innerEvalChebyshevPSBatch (before final sub): level=" << ctxt.getLevel() << " noise=" << ctxt.NoiseLevel
+			  << std::endl;
+#endif
 
 	ctxt.sub(T2km1);
+#ifdef DEBUG_CHEBYSHEV_TRACE
+	std::cout << "[BATCH] FINAL: level=" << ctxt.getLevel() << " noise=" << ctxt.NoiseLevel << std::endl;
+#endif
 }
