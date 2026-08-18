@@ -30,7 +30,7 @@
 #include <iostream>
 // Uncomment to trace level/NoiseLevel at key checkpoints, mirrored in
 // ApproxModEval.cu, for side-by-side debugging against the scalar original.
-#define DEBUG_CHEBYSHEV_TRACE 1
+#define DEBUG_CHEBYSHEV_TRACE 0
 
 #if defined(__clang__)
 #include <experimental/source_location>

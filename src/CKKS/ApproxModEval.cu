@@ -9,7 +9,7 @@
 #include <iostream>
 // Uncomment to trace level/NoiseLevel at key checkpoints, mirrored in
 // ApproxModEvalBatch.cu, for side-by-side debugging against the batch port.
-#define DEBUG_CHEBYSHEV_TRACE 1
+#define DEBUG_CHEBYSHEV_TRACE 0
 #if defined(__clang__)
 #include <experimental/source_location>
 using sc = std::experimental::source_location;
