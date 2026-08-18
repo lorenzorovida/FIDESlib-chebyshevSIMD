@@ -198,10 +198,6 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	                                                const std::vector<std::vector<double>>& coefficientSets,
 	                                                double a, double b);
  
-	static std::vector<double> GetChebyshevCoefficients(std::function<double(double)>& func, double a, double b, size_t degree);
-
-
-
 
 
 	Ciphertext<DCRTPoly> Rescale(const Ciphertext<DCRTPoly>& ciphertext);
