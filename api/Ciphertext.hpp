@@ -38,6 +38,7 @@ template <> class CiphertextImpl<DCRTPoly> {
 
     size_t GetLevel() const;
 	size_t GetNoiseScaleDeg() const;
+	size_t GetSlots() const;
 
 	// ---- Setters ----
 	void SetSlots(size_t slots);

@@ -80,6 +80,18 @@ size_t CiphertextImpl<DCRTPoly>::GetNoiseScaleDeg() const {
 	return ct_gpu->NoiseLevel;
 }
 
+size_t CiphertextImpl<DCRTPoly>::GetSlots() const {
+	if (!this->loaded) {
+		// Fall back to CPU.
+		auto& ct = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(this->cpu);
+		return ct->GetSlots();
+	}
+
+	// GPU path. Depth is reversed in FIDESlib, must do depth = maxDepth - depth
+	auto ct_gpu	  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->parent_context->GetDeviceCiphertext(this->gpu));
+	return ct_gpu.slots;
+}
+
 // ---- Setters ----
 
 void CiphertextImpl<DCRTPoly>::SetSlots(size_t slots) {
