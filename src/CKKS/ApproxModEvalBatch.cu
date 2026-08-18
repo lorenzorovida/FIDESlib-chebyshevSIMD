@@ -48,28 +48,38 @@ namespace {
  * non-batched algorithm: instead of a single double reused on every slot, we
  * need one double per slot.
  *
- * IMPORTANT: level convention mismatch. FIDESlib's core Ciphertext::getLevel()
- * counts DOWN from cc.L (a freshly-encrypted ciphertext has getLevel() == L,
- * and getLevel() decreases as depth is consumed) — see api/Ciphertext.cpp's
- * GetLevel(), which explicitly does `maxDepth - ct_gpu->getLevel()` to convert
- * to the OpenFHE-style level. lbcrypto::CryptoContext::MakeCKKSPackedPlaintext,
- * on the other hand, uses the OpenFHE convention: level COUNTS UP from 0 (a
- * freshly-encrypted ciphertext is at level 0, and level increases as depth is
- * consumed). Passing like.getLevel() directly encodes the plaintext with a
- * drastically wrong number of RNS limbs (e.g. requesting level == L, which
- * OpenFHE reads as "L levels of depth already consumed", i.e. almost no
- * limbs left) — this silently produces a plaintext whose limb count does not
- * match the ciphertext it is meant to be combined with, and multPt/addMultPt
- * then read/write out of bounds. We convert explicitly via cc.L before
- * calling into OpenFHE.
+ * IMPORTANT (1) — level convention mismatch. FIDESlib's core
+ * Ciphertext::getLevel() counts DOWN from cc.L (a freshly-encrypted
+ * ciphertext has getLevel() == L, and getLevel() decreases as depth is
+ * consumed) — see api/Ciphertext.cpp's GetLevel(), which explicitly does
+ * `maxDepth - ct_gpu->getLevel()` to convert to the OpenFHE-style level.
+ * lbcrypto::CryptoContext::MakeCKKSPackedPlaintext, on the other hand, uses
+ * the OpenFHE convention: level COUNTS UP from 0. We convert explicitly via
+ * cc.L before calling into OpenFHE.
+ *
+ * IMPORTANT (2) — noise/scale degree mismatch. Ciphertext::addScalar(double)
+ * computes its modular constant via
+ * cc.ElemForEvalAddOrSub(level, c, this->NoiseLevel), i.e. it adapts
+ * dynamically to whatever NoiseLevel (1 or 2) the target ciphertext currently
+ * has. A Plaintext, however, is encoded once with a fixed noiseScaleDeg.
+ * Ciphertext::addPt/multPt do not renormalize a NoiseLevel mismatch away
+ * (the relevant asserts are compiled out in release builds), so encoding
+ * every per-slot plaintext at a hardcoded noiseScaleDeg=1 silently produces
+ * wrong results whenever `like` happens to be at NoiseLevel==2 (e.g. under
+ * FLEXIBLEAUTO, where several call sites only rescale conditionally on
+ * FIXEDMANUAL). We therefore encode at `like.NoiseLevel` instead of a fixed
+ * 1, so the plaintext always matches the real scale of the ciphertext it
+ * will be combined with — without having to mutate `like` itself (important
+ * when `like` is a shared object such as T2[] reused across recursive calls).
  */
 Plaintext makePerSlotPlaintext(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
                                 FIDESlib::CKKS::Context& cc_,
                                 const std::vector<double>& values,
                                 const Ciphertext& like) {
 	uint32_t openfheLevel = static_cast<uint32_t>(like.cc.L - like.getLevel());
-	auto pt               = cc->MakeCKKSPackedPlaintext(values, /*noiseScaleDeg=*/1,
-	                                                      /*level=*/openfheLevel, nullptr,
+	size_t noiseScaleDeg   = static_cast<size_t>(like.NoiseLevel);
+	auto pt                = cc->MakeCKKSPackedPlaintext(values, /*noiseScaleDeg=*/noiseScaleDeg,
+	                                                       /*level=*/openfheLevel, nullptr,
 	                                                      /*slots=*/like.slots);
 	FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 	return Plaintext(cc_, raw);
@@ -140,11 +150,29 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 	}
 }
 
-/** Adds, per-slot, `values[j]` to `ctxt` (per-slot version of addScalar). */
+/**
+ * Adds, per-slot, `values[j]` to `ctxt` (per-slot version of addScalar).
+ *
+ * IMPORTANT: unlike Ciphertext::addScalar(double), which internally computes
+ * the correctly-scaled modular constant via
+ * cc.ElemForEvalAddOrSub(level, c, this->NoiseLevel) -- i.e. it adapts to
+ * whatever NoiseLevel `this` currently has (1 or 2) -- a Plaintext built by
+ * MakeCKKSPackedPlaintext(..., noiseScaleDeg=1, ...) is always encoded
+ * assuming NoiseLevel == 1. Ciphertext::addPt(const Plaintext&) does not
+ * renormalize a mismatch away (its assert(NoiseLevel == b.NoiseLevel) is
+ * compiled out in release builds), so adding this plaintext to a ciphertext
+ * that is currently at NoiseLevel == 2 silently combines values encoded at
+ * different scales, producing a constant per-slot additive error. We
+ * therefore force ctxt to NoiseLevel == 1 (via rescale) before building and
+ * adding the plaintext, regardless of rescaleTechnique -- mirroring what
+ * addScalar achieves dynamically.
+ */
 void addPerSlotScalar(Ciphertext& ctxt,
                        lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
                        FIDESlib::CKKS::Context& cc_,
                        const std::vector<double>& values) {
+	if (ctxt.NoiseLevel == 2)
+		ctxt.rescale();
 	Plaintext pt = makePerSlotPlaintext(cc, cc_, values, ctxt);
 	ctxt.addPt(pt);
 }
@@ -152,6 +180,10 @@ void addPerSlotScalar(Ciphertext& ctxt,
 /**
  * ctxt = src * (per-slot weights). Per-slot version of
  * Ciphertext::multScalar(src, weight, rescale).
+ *
+ * makePerSlotPlaintext already adapts its noiseScaleDeg to src's real
+ * NoiseLevel (see its doc comment), so this works correctly regardless of
+ * src's NoiseLevel; no rescale of src is needed or performed here.
  */
 void multPerSlotScalar(Ciphertext& ctxt,
                         lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
