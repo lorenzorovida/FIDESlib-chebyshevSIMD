@@ -1716,6 +1716,52 @@ void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchInPlace(
 	FIDESlib::CKKS::evalChebyshevSeriesPSBatch(context, *res_gpu, batchOfCoeffs, a, b);
 }
 
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchRepeated(
+    const Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& coefficientSets, double a, double b) {
+	FIDESlib::CudaNvtxRange r("API");
+ 
+	// Same CPU-fallback caveat as EvalChebyshevSeriesPSBatch: no plain-OpenFHE
+	// equivalent exists.
+	if (this->devices.empty()) {
+		OPENFHE_THROW(
+		    "EvalChebyshevSeriesPSBatchRepeated has no CPU fallback with the OpenFHE "
+		    "library currently linked. Configure at least one GPU device, or "
+		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+		    "to enable the CPU path.");
+	}
+ 
+	// GPU path.
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
+ 
+	auto& context               = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
+	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	FIDESlib::CKKS::evalChebyshevSeriesPSBatchRepeated(context, *res_gpu, coefficientSets, a, b);
+ 
+	return result;
+}
+ 
+void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchRepeatedInPlace(
+    Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& coefficientSets, double a, double b) {
+	FIDESlib::CudaNvtxRange r("API");
+ 
+	if (this->devices.empty()) {
+		OPENFHE_THROW(
+		    "EvalChebyshevSeriesPSBatchRepeatedInPlace has no CPU fallback with the OpenFHE "
+		    "library currently linked. Configure at least one GPU device, or "
+		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+		    "to enable the CPU path.");
+	}
+ 
+	// GPU path.
+	this->LoadCiphertext(ct);
+ 
+	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	auto res_gpu  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
+	FIDESlib::CKKS::evalChebyshevSeriesPSBatchRepeated(context, *res_gpu, coefficientSets, a, b);
+}
+
+
 
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::Rescale(const Ciphertext<DCRTPoly>& ciphertext) {

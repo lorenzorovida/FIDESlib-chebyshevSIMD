@@ -187,6 +187,20 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	void EvalChebyshevSeriesPSBatchInPlace(Ciphertext<DCRTPoly>& ct,
 	                                        const std::vector<std::vector<double>>& batchOfCoeffs,
 	                                        double a, double b);
+ 
+	// Like EvalChebyshevSeriesPSBatch, but takes a small set of coefficient
+	// sets and repeats them cyclically to fill all slots (slot j uses
+	// coefficientSets[j % coefficientSets.size()]).
+	Ciphertext<DCRTPoly> EvalChebyshevSeriesPSBatchRepeated(const Ciphertext<DCRTPoly>& ct,
+	                                                         const std::vector<std::vector<double>>& coefficientSets,
+	                                                         double a, double b);
+	void EvalChebyshevSeriesPSBatchRepeatedInPlace(Ciphertext<DCRTPoly>& ct,
+	                                                const std::vector<std::vector<double>>& coefficientSets,
+	                                                double a, double b);
+ 
+	static std::vector<double> GetChebyshevCoefficients(std::function<double(double)>& func, double a, double b, size_t degree);
+
+
 
 
 

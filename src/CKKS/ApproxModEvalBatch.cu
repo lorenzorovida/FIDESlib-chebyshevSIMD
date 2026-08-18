@@ -585,3 +585,26 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatch(lbcrypto::CryptoContext<lbcrypto
 
 	ctxt.sub(T2km1);
 }
+
+void FIDESlib::CKKS::evalChebyshevSeriesPSBatchRepeated(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+                                                          Ciphertext& ctxt,
+                                                          const std::vector<std::vector<double>>& coefficientSets,
+                                                          double lower_bound,
+                                                          double upper_bound) {
+	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
+
+	if (coefficientSets.empty())
+		OPENFHE_THROW("coefficientSets must not be empty");
+
+	// Expand the small repeating pattern into a full per-slot batch (one
+	// entry per slot, cycling through coefficientSets), then delegate to
+	// evalChebyshevSeriesPSBatch, which already validates equal degree,
+	// slot-count match, etc.
+	std::vector<std::vector<double>> batchOfCoefficients;
+	batchOfCoefficients.reserve(static_cast<size_t>(ctxt.slots));
+	for (int j = 0; j < ctxt.slots; ++j) {
+		batchOfCoefficients.push_back(coefficientSets[static_cast<size_t>(j) % coefficientSets.size()]);
+	}
+
+	evalChebyshevSeriesPSBatch(cc, ctxt, batchOfCoefficients, lower_bound, upper_bound);
+}

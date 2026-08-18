@@ -78,6 +78,36 @@ void evalChebyshevSeriesPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
                                  double lower_bound = -1.0,
                                  double upper_bound = 1.0);
 
+/**
+ * @brief Like evalChebyshevSeriesPSBatch, but takes a SMALL set of `x`
+ *        Chebyshev-coefficient sets and repeats them cyclically to fill all
+ *        `ctxt.slots` slots, instead of requiring one full set per slot.
+ *
+ * Slot `j` is evaluated with `coefficientSets[j % coefficientSets.size()]`.
+ * This is convenient when the same small handful of polynomials needs to be
+ * applied repeatedly across a ciphertext (e.g. `n / x` copies of `x`
+ * distinct functions), without the caller having to manually replicate the
+ * coefficient vector `n` times.
+ *
+ * `coefficientSets.size()` need not divide `ctxt.slots` evenly; slots are
+ * filled by cycling through `coefficientSets` in order, wrapping around as
+ * needed, until all `ctxt.slots` slots are covered.
+ *
+ * @param cc   OpenFHE CPU CryptoContext matching `ctxt` (see
+ *             evalChebyshevSeriesPSBatch for why this is needed).
+ * @param ctxt Ciphertext to transform in place.
+ * @param coefficientSets The small set of `x` Chebyshev coefficient vectors
+ *             to cycle through. Must be non-empty, and every inner vector
+ *             must have the same size (same degree).
+ * @param lower_bound Lower bound `a` of the approximation interval.
+ * @param upper_bound Upper bound `b` of the approximation interval.
+ */
+void evalChebyshevSeriesPSBatchRepeated(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+                                         Ciphertext& ctxt,
+                                         const std::vector<std::vector<double>>& coefficientSets,
+                                         double lower_bound = -1.0,
+                                         double upper_bound = 1.0);
+
 } // namespace FIDESlib::CKKS
 
 #endif // GPUCKKS_APPROXMODEVALBATCH_CUH
