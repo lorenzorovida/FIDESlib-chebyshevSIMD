@@ -2,8 +2,6 @@
 #include "CKKS/Ciphertext.cuh"
 
 #include <stdexcept>
-#include <utility>
-#include <vector>
 
 namespace FIDESlib::CKKS {
 
