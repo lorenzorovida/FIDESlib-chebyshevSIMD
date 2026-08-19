@@ -764,8 +764,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAddInteger(const Ciphertex
     FIDESlib::CKKS::evalIntegerAdd(
         *res_gpu,
         *ct2_gpu,
-        bits,
-        true);
+        bits);
 
     return result;
 }
