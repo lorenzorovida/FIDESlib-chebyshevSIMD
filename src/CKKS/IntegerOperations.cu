@@ -210,7 +210,14 @@ void processArray(
          * function available in your checkout.
          */
         //masked.mult(rolled_ctxt, rolled_mask);
-        masked.multPt(rolled_ctxt, rolled_mask, false);
+
+  
+        auto pt                = cc->MakeCKKSPackedPlaintext(rolled_mask, 0, rolled_ctxt.getLevel(), nullptr,
+	                                                      rolled_ctxt.slots);
+	    FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
+	    Plaintext mask = Plaintext(cc_, raw);
+       
+        masked.multPt(rolled_ctxt, mask, false);
 
         result.add(masked);
 

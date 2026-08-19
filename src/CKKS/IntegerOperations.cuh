@@ -2,6 +2,7 @@
 #define GPUCKKS_INTEGEROPS_CUH
 
 #include "CKKS/forwardDefs.cuh"
+#include "CKKS/Plaintext.cuh"
 
 #include <utility>
 #include <vector>
