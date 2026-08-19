@@ -1918,6 +1918,53 @@ void CryptoContextImpl<DCRTPoly>::EvalBootstrapStCFirstInPlace(Ciphertext<DCRTPo
 	FIDESlib::CKKS::BootstrapStCFirst(*res_gpu, res_gpu->slots, prescaled);
 }
 
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalBootstrapStCFirstBits(const Ciphertext<DCRTPoly>& ciphertext,
+                                                                             uint32_t numIterations,
+                                                                             uint32_t precision,
+                                                                             bool prescaled) {
+	FIDESlib::CudaNvtxRange r("API");
+ 
+	// No CPU fallback: the extra precision-correction step (coscoeffs +
+	// custom double-angle iterations) is FIDESlib-specific, with no
+	// upstream OpenFHE CPU equivalent.
+	if (this->devices.empty()) {
+		OPENFHE_THROW(
+		    "EvalBootstrapStCFirstBits has no CPU fallback. Configure at "
+		    "least one GPU device.");
+	}
+ 
+	// GPU path.
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ciphertext));
+ 
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ciphertext);
+	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+ 
+	FIDESlib::CKKS::BootstrapStCFirstBits(*res_gpu, res_gpu->slots, prescaled);
+ 
+	return result;
+}
+ 
+void CryptoContextImpl<DCRTPoly>::EvalBootstrapStCFirstBitsInPlace(Ciphertext<DCRTPoly>& ciphertext,
+                                                                    uint32_t numIterations,
+                                                                    uint32_t precision,
+                                                                    bool prescaled) {
+	FIDESlib::CudaNvtxRange r("API");
+ 
+	if (this->devices.empty()) {
+		OPENFHE_THROW(
+		    "EvalBootstrapStCFirstBitsInPlace has no CPU fallback. Configure "
+		    "at least one GPU device.");
+	}
+ 
+	// GPU path.
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ciphertext));
+ 
+	auto res_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ciphertext->gpu));
+ 
+	FIDESlib::CKKS::BootstrapStCFirstBits(*res_gpu, res_gpu->slots, prescaled);
+}
+
+
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::AccumulateSum(const Ciphertext<DCRTPoly>& ct, int slots, int stride) {
 	FIDESlib::CudaNvtxRange r("API");

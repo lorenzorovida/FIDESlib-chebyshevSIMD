@@ -38,6 +38,21 @@ void Bootstrap(Ciphertext& ctxt, const int slots, const bool prescaled = false);
  */
 void BootstrapStCFirst(Ciphertext& ctxt, const int slots, const bool prescaled = false);
 
+/**
+ * @brief Same pipeline as BootstrapStCFirst, but instead of returning the
+ *        ciphertext right after the standard EvalMod + double-angle +
+ *        corFactor scaling, applies an extra fixed degree-26 cosine
+ *        Chebyshev polynomial ("coscoeffs") followed by 2 custom
+ *        double-angle iterations (4x - 4x^2, extending the period from
+ *        [-4*pi, 4*pi] to [-16*pi, 16*pi], matching K=16 of sparse
+ *        encapsulated secrets) as an extra precision-correction step.
+ *
+ * Same preconditions as BootstrapStCFirst (StC-first precomputation via
+ * EvalBootstrapSetup(..., BTSlotsEncoding=true), and extra input-level
+ * headroom for the initial SlotsToCoeffs pass).
+ */
+void BootstrapStCFirstBits(Ciphertext& ctxt, const int slots, const bool prescaled = false);
+
 double GetPreScaleFactor(Context& cc, int slots);
 void ModRaise(Ciphertext& ctxt, const int slots, const uint32_t correction, const bool prescaled = false, bool sparse_encaps = false);
 } // namespace FIDESlib::CKKS

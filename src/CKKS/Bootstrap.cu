@@ -861,3 +861,177 @@ void FIDESlib::CKKS::BootstrapStCFirst(Ciphertext& ctxt, const int slots, const 
 
 	ctxt.slots = old_slots;
 }
+
+void FIDESlib::CKKS::BootstrapStCFirstBits(Ciphertext& ctxt, const int slots, const bool prescaled) {
+	CudaNvtxRange r(std::string{ sc::current().function_name() });
+
+	assert(slots >= ctxt.slots);
+	int old_slots = ctxt.slots;
+
+	FIDESlib::CKKS::Context& cc_ = ctxt.cc_;
+	ContextData& cc				 = ctxt.cc;
+	Ciphertext aux(cc_);
+	bool isLT = cc.GetBootPrecomputation(slots).LT.slots == slots;
+
+	// Same correction/scalar computation as Bootstrap() / BootstrapStCFirst().
+	uint64_t q	   = cc.prime[0].p;
+	double qDouble = (double)q;
+	const auto p   = cc.param.raw->p;
+	double powP	   = pow(2, p);
+	int32_t deg	   = std::round(std::log2(qDouble / powP));
+
+	uint32_t correction = cc.GetBootPrecomputation(slots).correctionFactor - deg;
+	double post			 = std::pow(2, static_cast<double>(deg));
+	double pre			 = 1. / post;
+	uint64_t scalar		 = std::llround(post);
+
+	bool sparse_encaps = cc.GetBootPrecomputation(slots).sparse_encaps;
+
+	//------------------------------------------------------------------------------
+	// STC-FIRST: run SlotsToCoeffs BEFORE the modulus raise. See
+	// BootstrapStCFirst() for the detailed rationale; identical here.
+	//------------------------------------------------------------------------------
+	if (isLT) {
+		EvalLinearTransform(ctxt, slots, true);
+	} else {
+		EvalCoeffsToSlots(ctxt, slots, true);
+	}
+
+	if (cc.N / 2 != slots) {
+		aux.rotate(ctxt, slots);
+		ctxt.add(aux);
+	}
+
+	//------------------------------------------------------------------------------
+	// RAISING THE MODULUS (identical to Bootstrap() / BootstrapStCFirst())
+	//------------------------------------------------------------------------------
+	{
+		ModRaise(ctxt, slots, correction, prescaled, sparse_encaps);
+
+		double k				 = cc.GetBootK();
+		double constantEvalMult = pre * (1.0 / (k * cc.N));
+		ctxt.multScalar(constantEvalMult, false);
+		if (MODRAISE_WITH_P0) {
+			ctxt.rescale();
+		}
+
+		if (sparse_encaps) {
+			auto& sparse_context	 = cc.GetBootPrecomputation(slots).sparse_context;
+			auto sparse_context_use = sparse_context.lock();
+			auto& btoa				 = CKKS::GetSecretSwitchingKey(sparse_context_use, ctxt.cc_, ctxt.keyID);
+			ctxt.keySwitch(btoa);
+		}
+		Accumulate(ctxt, cc.GetBootPrecomputation(slots).accumulate_bStep, slots, cc.N / 2 / slots);
+	}
+
+	ctxt.slots = cc.N / 2 == slots ? slots : 2 * slots;
+
+	if (ctxt.NoiseLevel == 2) {
+		ctxt.rescale();
+	}
+
+	//------------------------------------------------------------------------------
+	// CoeffsToSlots (second linear transform overall, as in BootstrapStCFirst()).
+	//------------------------------------------------------------------------------
+	if (isLT) {
+		EvalLinearTransform(ctxt, slots, false);
+	} else {
+		EvalCoeffsToSlots(ctxt, slots, false);
+	}
+
+	//------------------------------------------------------------------------------
+	// Approximate modular reduction (EvalMod), identical to Bootstrap() /
+	// BootstrapStCFirst().
+	//------------------------------------------------------------------------------
+	if (cc.N / 2 == slots) {
+		aux.conjugate(ctxt);
+		Ciphertext ctxtEncI(cc_);
+		ctxtEncI.sub(ctxt, aux);
+		ctxt.add(aux);
+		ctxtEncI.multMonomial(3 * 2 * cc.N / 4);
+		if (cc.rescaleTechnique == CKKS::FIXEDMANUAL)
+			ctxt.rescale();
+		if (cc.rescaleTechnique == CKKS::FIXEDMANUAL)
+			ctxtEncI.rescale();
+		approxModReduction(ctxt, ctxtEncI, cc.GetEvalKey(ctxt.keyID), scalar);
+	} else {
+		aux.conjugate(ctxt);
+		ctxt.add(aux);
+		if (cc.rescaleTechnique == CKKS::FIXEDMANUAL)
+			ctxt.rescale();
+		approxModReductionSparse(ctxt, scalar);
+	}
+
+	if (ctxt.NoiseLevel == 2) {
+		ctxt.rescale();
+	}
+
+	if (cc.N / 2 != slots) {
+		aux.rotate(ctxt, slots);
+		ctxt.add(aux);
+	}
+
+	uint64_t corFactor = (uint64_t)1 << std::llround(correction);
+	multIntScalar(ctxt, corFactor);
+
+	//------------------------------------------------------------------------------
+	// EXTRA PRECISION-CORRECTION STEP (the "Bits" part of BootstrapStCFirstBits).
+	//
+	// Ported from a FIDESlib-patched OpenFHE EvalBootstrapStCFirst snippet:
+	// instead of returning ctxtEnc right after the corFactor scaling above,
+	// apply a fixed degree-26 cosine Chebyshev polynomial (coscoeffs, on
+	// [-1, 1]) followed by 2 custom double-angle iterations of the form
+	// 4x - 4x^2 = 4x(1-x) (NOT the standard ApplyDoubleAngleIterations
+	// formula, which is -1/(2pi)^(2^j) * (2x^2 - 1) style — this is a
+	// different doubling identity matching the period of coscoeffs). This
+	// extends the polynomial's period from [-4*pi, 4*pi] to
+	// [-16*pi, 16*pi], matching K=16 of sparse encapsulated secrets.
+	//------------------------------------------------------------------------------
+	{
+		static std::vector<double> coscoeffs = { 0.8424926075178614,
+			                                      0,
+			                                      -0.1821017356423849,
+			                                      0,
+			                                      -0.2282086200252085,
+			                                      0,
+			                                      -0.18944158983822126,
+			                                      0,
+			                                      0.0663739366152565,
+			                                      0,
+			                                      0.2742280687085467,
+			                                      0,
+			                                      -0.23581858607763376,
+			                                      0,
+			                                      0.0932423161042029,
+			                                      0,
+			                                      -0.02306167377675832,
+			                                      0,
+			                                      0.004018391392239563,
+			                                      0,
+			                                      -0.0005268221419324767,
+			                                      0,
+			                                      5.423630683107579e-05,
+			                                      0,
+			                                      -4.520101975986046e-06,
+			                                      0,
+			                                      3.111541594155717e-07 };
+
+		evalChebyshevSeries(ctxt, coscoeffs, -1.0, 1.0);
+
+		// The Chebyshev poly is cos with period [-4*pi, 4*pi], so two
+		// doubling iterations bring it to [-16*pi, 16*pi], compatible with
+		// K=16 of sparse encapsulated secret.
+		for (int i = 0; i < 2; i++) {
+			Ciphertext term1(cc_);
+			term1.copy(ctxt);
+			multIntScalar(term1, 4);
+			Ciphertext term2(cc_);
+			term2.mult(term1, ctxt, false);
+			if (term2.NoiseLevel == 2)
+				term2.rescale();
+			ctxt.sub(term1, term2);
+		}
+	}
+
+	ctxt.slots = old_slots;
+}
