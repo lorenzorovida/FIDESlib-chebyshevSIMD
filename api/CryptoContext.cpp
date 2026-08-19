@@ -769,6 +769,60 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAddInteger(const Ciphertex
     return result;
 }
 
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots) {
+	FIDESlib::CudaNvtxRange r("API");
+
+	// Fall back to CPU.
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW(
+		    "EvalAddInteger has no CPU fallback with the OpenFHE "
+		    "library currently linked. Configure at least one GPU device, or "
+		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+		    "to enable the CPU path.");
+	}
+
+	// Load inputs onto GPU
+    this->LoadCiphertext(
+        const_cast<Ciphertext<DCRTPoly>&>(ct1));
+
+    this->LoadCiphertext(
+        const_cast<Ciphertext<DCRTPoly>&>(ct2));
+
+    // Make result from ct1, exactly like EvalAdd
+    Ciphertext<DCRTPoly> result =
+        std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
+
+    auto res_gpu =
+        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
+            this->GetDeviceCiphertext(result->gpu));
+
+    auto ct2_gpu =
+        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
+            this->GetDeviceCiphertext(ct2->gpu));
+
+	std::function<double(double)> sinc = [scale](double x) -> double {
+		if (x == 0)
+			return 0;
+		else
+			return sin(x * M_PI) / (x * M_PI);
+	};
+
+	auto coeffs = this->context->GetChebyshevCoefficients(sinc, 0, 256, 247);
+	
+    // Run the entire integer-add circuit on GPU
+    FIDESlib::CKKS::evalIntegerEqual(
+        *res_gpu,
+        *ct2_gpu,
+        bits, 
+		zslots,
+		coeffs, 
+		this
+	);
+
+    return result;
+}
+
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTPoly>& ct, Plaintext& pt) {
 	FIDESlib::CudaNvtxRange r("API");
 

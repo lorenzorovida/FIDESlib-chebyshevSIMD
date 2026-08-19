@@ -202,6 +202,7 @@ template <> class CryptoContextImpl<DCRTPoly> {
 
 	// Integer operations
 	Ciphertext<DCRTPoly> EvalAddInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits);
+	Ciphertext<DCRTPoly> EvalEqualInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits);
 
 
 	

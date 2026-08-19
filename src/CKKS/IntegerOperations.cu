@@ -130,7 +130,7 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
         a.slots,
         0.0);
 
-    for (uint32_t i = 0; i < zslots; ++i) {
+    for (int i = 0; i < zslots; ++i) {
 
         correction[
             i * (bits * bits) / 2
