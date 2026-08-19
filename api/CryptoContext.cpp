@@ -801,14 +801,14 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphert
         std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
             this->GetDeviceCiphertext(ct2->gpu));
 
-	std::function<double(double)> sinc = [scale](double x) -> double {
+	std::function<double(double)> sinc = [](double x) -> double {
 		if (x == 0)
 			return 0;
 		else
 			return sin(x * M_PI) / (x * M_PI);
 	};
 
-	auto coeffs = this->context->GetChebyshevCoefficients(sinc, 0, 256, 247);
+	auto coeffs = GetChebyshevCoefficients(sinc, 0, 256, 247);
 	
     // Run the entire integer-add circuit on GPU
     FIDESlib::CKKS::evalIntegerEqual(
