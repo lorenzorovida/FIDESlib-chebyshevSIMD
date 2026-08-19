@@ -2,14 +2,13 @@
 #define GPUCKKS_INTEGEROPS_CUH
 
 #include "CKKS/forwardDefs.cuh"
-#include "openfhe-interface/RawCiphertext.cuh"
-#include <cinttypes>
-#include <vector>
-#include <stdexcept>
 
 namespace FIDESlib::CKKS {
 
-void evalIntegerAdd(Ciphertext & ctxtA, Ciphertext & ctxtB, int bits);
+void evalIntegerAdd(
+    Ciphertext& ctxtA,
+    Ciphertext& ctxtB,
+    int bits);
 
 } // namespace FIDESlib::CKKS
 
