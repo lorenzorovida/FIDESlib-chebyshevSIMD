@@ -214,7 +214,7 @@ void processArray(
         //masked.mult(rolled_ctxt, rolled_mask);
 
   
-        auto pt                = cc->MakeCKKSPackedPlaintext(rolled_mask, 0, rolled_ctxt.getLevel(), nullptr,
+        auto pt                = cc->MakeCKKSPackedPlaintext(rolled_mask, static_cast<size_t>(rolled_ctxt.NoiseLevel), rolled_ctxt.getLevel(), nullptr,
 	                                                      rolled_ctxt.slots);
 	    FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 	    Plaintext maskP = Plaintext(cc_, raw);
