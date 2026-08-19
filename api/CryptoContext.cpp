@@ -741,29 +741,33 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAddInteger(const Ciphertex
 		    "to enable the CPU path.");
 	}
 
-	// GPU path.
-	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct1));
-	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct2));
+	// Load inputs onto GPU
+    this->LoadCiphertext(
+        const_cast<Ciphertext<DCRTPoly>&>(ct1));
 
-	auto ct1_gpu =
+    this->LoadCiphertext(
+        const_cast<Ciphertext<DCRTPoly>&>(ct2));
+
+    // Make result from ct1, exactly like EvalAdd
+    Ciphertext<DCRTPoly> result =
+        std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
+
+    auto res_gpu =
         std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
-            this->GetDeviceCiphertext(ct1->gpu));
+            this->GetDeviceCiphertext(result->gpu));
 
     auto ct2_gpu =
         std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
             this->GetDeviceCiphertext(ct2->gpu));
 
-    auto result =
-        std::make_shared<FIDESlib::CKKS::Ciphertext>(
-            ct1_gpu->cc_);
-
+    // Run the entire integer-add circuit on GPU
     FIDESlib::CKKS::evalIntegerAdd(
-        *ct1_gpu,
+        *res_gpu,
         *ct2_gpu,
         bits,
-        *result);
+        true);
 
-	return result;
+    return result;
 }
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTPoly>& ct, Plaintext& pt) {
