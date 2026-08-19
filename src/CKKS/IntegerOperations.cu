@@ -142,11 +142,11 @@ void processArray(
          *
          * for every i.
          */
-        std::vector<int> mask(total_size, 0);
+        std::vector<double> mask(total_size, 0);
 
         for (int i = 0; i < rep; ++i) {
             for (int j = 0; j < 4; ++j) {
-                mask[i * mask_size + start + j] = 1;
+                mask[i * mask_size + start + j] = 1.0;
             }
         }
 
@@ -172,7 +172,7 @@ void processArray(
          * explicitly if the plaintext multiplication API can
          * apply the rotated mask directly.
          */
-        std::vector<int> rolled_mask(total_size, 0);
+        std::vector<double> rolled_mask(total_size, 0);
 
         for (int k = 0; k < total_size; ++k) {
 
