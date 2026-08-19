@@ -728,7 +728,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTP
 	return result;
 }
 
-Ciphertext<DCRTPoly> EvalAddInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits) {
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAddInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	// Fall back to CPU.
@@ -749,7 +749,7 @@ Ciphertext<DCRTPoly> EvalAddInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphe
 	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	auto ct2_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
 	
-	FIDESlib::CKKS::evalIntegerAdd(*res_gpu, ct2_gpu, bits);
+	FIDESlib::CKKS::evalIntegerAdd(*res_gpu, *ct2_gpu, bits);
 
 	return result;
 }
