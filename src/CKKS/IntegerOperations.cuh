@@ -13,4 +13,4 @@ void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 
 } // namespace FIDESlib::CKKS
 
-#endif // GPUCKKS_APPROXMODEVALBATCH_CUH
+#endif // GPUCKKS_INTEGEROPS_CUH
