@@ -21,7 +21,7 @@ void processArray(Ciphertext& c_processed,
   int mask_size,
   int rep,
   lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-  FIDESlib::CKKS::Context& cc_, );
+  FIDESlib::CKKS::Context& cc_);
 
 void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_);
 
