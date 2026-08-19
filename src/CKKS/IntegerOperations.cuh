@@ -5,11 +5,12 @@
 #include "openfhe-interface/RawCiphertext.cuh"
 #include <cinttypes>
 #include <vector>
+#include <stdexcept>
 
 namespace FIDESlib::CKKS {
 
 
-void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
+void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, Ciphertext& result);
 
 } // namespace FIDESlib::CKKS
 

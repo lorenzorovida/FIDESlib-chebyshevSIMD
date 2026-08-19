@@ -749,7 +749,23 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAddInteger(const Ciphertex
 	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	auto ct2_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
 	
-	FIDESlib::CKKS::evalIntegerAdd(*res_gpu, *ct2_gpu, bits);
+	auto ct1_gpu =
+        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
+            this->GetDeviceCiphertext(ct1->gpu));
+
+    auto ct2_gpu =
+        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
+            this->GetDeviceCiphertext(ct2->gpu));
+
+    auto result =
+        std::make_shared<FIDESlib::CKKS::Ciphertext>(
+            ct1_gpu->cc_);
+
+    FIDESlib::CKKS::evalIntegerAdd(
+        *ct1_gpu,
+        *ct2_gpu,
+        bits,
+        *result);
 
 	return result;
 }
