@@ -223,7 +223,7 @@ void processArray(Ciphertext& c_processed,
 void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_) {
 	Ciphertext result(a.cc_);
 
-	result.mult(a, b);
+	result.mult(ctxtA, ctxtB);
 
 	// result = result - 1
 	std::vector<double> minusOne(result.slots, -1.0);
