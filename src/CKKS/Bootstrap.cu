@@ -940,8 +940,7 @@ void FIDESlib::CKKS::BootstrapStCFirstBits(Ciphertext& ctxt, const int slots, co
 	}
 
 	//------------------------------------------------------------------------------
-	// Approximate modular reduction (EvalMod), identical to Bootstrap() /
-	// BootstrapStCFirst().
+	// Approximate modular reduction (EvalMod), identical to Bootstrap().
 	//------------------------------------------------------------------------------
 	if (cc.N / 2 == slots) {
 		aux.conjugate(ctxt);
@@ -953,7 +952,6 @@ void FIDESlib::CKKS::BootstrapStCFirstBits(Ciphertext& ctxt, const int slots, co
 			ctxt.rescale();
 		if (cc.rescaleTechnique == CKKS::FIXEDMANUAL)
 			ctxtEncI.rescale();
-		
 		//approxModReduction(ctxt, ctxtEncI, cc.GetEvalKey(ctxt.keyID), scalar);
 	} else {
 		aux.conjugate(ctxt);
@@ -967,12 +965,17 @@ void FIDESlib::CKKS::BootstrapStCFirstBits(Ciphertext& ctxt, const int slots, co
 		ctxt.rescale();
 	}
 
+	//------------------------------------------------------------------------------
+	// NOTE: unlike Bootstrap(), there is NO second SlotsToCoeffs here: the
+	// StC transform already ran at the very start of this function, on the
+	// depleted ciphertext, matching OpenFHE's EvalBootstrapStCFirst, which
+	// returns ctxtEnc directly after EvalMod + double-angle + corFactor
+	// scaling, with no further CoeffsToSlots/SlotsToCoeffs call.
+	//------------------------------------------------------------------------------
 	if (cc.N / 2 != slots) {
 		aux.rotate(ctxt, slots);
-		
+		ctxt.add(aux);
 	}
-
-	ctxt.add(aux);
 
 	uint64_t corFactor = (uint64_t)1 << std::llround(correction);
 	multIntScalar(ctxt, corFactor);
@@ -990,51 +993,51 @@ void FIDESlib::CKKS::BootstrapStCFirstBits(Ciphertext& ctxt, const int slots, co
 	// extends the polynomial's period from [-4*pi, 4*pi] to
 	// [-16*pi, 16*pi], matching K=16 of sparse encapsulated secrets.
 	//------------------------------------------------------------------------------
-	{
-		static std::vector<double> coscoeffs = { 0.8424926075178614,
-			                                      0,
-			                                      -0.1821017356423849,
-			                                      0,
-			                                      -0.2282086200252085,
-			                                      0,
-			                                      -0.18944158983822126,
-			                                      0,
-			                                      0.0663739366152565,
-			                                      0,
-			                                      0.2742280687085467,
-			                                      0,
-			                                      -0.23581858607763376,
-			                                      0,
-			                                      0.0932423161042029,
-			                                      0,
-			                                      -0.02306167377675832,
-			                                      0,
-			                                      0.004018391392239563,
-			                                      0,
-			                                      -0.0005268221419324767,
-			                                      0,
-			                                      5.423630683107579e-05,
-			                                      0,
-			                                      -4.520101975986046e-06,
-			                                      0,
-			                                      3.111541594155717e-07 };
+	
+	static std::vector<double> coscoeffs = { 0.8424926075178614,
+												0,
+												-0.1821017356423849,
+												0,
+												-0.2282086200252085,
+												0,
+												-0.18944158983822126,
+												0,
+												0.0663739366152565,
+												0,
+												0.2742280687085467,
+												0,
+												-0.23581858607763376,
+												0,
+												0.0932423161042029,
+												0,
+												-0.02306167377675832,
+												0,
+												0.004018391392239563,
+												0,
+												-0.0005268221419324767,
+												0,
+												5.423630683107579e-05,
+												0,
+												-4.520101975986046e-06,
+												0,
+												3.111541594155717e-07 };
 
-		evalChebyshevSeries(ctxt, coscoeffs, -1.0, 1.0);
+	evalChebyshevSeries(ctxt, coscoeffs, -1.0, 1.0);
 
-		// The Chebyshev poly is cos with period [-4*pi, 4*pi], so two
-		// doubling iterations bring it to [-16*pi, 16*pi], compatible with
-		// K=16 of sparse encapsulated secret.
-		for (int i = 0; i < 2; i++) {
-			Ciphertext term1(cc_);
-			term1.copy(ctxt);
-			multIntScalar(term1, 4);
-			Ciphertext term2(cc_);
-			term2.mult(term1, ctxt, false);
-			if (term2.NoiseLevel == 2)
-				term2.rescale();
-			ctxt.sub(term1, term2);
-		}
+	// The Chebyshev poly is cos with period [-4*pi, 4*pi], so two
+	// doubling iterations bring it to [-16*pi, 16*pi], compatible with
+	// K=16 of sparse encapsulated secret.
+	for (int i = 0; i < 2; i++) {
+		Ciphertext term1(cc_);
+		term1.copy(ctxt);
+		multIntScalar(term1, 4);
+		Ciphertext term2(cc_);
+		term2.mult(term1, ctxt, false);
+		if (term2.NoiseLevel == 2)
+			term2.rescale();
+		ctxt.sub(term1, term2);
 	}
+
 
 	ctxt.slots = old_slots;
 }
