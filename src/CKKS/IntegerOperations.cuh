@@ -10,7 +10,7 @@
 namespace FIDESlib::CKKS {
 
 
-void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, Ciphertext& result);
+void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 
 } // namespace FIDESlib::CKKS
 

@@ -22,7 +22,7 @@ constexpr bool PRINT = false;
 
 using namespace FIDESlib::CKKS {
 
-	void evalIntegerAdd(Ciphertext & ctxtA, Ciphertext & ctxtB, int bits, Ciphertext& result) {
+	void evalIntegerAdd(Ciphertext & ctxtA, Ciphertext & ctxtB, int bits) {
 
 		Ciphertext p = result.copy();
 
