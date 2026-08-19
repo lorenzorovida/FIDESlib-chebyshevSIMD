@@ -22,7 +22,7 @@ void processArray(
     int mask_size,
     int rep,
     lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-    FIDESlib::CKKS::Context& cc_,);
+    FIDESlib::CKKS::Context& cc_);
 } // namespace FIDESlib::CKKS
 
 #endif // GPUCKKS_INTEGEROPS_CUH

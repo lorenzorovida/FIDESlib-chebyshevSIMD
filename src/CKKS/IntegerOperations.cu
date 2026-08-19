@@ -107,7 +107,7 @@ void processArray(
     int mask_size,
     int rep,
     lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-    FIDESlib::CKKS::Context& cc_,)
+    FIDESlib::CKKS::Context& cc_)
 {
     if (mask_size <= 0) {
         throw std::invalid_argument(
