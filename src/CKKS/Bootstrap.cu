@@ -953,6 +953,7 @@ void FIDESlib::CKKS::BootstrapStCFirstBits(Ciphertext& ctxt, const int slots, co
 			ctxt.rescale();
 		if (cc.rescaleTechnique == CKKS::FIXEDMANUAL)
 			ctxtEncI.rescale();
+		
 		//approxModReduction(ctxt, ctxtEncI, cc.GetEvalKey(ctxt.keyID), scalar);
 	} else {
 		aux.conjugate(ctxt);
@@ -968,8 +969,10 @@ void FIDESlib::CKKS::BootstrapStCFirstBits(Ciphertext& ctxt, const int slots, co
 
 	if (cc.N / 2 != slots) {
 		aux.rotate(ctxt, slots);
-		ctxt.add(aux);
+		
 	}
+
+	ctxt.add(aux);
 
 	uint64_t corFactor = (uint64_t)1 << std::llround(correction);
 	multIntScalar(ctxt, corFactor);
