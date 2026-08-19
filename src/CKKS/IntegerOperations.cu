@@ -20,52 +20,50 @@ using sc = std::source_location;
 
 constexpr bool PRINT = false;
 
-using namespace FIDESlib::CKKS {
+using namespace FIDESlib::CKKS;
 
-	void evalIntegerAdd(Ciphertext & ctxtA, Ciphertext & ctxtB, int bits) {
+void FIDESlib::CKKS::evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
 
-		Ciphertext p = result.copy();
+	Ciphertext p = result.copy();
 
-		if (clean_first) {
-			p.add(other);
-			// clean_and_reduce equivalent here
-		} else {
-			p.sub(other);
-			p.square();
-		}
-
-		Ciphertext absum = p.copy();
-
-		Ciphertext g = result.copy();
-		g.mult(other);
-
-		for (int i = 1; i < bits; i *= 2) {
-
-			Ciphertext p_shift = p.copy();
-			p_shift.rotate(-i);
-
-			Ciphertext g_shift = g.copy();
-			g_shift.rotate(-i);
-
-			Ciphertext pg = p.copy();
-			pg.mult(g_shift);
-
-			Ciphertext p_g = p.copy();
-			p_g.mult(g);
-
-			g.add(pg);
-			g.sub(p_g);
-
-			if (i < bits - 1) {
-				p.mult(p_shift);
-			}
-		}
-
-		g.rotate(-1);
-
-		result.copy(absum);
-		result.sub(g);
-		result.square();
+	if (clean_first) {
+		p.add(other);
+		// clean_and_reduce equivalent here
+	} else {
+		p.sub(other);
+		p.square();
 	}
 
-} // namespace FIDESlib::CKKS
+	Ciphertext absum = p.copy();
+
+	Ciphertext g = result.copy();
+	g.mult(other);
+
+	for (int i = 1; i < bits; i *= 2) {
+
+		Ciphertext p_shift = p.copy();
+		p_shift.rotate(-i);
+
+		Ciphertext g_shift = g.copy();
+		g_shift.rotate(-i);
+
+		Ciphertext pg = p.copy();
+		pg.mult(g_shift);
+
+		Ciphertext p_g = p.copy();
+		p_g.mult(g);
+
+		g.add(pg);
+		g.sub(p_g);
+
+		if (i < bits - 1) {
+			p.mult(p_shift);
+		}
+	}
+
+	g.rotate(-1);
+
+	result.copy(absum);
+	result.sub(g);
+	result.square();
+}
