@@ -1,29 +1,15 @@
-//
-// Created by lollo on 19/08/26.
-//
-
-#include "CKKS/ApproxModEval.cuh"
 #include "CKKS/Ciphertext.cuh"
-#include "CKKS/Context.cuh"
 #include "CKKS/IntegerOperations.cuh"
-#include "CudaUtils.cuh"
-#include <iostream>
-// Uncomment to trace level/NoiseLevel at key checkpoints, mirrored in
-// ApproxModEvalBatch.cu, for side-by-side debugging against the batch port.
-#if defined(__clang__)
-#include <experimental/source_location>
-using sc = std::experimental::source_location;
-#else
-#include <source_location>
-using sc = std::source_location;
-#endif
 
-constexpr bool PRINT = false;
+#include <stdexcept>
 
-using namespace FIDESlib::CKKS;
+namespace FIDESlib::CKKS {
 
-void FIDESlib::CKKS::evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
-
+void evalIntegerAdd(
+    Ciphertext& ctxtA,
+    Ciphertext& ctxtB,
+    int bits)
+{
     if (bits <= 0) {
         throw std::invalid_argument(
             "evalIntegerAdd: bits must be > 0");
@@ -33,8 +19,8 @@ void FIDESlib::CKKS::evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bi
     Ciphertext p = ctxtA.copy();
     p.sub(ctxtB);
     p.square();
-    
-	// absum = p
+
+    // absum = p
     Ciphertext absum = p.copy();
 
     // g = mult(a, b)
@@ -79,3 +65,5 @@ void FIDESlib::CKKS::evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bi
     ctxtA.sub(g);
     ctxtA.square();
 }
+
+} // namespace FIDESlib::CKKS
