@@ -965,6 +965,8 @@ void FIDESlib::CKKS::BootstrapStCFirstBits(Ciphertext& ctxt, const int slots, co
 		ctxt.rescale();
 	}
 
+	multIntScalar(ctxt, scalar);
+
 	//------------------------------------------------------------------------------
 	// NOTE: unlike Bootstrap(), there is NO second SlotsToCoeffs here: the
 	// StC transform already ran at the very start of this function, on the
@@ -976,6 +978,8 @@ void FIDESlib::CKKS::BootstrapStCFirstBits(Ciphertext& ctxt, const int slots, co
 		aux.rotate(ctxt, slots);
 		ctxt.add(aux);
 	}
+
+	
 
 	uint64_t corFactor = (uint64_t)1 << std::llround(correction);
 	multIntScalar(ctxt, corFactor);
