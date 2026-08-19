@@ -199,7 +199,11 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	                                                double a, double b);
  
 
+	// Integer operations
+	Ciphertext<DCRTPoly> EvalAddInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits);
 
+
+	
 	Ciphertext<DCRTPoly> Rescale(const Ciphertext<DCRTPoly>& ciphertext);
 	void RescaleInPlace(Ciphertext<DCRTPoly>& ciphertext);
 

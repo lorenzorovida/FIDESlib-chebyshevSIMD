@@ -727,6 +727,32 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTP
 	return result;
 }
 
+Ciphertext<DCRTPoly> EvalAddInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits) {
+	FIDESlib::CudaNvtxRange r("API");
+
+	// Fall back to CPU.
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW(
+		    "EvalAddInteger has no CPU fallback with the OpenFHE "
+		    "library currently linked. Configure at least one GPU device, or "
+		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+		    "to enable the CPU path.");
+	}
+
+	// GPU path.
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct1));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct2));
+
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
+	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto ct2_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
+	
+	FIDESlib::CKKS::evalIntegerAdd(*res_gpu, ct2_gpu, bits);
+
+	return result;
+}
+
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTPoly>& ct, Plaintext& pt) {
 	FIDESlib::CudaNvtxRange r("API");
 
@@ -1614,6 +1640,7 @@ CryptoContextImpl<DCRTPoly>::EvalFastRotationExt(const Ciphertext<DCRTPoly>& ct,
 	}
 
 	ct_gpu->rotate_hoisted(indices_real, results_gpu, true);
+	
 	return results;
 }
 
