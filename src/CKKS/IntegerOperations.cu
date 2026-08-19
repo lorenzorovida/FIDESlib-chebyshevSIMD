@@ -105,7 +105,9 @@ void processArray(
     const Ciphertext& c,
     const std::vector<std::pair<int, int>>& mask_roll_pairs,
     int mask_size,
-    int rep)
+    int rep,
+    lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+    FIDESlib::CKKS::Context& cc_,)
 {
     if (mask_size <= 0) {
         throw std::invalid_argument(
@@ -215,15 +217,15 @@ void processArray(
         auto pt                = cc->MakeCKKSPackedPlaintext(rolled_mask, 0, rolled_ctxt.getLevel(), nullptr,
 	                                                      rolled_ctxt.slots);
 	    FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
-	    Plaintext mask = Plaintext(cc_, raw);
+	    Plaintext maskP = Plaintext(cc_, raw);
        
-        masked.multPt(rolled_ctxt, mask, false);
+        masked.multPt(rolled_ctxt, maskP, false);
 
         result.add(masked);
 
         if (result.cc.rescaleTechnique == FIDESlib::CKKS::FIXEDMANUAL) {
 		    result.rescale();
-	}
+        }
     }
 
 
