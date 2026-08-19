@@ -94,6 +94,86 @@ void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
 	ctxtA.square();
 }
 
+void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+    Ciphertext sum(a.cc_);
+
+    sum.copy(a);
+    sum.sub(b);
+    sum.square();
+
+
+    // ------------------------------------------------------------
+    // sum = sum + rotations of sum
+    // ------------------------------------------------------------
+
+    const int rounds =
+        static_cast<int>(std::log2(bits));
+
+    for (int i = 0; i < rounds; ++i) {
+
+        const int rotation = 1 << i;
+
+        Ciphertext rotated(a.cc_);
+        rotated.rotate(sum, rotation);
+
+        sum.add(rotated);
+    }
+
+
+    evalChebyshevSeries(sum, coeffsSinc, 0, 256);
+
+    // ------------------------------------------------------------
+    // correction mask
+    // ------------------------------------------------------------
+
+    std::vector<double> correction(
+        a.slots,
+        0.0);
+
+    for (uint32_t i = 0; i < zslots; ++i) {
+
+        correction[
+            i * (bits * bits) / 2
+        ] = 1.0;
+    }
+
+    // ------------------------------------------------------------
+    // Convert correction to FIDESlib plaintext
+    // ------------------------------------------------------------
+
+    size_t noise =
+        static_cast<size_t>(sum.NoiseLevel);
+
+    auto pt = cc->MakeCKKSPackedPlaintext(
+        correction,
+        noise,
+        sum.getLevel(),
+        nullptr,
+        sum.slots);
+
+    FIDESlib::CKKS::RawPlainText raw =
+        FIDESlib::CKKS::GetRawPlainText(
+            cc,
+            pt);
+
+    Plaintext correctionPt(
+        sum.cc_,
+        raw);
+
+    Ciphertext corrected(
+        sum.cc_);
+
+    corrected.multPt(
+        sum,
+        correctionPt,
+        false);
+
+    BootstrapStCFirstBits(corrected, corrected.slots, false);
+
+
+}
+
+
 void processArray(Ciphertext& c_processed,
   const Ciphertext& c,
   const std::vector<std::pair<int, int>>& mask_roll_pairs,
@@ -244,5 +324,6 @@ void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std:
 
     FIDESlib::CKKS::BootstrapStCFirstBits(result, result.slots, false);
 }
+
 
 } // namespace FIDESlib::CKKS

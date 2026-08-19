@@ -5,6 +5,7 @@
 #include "CKKS/Plaintext.cuh"
 #include "CKKS/forwardDefs.cuh"
 #include "CKKS/ApproxModEvalBatch.cuh"
+#include "CKKS/ApproxModEval.cuh"
 #include "CKKS/Bootstrap.cuh"
 
 #include <utility>
@@ -13,6 +14,8 @@
 namespace FIDESlib::CKKS {
 
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
+void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
+
 
 // Can be heavily optimized by precomputing masks
 void processArray(Ciphertext& c_processed,
