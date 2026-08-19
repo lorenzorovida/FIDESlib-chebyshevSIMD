@@ -23,7 +23,7 @@ void processArray(Ciphertext& c_processed,
   lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   FIDESlib::CKKS::Context& cc_);
 
-void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_);
+void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs);
 
 } // namespace FIDESlib::CKKS
 

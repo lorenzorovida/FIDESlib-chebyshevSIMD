@@ -220,8 +220,11 @@ void processArray(Ciphertext& c_processed,
 	c_processed.copy(result);
 }
 
-void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_) {
-	Ciphertext result(a.cc_);
+void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs) {
+    lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc = ctxtA.cc;
+    FIDESlib::CKKS::Context& cc_ = ctxtA.cc_;
+
+	Ciphertext result(ctxtA.cc_);
 
 	result.mult(ctxtA, ctxtB);
 
