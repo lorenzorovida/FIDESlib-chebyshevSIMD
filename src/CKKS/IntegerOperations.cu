@@ -22,52 +22,60 @@ constexpr bool PRINT = false;
 
 using namespace FIDESlib::CKKS;
 
-namespace {
-
 void FIDESlib::CKKS::evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
 
-	Ciphertext p = result.copy();
+    if (bits <= 0) {
+        throw std::invalid_argument(
+            "evalIntegerAdd: bits must be > 0");
+    }
 
-	if (clean_first) {
-		p.add(other);
-		// clean_and_reduce equivalent here
-	} else {
-		p.sub(other);
-		p.square();
-	}
+    // p = square(sub(a, b))
+    Ciphertext p = ctxtA.copy();
+    p.sub(ctxtB);
+    p.square();
+    
+	// absum = p
+    Ciphertext absum = p.copy();
 
-	Ciphertext absum = p.copy();
+    // g = mult(a, b)
+    Ciphertext g = ctxtA.copy();
+    g.mult(ctxtB);
 
-	Ciphertext g = result.copy();
-	g.mult(other);
+    for (int i = 1; i < bits; i *= 2) {
 
-	for (int i = 1; i < bits; i *= 2) {
+        // p_shift = rot(p, -i)
+        Ciphertext p_shift = p.copy();
+        p_shift.rotate(-i);
 
-		Ciphertext p_shift = p.copy();
-		p_shift.rotate(-i);
+        // g_shift = rot(g, -i)
+        Ciphertext g_shift = g.copy();
+        g_shift.rotate(-i);
 
-		Ciphertext g_shift = g.copy();
-		g_shift.rotate(-i);
+        // pg = mult(p, g_shift)
+        Ciphertext pg = p.copy();
+        pg.mult(g_shift);
 
-		Ciphertext pg = p.copy();
-		pg.mult(g_shift);
+        // p_g = mult(p, g)
+        Ciphertext p_g = p.copy();
+        p_g.mult(g);
 
-		Ciphertext p_g = p.copy();
-		p_g.mult(g);
+        // g = add(g, pg)
+        g.add(pg);
 
-		g.add(pg);
-		g.sub(p_g);
+        // g = sub(g, p_g)
+        g.sub(p_g);
 
-		if (i < bits - 1) {
-			p.mult(p_shift);
-		}
-	}
+        // p = mult(p, p_shift)
+        if (i < bits - 1) {
+            p.mult(p_shift);
+        }
+    }
 
-	g.rotate(-1);
+    // g = rot(g, -1)
+    g.rotate(-1);
 
-	result.copy(absum);
-	result.sub(g);
-	result.square();
-}
-
+    // result = square(sub(absum, g))
+    ctxtA.copy(absum);
+    ctxtA.sub(g);
+    ctxtA.square();
 }
