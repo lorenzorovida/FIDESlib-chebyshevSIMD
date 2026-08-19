@@ -1,5 +1,5 @@
-#include "CKKS/Ciphertext.cuh"
 #include "CKKS/IntegerOperations.cuh"
+#include "CKKS/Ciphertext.cuh"
 
 #include <stdexcept>
 
@@ -15,52 +15,85 @@ void evalIntegerAdd(
             "evalIntegerAdd: bits must be > 0");
     }
 
-    // p = square(sub(a, b))
-    Ciphertext p = ctxtA.copy();
+    /*
+     * Original CPU:
+     *
+     * p = square(sub(a, b));
+     */
+
+    Ciphertext p(ctxtA.cc_);
+    p.copy(ctxtA);
     p.sub(ctxtB);
     p.square();
 
-    // absum = p
-    Ciphertext absum = p.copy();
+    /*
+     * absum = p->Clone()
+     */
 
-    // g = mult(a, b)
-    Ciphertext g = ctxtA.copy();
+    Ciphertext absum(ctxtA.cc_);
+    absum.copy(p);
+
+    /*
+     * g = mult(a, b);
+     */
+
+    Ciphertext g(ctxtA.cc_);
+    g.copy(ctxtA);
     g.mult(ctxtB);
 
+    /*
+     * for (int i = 1; i < bits; i *= 2)
+     */
     for (int i = 1; i < bits; i *= 2) {
 
-        // p_shift = rot(p, -i)
-        Ciphertext p_shift = p.copy();
-        p_shift.rotate(-i);
+        /*
+         * p_shift = rot(p, -i)
+         */
+        Ciphertext p_shift(ctxtA.cc_);
+        p_shift.rotate(p, -i);
 
-        // g_shift = rot(g, -i)
-        Ciphertext g_shift = g.copy();
-        g_shift.rotate(-i);
+        /*
+         * g_shift = rot(g, -i)
+         */
+        Ciphertext g_shift(ctxtA.cc_);
+        g_shift.rotate(g, -i);
 
-        // pg = mult(p, g_shift)
-        Ciphertext pg = p.copy();
-        pg.mult(g_shift);
+        /*
+         * pg = mult(p, g_shift)
+         */
+        Ciphertext pg(ctxtA.cc_);
+        pg.mult(p, g_shift);
 
-        // p_g = mult(p, g)
-        Ciphertext p_g = p.copy();
-        p_g.mult(g);
+        /*
+         * mult(p, g)
+         */
+        Ciphertext p_g(ctxtA.cc_);
+        p_g.mult(p, g);
 
-        // g = add(g, pg)
+        /*
+         * g = sub(add(g, pg), p_g)
+         */
         g.add(pg);
-
-        // g = sub(g, p_g)
         g.sub(p_g);
 
-        // p = mult(p, p_shift)
+        /*
+         * p = mult(p, p_shift)
+         */
         if (i < bits - 1) {
             p.mult(p_shift);
         }
     }
 
-    // g = rot(g, -1)
+    /*
+     * g = rot(g, -1)
+     */
     g.rotate(-1);
 
-    // result = square(sub(absum, g))
+    /*
+     * s = square(sub(absum, g))
+     *
+     * Since ctxtA is our output buffer, overwrite it.
+     */
     ctxtA.copy(absum);
     ctxtA.sub(g);
     ctxtA.square();
