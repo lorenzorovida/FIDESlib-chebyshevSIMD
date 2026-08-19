@@ -18,6 +18,7 @@
 #include "PublicKey.hpp"
 #include "Serialize.hpp"
 
+
 namespace fideslib {
 
 /// @brief Specialization of CryptoContext for the DCRTPoly representation.

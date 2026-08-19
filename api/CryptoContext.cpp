@@ -16,6 +16,7 @@
 #include "PolyApprox.cuh"
 #include "PublicKey.hpp"
 #include "Serialize.hpp"
+#include "IntegerOperations.cuh"
 #include "ciphertext-fwd.h"
 #include "cryptocontext-fwd.h"
 #include "lattice/hal/lat-backend.h"
