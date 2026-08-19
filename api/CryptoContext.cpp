@@ -1463,6 +1463,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalRotate(const Ciphertext<DC
 		}
 	}
 	// GPU path.
+	
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ciphertext));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ciphertext);
