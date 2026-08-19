@@ -22,6 +22,8 @@ constexpr bool PRINT = false;
 
 using namespace FIDESlib::CKKS;
 
+namespace {
+
 void FIDESlib::CKKS::evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
 
 	Ciphertext p = result.copy();
@@ -66,4 +68,6 @@ void FIDESlib::CKKS::evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bi
 	result.copy(absum);
 	result.sub(g);
 	result.square();
+}
+
 }
