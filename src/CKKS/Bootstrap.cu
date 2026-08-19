@@ -723,3 +723,141 @@ void FIDESlib::CKKS::ModRaise(Ciphertext& ctxt, const int slots, const uint32_t 
 
 	ctxt.slots = cc.N / 2;
 }
+
+void FIDESlib::CKKS::BootstrapStCFirst(Ciphertext& ctxt, const int slots, const bool prescaled) {
+	CudaNvtxRange r(std::string{ sc::current().function_name() });
+
+	assert(slots >= ctxt.slots);
+	int old_slots = ctxt.slots;
+
+	FIDESlib::CKKS::Context& cc_ = ctxt.cc_;
+	ContextData& cc				 = ctxt.cc;
+	Ciphertext aux(cc_);
+	bool isLT = cc.GetBootPrecomputation(slots).LT.slots == slots;
+
+	// Same correction/scalar computation as Bootstrap() (ModRaise-first):
+	// it only depends on the current ciphertext modulus and the bootstrap
+	// precomputation for `slots`, not on the ModRaise-first vs StC-first
+	// ordering.
+	uint64_t q	   = cc.prime[0].p;
+	double qDouble = (double)q;
+	const auto p   = cc.param.raw->p;
+	double powP	   = pow(2, p);
+	int32_t deg	   = std::round(std::log2(qDouble / powP));
+
+	uint32_t correction = cc.GetBootPrecomputation(slots).correctionFactor - deg;
+	double post			 = std::pow(2, static_cast<double>(deg));
+	double pre			 = 1. / post;
+	uint64_t scalar		 = std::llround(post);
+
+	bool sparse_encaps = cc.GetBootPrecomputation(slots).sparse_encaps;
+
+	//------------------------------------------------------------------------------
+	// STC-FIRST: run SlotsToCoeffs BEFORE the modulus raise.
+	//
+	// Mirrors OpenFHE's FHECKKSRNS::EvalBootstrapStCFirst: the depleted
+	// ciphertext (still at its post-computation, low level) is first
+	// transformed via SlotsToCoeffs (the "decode" direction of the same
+	// EvalCoeffsToSlots primitive used by the ModRaise-first path), before
+	// any level is spent on ModRaise/Accumulate/CoeffsToSlots/EvalMod. This
+	// is why BootstrapStCFirst requires more remaining input levels than
+	// Bootstrap(): this linear transform is "new" work happening before
+	// ModRaise, instead of being folded in via the ModRaise-first ordering.
+	//------------------------------------------------------------------------------
+	if (isLT) {
+		EvalLinearTransform(ctxt, slots, true);
+	} else {
+		EvalCoeffsToSlots(ctxt, slots, true);
+	}
+
+	if (cc.N / 2 != slots) {
+		// Sparsely packed case: fold the redundant copies back together
+		// before ModRaise, mirroring OpenFHE's
+		// EvalAddInPlaceNoCheck(ctxtDepleted, EvalRotate(ctxtDepleted, slots))
+		// right after EvalSlotsToCoeffs.
+		aux.rotate(ctxt, slots);
+		ctxt.add(aux);
+	}
+
+	//------------------------------------------------------------------------------
+	// RAISING THE MODULUS (identical to Bootstrap())
+	//------------------------------------------------------------------------------
+	{
+		ModRaise(ctxt, slots, correction, prescaled, sparse_encaps);
+
+		double k				 = cc.GetBootK();
+		double constantEvalMult = pre * (1.0 / (k * cc.N));
+		ctxt.multScalar(constantEvalMult, false);
+		if (MODRAISE_WITH_P0) {
+			ctxt.rescale();
+		}
+
+		if (sparse_encaps) {
+			auto& sparse_context	 = cc.GetBootPrecomputation(slots).sparse_context;
+			auto sparse_context_use = sparse_context.lock();
+			auto& btoa				 = CKKS::GetSecretSwitchingKey(sparse_context_use, ctxt.cc_, ctxt.keyID);
+			ctxt.keySwitch(btoa);
+		}
+		Accumulate(ctxt, cc.GetBootPrecomputation(slots).accumulate_bStep, slots, cc.N / 2 / slots);
+	}
+
+	ctxt.slots = cc.N / 2 == slots ? slots : 2 * slots;
+
+	if (ctxt.NoiseLevel == 2) {
+		ctxt.rescale();
+	}
+
+	//------------------------------------------------------------------------------
+	// CoeffsToSlots (identical role to Bootstrap()'s first EvalCoeffsToSlots
+	// call, only now it is the SECOND linear transform overall instead of
+	// the first).
+	//------------------------------------------------------------------------------
+	if (isLT) {
+		EvalLinearTransform(ctxt, slots, false);
+	} else {
+		EvalCoeffsToSlots(ctxt, slots, false);
+	}
+
+	//------------------------------------------------------------------------------
+	// Approximate modular reduction (EvalMod), identical to Bootstrap().
+	//------------------------------------------------------------------------------
+	if (cc.N / 2 == slots) {
+		aux.conjugate(ctxt);
+		Ciphertext ctxtEncI(cc_);
+		ctxtEncI.sub(ctxt, aux);
+		ctxt.add(aux);
+		ctxtEncI.multMonomial(3 * 2 * cc.N / 4);
+		if (cc.rescaleTechnique == CKKS::FIXEDMANUAL)
+			ctxt.rescale();
+		if (cc.rescaleTechnique == CKKS::FIXEDMANUAL)
+			ctxtEncI.rescale();
+		approxModReduction(ctxt, ctxtEncI, cc.GetEvalKey(ctxt.keyID), scalar);
+	} else {
+		aux.conjugate(ctxt);
+		ctxt.add(aux);
+		if (cc.rescaleTechnique == CKKS::FIXEDMANUAL)
+			ctxt.rescale();
+		approxModReductionSparse(ctxt, scalar);
+	}
+
+	if (ctxt.NoiseLevel == 2) {
+		ctxt.rescale();
+	}
+
+	//------------------------------------------------------------------------------
+	// NOTE: unlike Bootstrap(), there is NO second SlotsToCoeffs here: the
+	// StC transform already ran at the very start of this function, on the
+	// depleted ciphertext, matching OpenFHE's EvalBootstrapStCFirst, which
+	// returns ctxtEnc directly after EvalMod + double-angle + corFactor
+	// scaling, with no further CoeffsToSlots/SlotsToCoeffs call.
+	//------------------------------------------------------------------------------
+	if (cc.N / 2 != slots) {
+		aux.rotate(ctxt, slots);
+		ctxt.add(aux);
+	}
+
+	uint64_t corFactor = (uint64_t)1 << std::llround(correction);
+	multIntScalar(ctxt, corFactor);
+
+	ctxt.slots = old_slots;
+}
