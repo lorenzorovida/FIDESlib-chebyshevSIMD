@@ -809,8 +809,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphert
 	};
 
 	auto coeffs = GetChebyshevCoefficients(sinc, 0, 256, 247);
-	
-	auto& context = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
     // Run the entire integer-add circuit on GPU
     FIDESlib::CKKS::evalIntegerEqual(
