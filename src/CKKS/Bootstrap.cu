@@ -953,13 +953,13 @@ void FIDESlib::CKKS::BootstrapStCFirstBits(Ciphertext& ctxt, const int slots, co
 			ctxt.rescale();
 		if (cc.rescaleTechnique == CKKS::FIXEDMANUAL)
 			ctxtEncI.rescale();
-		approxModReduction(ctxt, ctxtEncI, cc.GetEvalKey(ctxt.keyID), scalar);
+		//approxModReduction(ctxt, ctxtEncI, cc.GetEvalKey(ctxt.keyID), scalar);
 	} else {
 		aux.conjugate(ctxt);
 		ctxt.add(aux);
 		if (cc.rescaleTechnique == CKKS::FIXEDMANUAL)
 			ctxt.rescale();
-		approxModReductionSparse(ctxt, scalar);
+		//approxModReductionSparse(ctxt, scalar);
 	}
 
 	if (ctxt.NoiseLevel == 2) {
