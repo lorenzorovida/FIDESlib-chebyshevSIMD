@@ -209,9 +209,14 @@ void processArray(
          * Replace this with the FIDESlib plaintext multiplication
          * function available in your checkout.
          */
-        masked.mult(rolled_ctxt, rolled_mask);
+        //masked.mult(rolled_ctxt, rolled_mask);
+        masked.multPt(rolled_ctxt, rolled_mask, false);
 
         result.add(masked);
+
+        if (result.cc.rescaleTechnique == FIDESlib::CKKS::FIXEDMANUAL) {
+		    result.rescale();
+	}
     }
 
 
