@@ -325,7 +325,7 @@ void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std:
     FIDESlib::CKKS::BootstrapStCFirstBits(result, result.slots, false);
 }
 
-void FIDESlib::CKKS::cleanAndReduce(Ciphertext& out, const Ciphertext& c) {
+void cleanAndReduce(Ciphertext& out, const Ciphertext& c) {
 	FIDESlib::CKKS::Context& cc_ = c.cc_;
 
 	// sqC := c^2
@@ -346,7 +346,7 @@ void FIDESlib::CKKS::cleanAndReduce(Ciphertext& out, const Ciphertext& c) {
 	out.mult(sqC, shifted, false);
 }
 
-void FIDESlib::CKKS::clean(Ciphertext& out, const Ciphertext& c) {
+void clean(Ciphertext& out, const Ciphertext& c) {
 	FIDESlib::CKKS::Context& cc_ = c.cc_;
 
 	// sq := c^2
@@ -373,7 +373,7 @@ void FIDESlib::CKKS::clean(Ciphertext& out, const Ciphertext& c) {
 	out.add(termA, termB);
 }
 
-void FIDESlib::CKKS::mod2Shallow(Ciphertext& out, const Ciphertext& c) {
+void mod2Shallow(Ciphertext& out, const Ciphertext& c) {
 	FIDESlib::CKKS::Context& cc_ = c.cc_;
 
 	// doubled := c * 2
@@ -390,7 +390,7 @@ void FIDESlib::CKKS::mod2Shallow(Ciphertext& out, const Ciphertext& c) {
 	out.sub(doubled, sq);
 }
 
-void FIDESlib::CKKS::majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c) {
+void majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c) {
 	FIDESlib::CKKS::Context& cc_ = a.cc_;
 
 	// total := a + b + c
@@ -428,7 +428,7 @@ void FIDESlib::CKKS::majorityBit(Ciphertext& out, const Ciphertext& a, const Cip
 	out.add(ab, termC);
 }
 
-void FIDESlib::CKKS::csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c, bool cleanVals) {
+void csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c, bool cleanVals) {
 	FIDESlib::CKKS::Context& cc_ = a.cc_;
 
 	if (cleanVals) {
@@ -458,7 +458,7 @@ void FIDESlib::CKKS::csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, con
 	majorityBit(C, a, b, c);
 }
 
-void FIDESlib::CKKS::bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, const Ciphertext& c, int repetitions) {
+void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, const Ciphertext& c, int repetitions) {
 	FIDESlib::CKKS::Context& cc_ = c.cc_;
 
 	// Build the {1,2,4,8,0,0,0,0}-repeated mask, encoded at c's level, and

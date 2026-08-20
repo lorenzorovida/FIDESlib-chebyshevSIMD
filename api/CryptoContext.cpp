@@ -851,7 +851,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::CsaSum(const Ciphertext<DCRTPo
 	// the shared work twice. Worth optimizing once this is used inside the
 	// larger mul_integer pipeline.
 	FIDESlib::CKKS::Ciphertext dummyCarry(res_gpu->cc_);
-	FIDESlib::CKKS::csa3(*res_gpu, dummyCarry, *a_gpu, *b_gpu, *c_gpu, cleanVals);
+	FIDESlib::CKKS::csa3(*res_gpu, dummyCarry, *a_gpu, *b_gpu, *c_gpu);
  
 	return result;
 }
@@ -879,7 +879,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::CsaCarry(const Ciphertext<DCRT
 	auto c_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
  
 	FIDESlib::CKKS::Ciphertext dummySum(res_gpu->cc_);
-	FIDESlib::CKKS::csa3(dummySum, *res_gpu, *a_gpu, *b_gpu, *c_gpu, cleanVals);
+	FIDESlib::CKKS::csa3(dummySum, *res_gpu, *a_gpu, *b_gpu, *c_gpu);
  
 	return result;
 }
@@ -913,7 +913,14 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::MajorityBit(const Ciphertext<D
  
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::BinToDec(const Ciphertext<DCRTPoly>& ct, int repetitions) {
 	FIDESlib::CudaNvtxRange r("API");
-	ThrowIfNoDevicesForIntegerArith(this->devices.empty(), "BinToDec");
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW(
+		    "BinToDec has no CPU fallback with the OpenFHE "
+		    "library currently linked. Configure at least one GPU device, or "
+		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+		    "to enable the CPU path.");
+	}
  
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
  
