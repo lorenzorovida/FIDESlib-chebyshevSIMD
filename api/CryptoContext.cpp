@@ -858,6 +858,8 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Cipherte
         std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
             this->GetDeviceCiphertext(ct2->gpu));
 
+	auto& context               = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
     FIDESlib::CKKS::evalIntegerMult(
         *res_gpu,
         *ct1_gpu,
@@ -868,7 +870,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Cipherte
         zslots,
         overflow,
         coeffsMultipler4bits,
-        this->cc);
+        context);
 
     return result;
 }

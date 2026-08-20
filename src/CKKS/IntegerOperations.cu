@@ -709,8 +709,7 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
             repetitions_original,
             overflow,
             coeffs,
-            cc,
-            cc_);
+            cc);
     }
 
 
