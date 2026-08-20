@@ -1262,7 +1262,7 @@ void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, 
 	out.copy(res);
 }
 
-std::vector<int> rotateMask(const std::vector<int>& mask, int shift)
+std::vector<double> rotateMask(const std::vector<double>& mask, int shift)
 {
     const int n = static_cast<int>(mask.size());
 
