@@ -649,7 +649,7 @@ void evalIntegerMult(Ciphertext& out,
 		mask2,
 		cc);
 	*/
-	size_t noise = static_cast<size_t>(result.NoiseLevel);
+	noise = static_cast<size_t>(result.NoiseLevel);
 
 	pt = cc->MakeCKKSPackedPlaintext(mask2, noise, result.getLevel(), nullptr, result.slots);
 
