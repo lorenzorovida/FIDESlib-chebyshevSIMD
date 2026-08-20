@@ -808,6 +808,8 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphert
 			return sin(x * M_PI) / (x * M_PI);
 	};
 
+	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
     // Run the entire integer-add circuit on GPU
     FIDESlib::CKKS::evalIntegerEqual(
         *res_gpu,
