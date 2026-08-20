@@ -428,7 +428,7 @@ void majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, cons
 	out.add(ab, termC);
 }
 
-void csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c, bool cleanVals) {
+void csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c) {
 	FIDESlib::CKKS::Context& cc_ = a.cc_;
 
 	if (cleanVals) {
