@@ -865,18 +865,6 @@ void FIDESlib::CKKS::BootstrapStCFirst(Ciphertext& ctxt, const int slots, const 
 void FIDESlib::CKKS::BootstrapStCFirstBits(Ciphertext& ctxt, const int slots, const bool prescaled) {
 	CudaNvtxRange r(std::string{ sc::current().function_name() });
 
-	std::cout << "Input level = "
-          << ctxt.getLevel()
-          << std::endl;
-
-	std::cout << "Input slots = "
-          << ctxt.slots
-          << std::endl;
-
-	std::cout << "Input noise = "
-          << ctxt.NoiseLevel
-          << std::endl;	
-
 	if (ctxt.NoiseLevel == 2) {
 		ctxt.rescale();
 	}
