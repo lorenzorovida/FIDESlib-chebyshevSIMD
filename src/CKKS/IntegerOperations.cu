@@ -117,7 +117,7 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
 		sum.add(rotated);
 	}
 
-	evalChebyshevSeries(sum, coeffsSinc, 0, 256);
+	//evalChebyshevSeries(sum, coeffsSinc, 0, 256);
 
 	// ------------------------------------------------------------
 	// correction mask
@@ -702,7 +702,7 @@ void evalIntegerMult(Ciphertext& out,
 	} else {
 
 		csa4(result, p1, p2, p3, p4, bits);
-        BootstrapStCFirstBits(result, result.slots, false);
+		BootstrapStCFirstBits(result, result.slots, false);
 	}
 
 	out.copy(result);
