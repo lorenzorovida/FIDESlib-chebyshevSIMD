@@ -251,18 +251,18 @@ void evalIntegerMult(Ciphertext& out,
 
 		if (bits_original > 8) {
 
-			processArray(a_processed, a, { { 8, 64 }, { 12, 80 } }, mask_size, repetitions_original, cc, cc_);
+			processArray(a_processed, a, { { 8, 64 }, { 12, 80 } }, mask_size, repetitions_original, cc);
 		}
 
 		if (bits_original > 16) {
 
-			processArray(a_processed, a, { { 16, 256 }, { 20, 272 }, { 24, 320 }, { 28, 336 } }, mask_size, repetitions_original, cc, cc_);
+			processArray(a_processed, a, { { 16, 256 }, { 20, 272 }, { 24, 320 }, { 28, 336 } }, mask_size, repetitions_original, cc);
 		}
 
 		if (bits_original > 32) {
 
 			processArray(
-			  a_processed, a, { { 32, 1024 }, { 36, 1040 }, { 40, 1088 }, { 44, 1104 }, { 48, 1280 }, { 52, 1296 }, { 56, 1344 }, { 60, 1360 } }, mask_size, repetitions_original, cc, cc_);
+			  a_processed, a, { { 32, 1024 }, { 36, 1040 }, { 40, 1088 }, { 44, 1104 }, { 48, 1280 }, { 52, 1296 }, { 56, 1344 }, { 60, 1360 } }, mask_size, repetitions_original, cc);
 		}
 
 		if (bits_original > 64) {
@@ -416,18 +416,18 @@ void evalIntegerMult(Ciphertext& out,
 
 		if (bits_original > 8) {
 
-			processArray(b_processed, b, { { 8, 32 }, { 12, 40 } }, mask_size, repetitions_original, cc, cc_);
+			processArray(b_processed, b, { { 8, 32 }, { 12, 40 } }, mask_size, repetitions_original, cc);
 		}
 
 		if (bits_original > 16) {
 
-			processArray(b_processed, b, { { 16, 128 }, { 20, 136 }, { 24, 160 }, { 28, 168 } }, mask_size, repetitions_original, cc, cc_);
+			processArray(b_processed, b, { { 16, 128 }, { 20, 136 }, { 24, 160 }, { 28, 168 } }, mask_size, repetitions_original, cc);
 		}
 
 		if (bits_original > 32) {
 
 			processArray(
-			  b_processed, b, { { 32, 512 }, { 36, 520 }, { 40, 544 }, { 44, 552 }, { 48, 640 }, { 52, 648 }, { 56, 672 }, { 60, 680 } }, mask_size, repetitions_original, cc, cc_);
+			  b_processed, b, { { 32, 512 }, { 36, 520 }, { 40, 544 }, { 44, 552 }, { 48, 640 }, { 52, 648 }, { 56, 672 }, { 60, 680 } }, mask_size, repetitions_original, cc);
 		}
 
 		if (bits_original > 64) {
