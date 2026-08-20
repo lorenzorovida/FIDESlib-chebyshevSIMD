@@ -769,11 +769,28 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
 
     Ciphertext p1(a.cc_);
 
+	/*
     multMask(
         p1,
         result,
         mask1,
         cc);
+	*/
+
+	noise = result.NoiseFactor;
+
+	pt = cc->MakeCKKSPackedPlaintext(
+		mask1,
+		noise,
+		result.getLevel(),
+		nullptr,
+		result.slots);
+
+	raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
+	Plaintext maskP5(cc_, raw);
+	p1.multPt(result, maskP5);
+
+	
 
 
     // ------------------------------------------------------------
@@ -793,11 +810,25 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
 
     Ciphertext masked2(a.cc_);
 
+	/*
     multMask(
         masked2,
         result,
         mask2,
         cc);
+	*/
+	noise = result.NoiseFactor;
+
+	pt = cc->MakeCKKSPackedPlaintext(
+		mask2,
+		noise,
+		result.getLevel(),
+		nullptr,
+		result.slots);
+
+	raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
+	Plaintext maskP6(cc_, raw);
+	masked2.multPt(result, maskP6);
 
     Ciphertext p3(a.cc_);
 
