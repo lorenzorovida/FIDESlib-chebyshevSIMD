@@ -149,14 +149,13 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
     a.copy(corrected);
 
     if (a.NoiseLevel == 2) {
-        a.dropToLevel(depth - 5, false);
+        a.dropToLevel(5, false);
     } else {
-        a.dropToLevel(depth - 4, false);
+        a.dropToLevel(4, false);
     }
 
 
 	BootstrapStCFirstBits(a, a.slots, false);
-    
 }
 
 void evalIntegerMult(Ciphertext& out,
