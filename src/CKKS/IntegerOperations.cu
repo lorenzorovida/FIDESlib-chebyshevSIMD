@@ -162,7 +162,7 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
         std::cout << "Before BTS all good" << std::endl;
     }
 
-	BootstrapStCFirstBits(a, a.slots, false);
+	//BootstrapStCFirstBits(a, a.slots, false);
 
     err = cudaDeviceSynchronize();
 
