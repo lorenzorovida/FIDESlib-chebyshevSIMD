@@ -1,17 +1,17 @@
 #include "CryptoContext.hpp"
 #include "CKKS/AccumulateBroadcast.cuh"
 #include "CKKS/ApproxModEval.cuh"
+#include "CKKS/ApproxModEvalBatch.cuh"
 #include "CKKS/Bootstrap.cuh"
 #include "CKKS/Ciphertext.cuh"
 #include "CKKS/Context.cuh"
+#include "CKKS/IntegerOperations.cuh"
 #include "CKKS/KeySwitchingKey.cuh"
 #include "CKKS/LinearTransform.cuh"
 #include "CKKS/Parameters.cuh"
 #include "CKKS/Plaintext.cuh"
 #include "CKKS/forwardDefs.cuh"
 #include "CKKS/openfhe-interface/RawCiphertext.cuh"
-#include "CKKS/ApproxModEvalBatch.cuh"
-#include "CKKS/IntegerOperations.cuh"
 #include "CudaUtils.cuh"
 #include "Definitions.hpp"
 #include "PolyApprox.cuh"
@@ -99,20 +99,20 @@ static std::vector<FIDESlib::PrimeRecord> p64{ { .p = 2305843009218281473 },
 	{ .p = 2251799815520257 } };
 
 static std::vector<FIDESlib::PrimeRecord> sp64{ { .p = 2305843009218936833 },
-                                                { .p = 2305843009220116481 },
-                                                { .p = 2305843009221820417 },
-                                                { .p = 2305843009224179713 },
-                                                { .p = 2305843009225228289 },
-                                                { .p = 2305843009227980801 },
-                                                { .p = 2305843009229160449 },
-                                                { .p = 2305843009229946881 },
-                                                { .p = 2305843009231650817 },
-                                                { .p = 2305843009235189761 },
-                                                { .p = 2305843009240301569 },
-                                                { .p = 2305843009242923009 },
-                                                { .p = 2305843009244889089 },
-                                                { .p = 2305843009245413377 },
-                                                { .p = 2305843009247641601 } };
+	{ .p = 2305843009220116481 },
+	{ .p = 2305843009221820417 },
+	{ .p = 2305843009224179713 },
+	{ .p = 2305843009225228289 },
+	{ .p = 2305843009227980801 },
+	{ .p = 2305843009229160449 },
+	{ .p = 2305843009229946881 },
+	{ .p = 2305843009231650817 },
+	{ .p = 2305843009235189761 },
+	{ .p = 2305843009240301569 },
+	{ .p = 2305843009242923009 },
+	{ .p = 2305843009244889089 },
+	{ .p = 2305843009245413377 },
+	{ .p = 2305843009247641601 } };
 
 static std::unordered_map<PKESchemeFeature, lbcrypto::PKESchemeFeature> PKESchemeFeatureMap = {
 	{ PKESchemeFeature::PKE, lbcrypto::PKE },
@@ -210,19 +210,15 @@ void CryptoContextImpl<DCRTPoly>::LoadContext(const PublicKey<DCRTPoly>& publicK
 	const auto cryptoParams = std::dynamic_pointer_cast<lbcrypto::CryptoParametersCKKSRNS>(context->GetCryptoParameters());
 	FIDESlib::BOOT_CONFIG bootConfig;
 	switch (this->keyDist) {
-	case fideslib::UNIFORM_TERNARY: bootConfig = FIDESlib::UNIFORM;
-		break;
-	case fideslib::SPARSE_TERNARY: bootConfig = FIDESlib::SPARSE;
-		break;
-	case fideslib::SPARSE_ENCAPSULATED: bootConfig = FIDESlib::ENCAPS;
-		break;
-	default: bootConfig = FIDESlib::UNIFORM;
-		break;
+	case fideslib::UNIFORM_TERNARY: bootConfig = FIDESlib::UNIFORM; break;
+	case fideslib::SPARSE_TERNARY: bootConfig = FIDESlib::SPARSE; break;
+	case fideslib::SPARSE_ENCAPSULATED: bootConfig = FIDESlib::ENCAPS; break;
+	default: bootConfig = FIDESlib::UNIFORM; break;
 	}
 
 	FIDESlib::CKKS::RawParams rawParams = FIDESlib::CKKS::GetRawParams(context, bootConfig);
-	params                              = params.adaptTo(rawParams);
-	FIDESlib::CKKS::Context c           = FIDESlib::CKKS::GenCryptoContextGPU(params, this->devices);
+	params								= params.adaptTo(rawParams);
+	FIDESlib::CKKS::Context c			= FIDESlib::CKKS::GenCryptoContextGPU(params, this->devices);
 
 	auto& pkImpl = std::any_cast<const lbcrypto::PublicKey<lbcrypto::DCRTPoly>&>(publicKey->pimpl);
 
@@ -246,7 +242,7 @@ void CryptoContextImpl<DCRTPoly>::LoadContext(const PublicKey<DCRTPoly>& publicK
 		FIDESlib::CKKS::AddBootstrapPrecomputation(pkImpl, slot, c);
 	}
 
-	this->gpu    = std::make_any<FIDESlib::CKKS::Context>(std::move(c));
+	this->gpu	 = std::make_any<FIDESlib::CKKS::Context>(std::move(c));
 	this->loaded = true;
 }
 
@@ -259,14 +255,14 @@ void CryptoContextImpl<DCRTPoly>::LoadPlaintext(Plaintext& pt) {
 		OPENFHE_THROW("CryptoContext not loaded to any device");
 	}
 
-	auto& context_gpu                                 = std::any_cast<FIDESlib::CKKS::Context&>(this->gpu);
-	auto& context                                     = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-	const auto& ptImpl                                = std::any_cast<const lbcrypto::Plaintext&>(pt->cpu);
-	FIDESlib::CKKS::RawPlainText raw_pt               = FIDESlib::CKKS::GetRawPlainText(context, ptImpl);
+	auto& context_gpu								  = std::any_cast<FIDESlib::CKKS::Context&>(this->gpu);
+	auto& context									  = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	const auto& ptImpl								  = std::any_cast<const lbcrypto::Plaintext&>(pt->cpu);
+	FIDESlib::CKKS::RawPlainText raw_pt				  = FIDESlib::CKKS::GetRawPlainText(context, ptImpl);
 	std::shared_ptr<FIDESlib::CKKS::Plaintext> gpu_pt = std::make_shared<FIDESlib::CKKS::Plaintext>(context_gpu, raw_pt);
-	uint32_t handle                                   = this->RegisterDevicePlaintext(std::move(gpu_pt));
-	pt->gpu                                           = handle;
-	pt->loaded                                        = true;
+	uint32_t handle									  = this->RegisterDevicePlaintext(std::move(gpu_pt));
+	pt->gpu											  = handle;
+	pt->loaded										  = true;
 }
 
 void CryptoContextImpl<DCRTPoly>::LoadCiphertext(Ciphertext<DCRTPoly>& ct) {
@@ -278,15 +274,15 @@ void CryptoContextImpl<DCRTPoly>::LoadCiphertext(Ciphertext<DCRTPoly>& ct) {
 		OPENFHE_THROW("CryptoContext not loaded to any device");
 	}
 
-	auto& context_gpu                                  = std::any_cast<FIDESlib::CKKS::Context&>(this->gpu);
-	auto& context                                      = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-	const auto& ctImpl                                 = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-	FIDESlib::CKKS::RawCipherText raw_ct               = FIDESlib::CKKS::GetRawCipherText(context, ctImpl);
+	auto& context_gpu								   = std::any_cast<FIDESlib::CKKS::Context&>(this->gpu);
+	auto& context									   = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	const auto& ctImpl								   = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+	FIDESlib::CKKS::RawCipherText raw_ct			   = FIDESlib::CKKS::GetRawCipherText(context, ctImpl);
 	std::shared_ptr<FIDESlib::CKKS::Ciphertext> gpu_ct = std::make_shared<FIDESlib::CKKS::Ciphertext>(context_gpu, raw_ct);
-	uint32_t handle                                    = this->RegisterDeviceCiphertext(std::move(gpu_ct));
-	ct->gpu                                            = handle;
-	ct->loaded                                         = true;
-	ct->original_level                                 = this->multiplicative_depth - ct->GetLevel();
+	uint32_t handle									   = this->RegisterDeviceCiphertext(std::move(gpu_ct));
+	ct->gpu											   = handle;
+	ct->loaded										   = true;
+	ct->original_level								   = this->multiplicative_depth - ct->GetLevel();
 }
 
 // ---- Key Generation ----
@@ -294,7 +290,7 @@ void CryptoContextImpl<DCRTPoly>::LoadCiphertext(Ciphertext<DCRTPoly>& ct) {
 KeyPair<DCRTPoly> CryptoContextImpl<DCRTPoly>::KeyGen() {
 	FIDESlib::CudaNvtxRange r("API");
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-	auto keys     = context->KeyGen();
+	auto keys	  = context->KeyGen();
 
 	KeyPair<DCRTPoly> keypair;
 	keypair.publicKey = std::make_shared<PublicKeyImpl<DCRTPoly>>();
@@ -333,12 +329,7 @@ void CryptoContextImpl<DCRTPoly>::EvalRotateKeyGen(const PrivateKey<DCRTPoly>& s
 
 // ---- Bootstrapping ----
 
-void CryptoContextImpl<DCRTPoly>::EvalBootstrapSetup(const std::vector<uint32_t>& levelBudget,
-                                                     std::vector<uint32_t> dim1,
-                                                     uint32_t slots,
-                                                     uint32_t correctionFactor,
-                                                     bool precompute,
-                                                     bool btsfirstboot) {
+void CryptoContextImpl<DCRTPoly>::EvalBootstrapSetup(const std::vector<uint32_t>& levelBudget, std::vector<uint32_t> dim1, uint32_t slots, uint32_t correctionFactor, bool precompute, bool btsfirstboot) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	// Only before loading one must compute the bootstrapping auxiliary data.
@@ -393,17 +384,13 @@ bool CryptoContextImpl<DCRTPoly>::SerializeEvalMultKey(std::ostream& ser, const 
 	FIDESlib::CudaNvtxRange r("API");
 	bool res;
 	switch (sertype) {
-	case fideslib::SerType::BINARY: res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned
-			long>>>>::SerializeEvalMultKey(
-			ser,
-			lbcrypto::SerType::BINARY,
-			keyTag);
+	case fideslib::SerType::BINARY:
+		res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>::SerializeEvalMultKey(
+		  ser, lbcrypto::SerType::BINARY, keyTag);
 		break;
-	case fideslib::SerType::JSON: res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned
-			long>>>>::SerializeEvalMultKey(
-			ser,
-			lbcrypto::SerType::JSON,
-			keyTag);
+	case fideslib::SerType::JSON:
+		res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>::SerializeEvalMultKey(
+		  ser, lbcrypto::SerType::JSON, keyTag);
 		break;
 	default: OPENFHE_THROW("Unsupported serialization type");
 	}
@@ -415,17 +402,13 @@ bool CryptoContextImpl<DCRTPoly>::SerializeEvalAutomorphismKey(std::ostream& ser
 	FIDESlib::CudaNvtxRange r("API");
 	bool res;
 	switch (sertype) {
-	case SerType::BINARY: res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned
-			long>>>>::SerializeEvalAutomorphismKey(
-			ser,
-			lbcrypto::SerType::BINARY,
-			keyTag);
+	case SerType::BINARY:
+		res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>::SerializeEvalAutomorphismKey(
+		  ser, lbcrypto::SerType::BINARY, keyTag);
 		break;
-	case SerType::JSON: res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned
-			long>>>>::SerializeEvalAutomorphismKey(
-			ser,
-			lbcrypto::SerType::JSON,
-			keyTag);
+	case SerType::JSON:
+		res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>::SerializeEvalAutomorphismKey(
+		  ser, lbcrypto::SerType::JSON, keyTag);
 		break;
 	default: OPENFHE_THROW("Unsupported serialization type");
 	}
@@ -444,15 +427,13 @@ bool CryptoContextImpl<DCRTPoly>::DeserializeEvalMultKey(std::istream& ser, cons
 
 	bool res;
 	switch (sertype) {
-	case SerType::BINARY: res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned
-			long>>>>::DeserializeEvalMultKey(
-			ser,
-			lbcrypto::SerType::BINARY);
+	case SerType::BINARY:
+		res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>::DeserializeEvalMultKey(
+		  ser, lbcrypto::SerType::BINARY);
 		break;
-	case SerType::JSON: res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned
-			long>>>>::DeserializeEvalMultKey(
-			ser,
-			lbcrypto::SerType::JSON);
+	case SerType::JSON:
+		res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>::DeserializeEvalMultKey(
+		  ser, lbcrypto::SerType::JSON);
 		break;
 	default: OPENFHE_THROW("Unsupported serialization type");
 	}
@@ -469,15 +450,13 @@ bool CryptoContextImpl<DCRTPoly>::DeserializeEvalAutomorphismKey(std::istream& s
 
 	bool res;
 	switch (sertype) {
-	case SerType::BINARY: res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned
-			long>>>>::DeserializeEvalAutomorphismKey(
-			ser,
-			lbcrypto::SerType::BINARY);
+	case SerType::BINARY:
+		res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>::DeserializeEvalAutomorphismKey(
+		  ser, lbcrypto::SerType::BINARY);
 		break;
-	case SerType::JSON: res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned
-			long>>>>::DeserializeEvalAutomorphismKey(
-			ser,
-			lbcrypto::SerType::JSON);
+	case SerType::JSON:
+		res = lbcrypto::CryptoContextImpl<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>::DeserializeEvalAutomorphismKey(
+		  ser, lbcrypto::SerType::JSON);
 		break;
 	default: OPENFHE_THROW("Unsupported serialization type");
 	}
@@ -488,18 +467,18 @@ bool CryptoContextImpl<DCRTPoly>::DeserializeEvalAutomorphismKey(std::istream& s
 // ---- Encoding ----
 
 Plaintext CryptoContextImpl<DCRTPoly>::MakeCKKSPackedPlaintext(const std::vector<std::complex<double>>& value,
-                                                               size_t noiseScaleDeg,
-                                                               uint32_t level,
-                                                               const std::shared_ptr<void> params,
-                                                               uint32_t slots) {
+  size_t noiseScaleDeg,
+  uint32_t level,
+  const std::shared_ptr<void> params,
+  uint32_t slots) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-	auto pt       = context->MakeCKKSPackedPlaintext(value, noiseScaleDeg, level, nullptr, slots);
+	auto pt		  = context->MakeCKKSPackedPlaintext(value, noiseScaleDeg, level, nullptr, slots);
 
 	Plaintext plaintext = std::make_shared<PlaintextImpl>(this->self_reference.lock());
-	plaintext->cpu      = std::make_any<lbcrypto::Plaintext>(pt);
-	plaintext->loaded   = false;
+	plaintext->cpu		= std::make_any<lbcrypto::Plaintext>(pt);
+	plaintext->loaded	= false;
 
 	if (this->devices.empty() || !this->auto_load_plaintexts) {
 		return plaintext;
@@ -511,19 +490,15 @@ Plaintext CryptoContextImpl<DCRTPoly>::MakeCKKSPackedPlaintext(const std::vector
 }
 
 Plaintext
-CryptoContextImpl<DCRTPoly>::MakeCKKSPackedPlaintext(const std::vector<double>& value,
-                                                     size_t noiseScaleDeg,
-                                                     uint32_t level,
-                                                     const std::shared_ptr<void> params,
-                                                     uint32_t slots) {
+CryptoContextImpl<DCRTPoly>::MakeCKKSPackedPlaintext(const std::vector<double>& value, size_t noiseScaleDeg, uint32_t level, const std::shared_ptr<void> params, uint32_t slots) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-	auto pt       = context->MakeCKKSPackedPlaintext(value, noiseScaleDeg, level, nullptr, slots);
+	auto pt		  = context->MakeCKKSPackedPlaintext(value, noiseScaleDeg, level, nullptr, slots);
 
 	Plaintext plaintext = std::make_shared<PlaintextImpl>(this->self_reference.lock());
-	plaintext->cpu      = std::make_any<lbcrypto::Plaintext>(pt);
-	plaintext->loaded   = false;
+	plaintext->cpu		= std::make_any<lbcrypto::Plaintext>(pt);
+	plaintext->loaded	= false;
 
 	if (this->devices.empty() || !this->auto_load_plaintexts) {
 		return plaintext;
@@ -539,13 +514,13 @@ CryptoContextImpl<DCRTPoly>::MakeCKKSPackedPlaintext(const std::vector<double>& 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::Encrypt(Plaintext& pt, const PublicKey<DCRTPoly>& pk) {
 	FIDESlib::CudaNvtxRange r("API");
 
-	auto& context      = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	auto& context	   = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 	const auto& pkImpl = std::any_cast<const lbcrypto::PublicKey<lbcrypto::DCRTPoly>&>(pk->pimpl);
 	const auto& ptImpl = std::any_cast<lbcrypto::Plaintext&>(pt->cpu);
 
-	auto ct                         = context->Encrypt(pkImpl, ptImpl);
+	auto ct							= context->Encrypt(pkImpl, ptImpl);
 	Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-	ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+	ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 
 	if (this->devices.empty() || !this->auto_load_ciphertexts) {
 		return ciphertext;
@@ -564,13 +539,13 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::Encrypt(const PublicKey<DCRTPo
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::Encrypt(Plaintext& pt, const PrivateKey<DCRTPoly>& sk) {
 	FIDESlib::CudaNvtxRange r("API");
 
-	auto& context      = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	auto& context	   = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 	const auto& skImpl = std::any_cast<const lbcrypto::PrivateKey<lbcrypto::DCRTPoly>&>(sk->pimpl);
 	const auto& ptImpl = std::any_cast<lbcrypto::Plaintext&>(pt->cpu);
 
-	auto ct                         = context->Encrypt(skImpl, ptImpl);
+	auto ct							= context->Encrypt(skImpl, ptImpl);
 	Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-	ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+	ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 
 	if (this->devices.empty() || !this->auto_load_ciphertexts) {
 		return ciphertext;
@@ -616,7 +591,7 @@ DecryptResult CryptoContextImpl<DCRTPoly>::Decrypt(Ciphertext<DCRTPoly>& ct, con
 			std::vector<double> dummy(1, 0.0);
 			auto pt_dummy = context->MakeCKKSPackedPlaintext(dummy, 1, this->multiplicative_depth - ct_gpu->getLevel());
 			auto& skImpl  = std::any_cast<const lbcrypto::PrivateKey<lbcrypto::DCRTPoly>&>(sk->pimpl);
-			ct_cpu        = context->Encrypt(skImpl, pt_dummy);
+			ct_cpu		  = context->Encrypt(skImpl, pt_dummy);
 		}
 
 		// Overwrite cpu ct with the data from GPU.
@@ -636,18 +611,18 @@ DecryptResult CryptoContextImpl<DCRTPoly>::Decrypt(Ciphertext<DCRTPoly>& ct, con
 			OPENFHE_THROW("Plaintext eviction error: could not evict Plaintext from device");
 		}
 
-		(*pt)->cpu    = std::make_any<lbcrypto::Plaintext>(std::move(ptImpl));
+		(*pt)->cpu	  = std::make_any<lbcrypto::Plaintext>(std::move(ptImpl));
 		(*pt)->loaded = false;
-		(*pt)->gpu    = 0;
+		(*pt)->gpu	  = 0;
 	} else {
-		*pt           = std::make_shared<PlaintextImpl>();
-		(*pt)->cpu    = std::make_any<lbcrypto::Plaintext>(std::move(ptImpl));
+		*pt			  = std::make_shared<PlaintextImpl>();
+		(*pt)->cpu	  = std::make_any<lbcrypto::Plaintext>(std::move(ptImpl));
 		(*pt)->loaded = false;
-		(*pt)->gpu    = 0;
+		(*pt)->gpu	  = 0;
 	}
 
 	DecryptResult result{};
-	result.isValid       = res.isValid;
+	result.isValid		 = res.isValid;
 	result.messageLength = res.messageLength;
 	return result;
 }
@@ -664,11 +639,11 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalNegate(const Ciphertext<DC
 
 	// Fall back to CPU.
 	if (this->devices.empty()) {
-		auto& context                   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl                    = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto ct                         = context->EvalNegate(ctImpl);
+		auto& context					= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ctImpl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+		auto ct							= context->EvalNegate(ctImpl);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -676,7 +651,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalNegate(const Ciphertext<DC
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	res_gpu->multScalar(-1.0);
 	return result;
 }
@@ -707,12 +682,12 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTP
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		auto& context                   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ct1Impl                   = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct1->cpu);
-		auto& ct2Impl                   = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct2->cpu);
-		auto ct                         = context->EvalAdd(ct1Impl, ct2Impl);
+		auto& context					= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ct1Impl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct1->cpu);
+		auto& ct2Impl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct2->cpu);
+		auto ct							= context->EvalAdd(ct1Impl, ct2Impl);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -721,8 +696,8 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTP
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct2));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto ct2_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto ct2_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
 	res_gpu->add(*ct2_gpu);
 
 	return result;
@@ -734,72 +709,54 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAddInteger(const Ciphertex
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		OPENFHE_THROW(
-		    "EvalAddInteger has no CPU fallback with the OpenFHE "
-		    "library currently linked. Configure at least one GPU device, or "
-		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
-		    "to enable the CPU path.");
+		OPENFHE_THROW("EvalAddInteger has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
 	}
 
 	// Load inputs onto GPU
-    this->LoadCiphertext(
-        const_cast<Ciphertext<DCRTPoly>&>(ct1));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct1));
 
-    this->LoadCiphertext(
-        const_cast<Ciphertext<DCRTPoly>&>(ct2));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct2));
 
-    // Make result from ct1, exactly like EvalAdd
-    Ciphertext<DCRTPoly> result =
-        std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
+	// Make result from ct1, exactly like EvalAdd
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
 
-    auto res_gpu =
-        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
-            this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 
-    auto ct2_gpu =
-        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
-            this->GetDeviceCiphertext(ct2->gpu));
+	auto ct2_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
 
-    // Run the entire integer-add circuit on GPU
-    FIDESlib::CKKS::evalIntegerAdd(
-        *res_gpu,
-        *ct2_gpu,
-        bits);
+	// Run the entire integer-add circuit on GPU
+	FIDESlib::CKKS::evalIntegerAdd(*res_gpu, *ct2_gpu, bits);
 
-    return result;
+	return result;
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, std::vector<double> coeffs, int depth) {
+Ciphertext<DCRTPoly>
+CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, std::vector<double> coeffs, int depth) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		OPENFHE_THROW(
-		    "EvalEqualInteger has no CPU fallback with the OpenFHE "
-		    "library currently linked. Configure at least one GPU device, or "
-		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
-		    "to enable the CPU path.");
+		OPENFHE_THROW("EvalEqualInteger has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
 	}
 
 	// Load inputs onto GPU
-    this->LoadCiphertext(
-        const_cast<Ciphertext<DCRTPoly>&>(ct1));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct1));
 
-    this->LoadCiphertext(
-        const_cast<Ciphertext<DCRTPoly>&>(ct2));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct2));
 
-    // Make result from ct1, exactly like EvalAdd
-    Ciphertext<DCRTPoly> result =
-        std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
+	// Make result from ct1, exactly like EvalAdd
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
 
-    auto res_gpu =
-        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
-            this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 
-    auto ct2_gpu =
-        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
-            this->GetDeviceCiphertext(ct2->gpu));
+	auto ct2_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
 
 	std::function<double(double)> sinc = [](double x) -> double {
 		if (x == 0)
@@ -810,202 +767,378 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphert
 
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
-    // Run the entire integer-add circuit on GPU
-    FIDESlib::CKKS::evalIntegerEqual(
-        *res_gpu,
-        *ct2_gpu,
-        bits, 
-		zslots,
-		coeffs, 
-		context,
-		depth
-	);
+	// Run the entire integer-add circuit on GPU
+	FIDESlib::CKKS::evalIntegerEqual(*res_gpu, *ct2_gpu, bits, zslots, coeffs, context, depth);
 
-    return result;
+	return result;
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, bool overflow, std::vector<std::vector<double>> coeffsMultipler4bits) {
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Ciphertext<DCRTPoly>& ct1,
+  const Ciphertext<DCRTPoly>& ct2,
+  int bits,
+  int zslots,
+  bool overflow,
+  std::vector<std::vector<double>> coeffsMultipler4bits) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		OPENFHE_THROW(
-		    "EvalMultInteger has no CPU fallback with the OpenFHE "
-		    "library currently linked. Configure at least one GPU device, or "
-		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
-		    "to enable the CPU path.");
+		OPENFHE_THROW("EvalMultInteger has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
 	}
 
-	this->LoadCiphertext(
-        const_cast<Ciphertext<DCRTPoly>&>(ct1));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct1));
 
-    this->LoadCiphertext(
-        const_cast<Ciphertext<DCRTPoly>&>(ct2));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct2));
 
-    Ciphertext<DCRTPoly> result =
-        std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
 
-    auto res_gpu =
-        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
-            this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 
-    auto ct1_gpu =
-        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
-            this->GetDeviceCiphertext(ct1->gpu));
+	auto ct1_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct1->gpu));
 
-    auto ct2_gpu =
-        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
-            this->GetDeviceCiphertext(ct2->gpu));
+	auto ct2_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
 
-	auto& context               = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
-    FIDESlib::CKKS::evalIntegerMult(
-        *res_gpu,
-        *ct1_gpu,
-        *ct2_gpu,
-        bits,
-        bits,
-        zslots,
-        zslots,
-        overflow,
-        coeffsMultipler4bits,
-        context);
+	FIDESlib::CKKS::evalIntegerMult(*res_gpu, *ct1_gpu, *ct2_gpu, bits, bits, zslots, zslots, overflow, coeffsMultipler4bits, context);
 
-    return result;
+	return result;
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::CsaSum(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b,
-                                                          const Ciphertext<DCRTPoly>& c) {
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::CsaSum(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
 
-		OPENFHE_THROW(
-		    "CsaSum has no CPU fallback with the OpenFHE "
-		    "library currently linked. Configure at least one GPU device, or "
-		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
-		    "to enable the CPU path.");
+		OPENFHE_THROW("CsaSum has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
 	}
- 
+
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(a));
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(b));
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
- 
+
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*a);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto a_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(a->gpu));
-	auto b_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(b->gpu));
-	auto c_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
- 
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto a_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(a->gpu));
+	auto b_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(b->gpu));
+	auto c_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
+
 	// CsaSum/CsaCarry each recompute csa3() independently (it produces both
 	// outputs together): simplest and safest for now, at the cost of doing
 	// the shared work twice. Worth optimizing once this is used inside the
 	// larger mul_integer pipeline.
 	FIDESlib::CKKS::Ciphertext dummyCarry(res_gpu->cc_);
 	FIDESlib::CKKS::csa3(*res_gpu, dummyCarry, *a_gpu, *b_gpu, *c_gpu);
- 
+
 	return result;
 }
- 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::CsaCarry(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b,
-                                                            const Ciphertext<DCRTPoly>& c) {
+
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::CsaCarry(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
 
-		OPENFHE_THROW(
-		    "CsaCarry has no CPU fallback with the OpenFHE "
-		    "library currently linked. Configure at least one GPU device, or "
-		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
-		    "to enable the CPU path.");
+		OPENFHE_THROW("CsaCarry has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
 	}
- 
+
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(a));
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(b));
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
- 
+
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*a);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto a_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(a->gpu));
-	auto b_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(b->gpu));
-	auto c_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
- 
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto a_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(a->gpu));
+	auto b_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(b->gpu));
+	auto c_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
+
 	FIDESlib::CKKS::Ciphertext dummySum(res_gpu->cc_);
 	FIDESlib::CKKS::csa3(dummySum, *res_gpu, *a_gpu, *b_gpu, *c_gpu);
- 
+
 	return result;
 }
- 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::MajorityBit(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b,
-                                                               const Ciphertext<DCRTPoly>& c) {
+
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::MajorityBit(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
 
-		OPENFHE_THROW(
-		    "MajorityBits has no CPU fallback with the OpenFHE "
-		    "library currently linked. Configure at least one GPU device, or "
-		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
-		    "to enable the CPU path.");
+		OPENFHE_THROW("MajorityBits has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
 	}
- 
+
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(a));
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(b));
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
- 
+
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*a);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto a_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(a->gpu));
-	auto b_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(b->gpu));
-	auto c_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
- 
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto a_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(a->gpu));
+	auto b_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(b->gpu));
+	auto c_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
+
 	FIDESlib::CKKS::majorityBit(*res_gpu, *a_gpu, *b_gpu, *c_gpu);
- 
+
 	return result;
 }
- 
+
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::BinToDec(const Ciphertext<DCRTPoly>& ct, int repetitions) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
 
-		OPENFHE_THROW(
-		    "BinToDec has no CPU fallback with the OpenFHE "
-		    "library currently linked. Configure at least one GPU device, or "
-		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
-		    "to enable the CPU path.");
+		OPENFHE_THROW("BinToDec has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
 	}
- 
+
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
- 
-	auto& context                = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
+	auto& context				= std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                 = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto ct_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
- 
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto ct_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
+
 	FIDESlib::CKKS::bintodec(context, *res_gpu, *ct_gpu, repetitions);
- 
+
 	return result;
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::ProcessArray(const Ciphertext<DCRTPoly>& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep) {
+Ciphertext<DCRTPoly>
+CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<DCRTPoly>& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
 
-		OPENFHE_THROW(
-		    "ProcessArray has no CPU fallback with the OpenFHE "
-		    "library currently linked. Configure at least one GPU device, or "
-		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
-		    "to enable the CPU path.");
+		OPENFHE_THROW("ProcessArray has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
 	}
- 
+
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
- 
+
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*c);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto c_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto c_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
+
+	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
+	if (bits > 8) {
+		preprocessProcessArray(bits, { { 8, 64 }, { 12, 80 } }, mask_size, repetitions_original, slots, level, noise, cc, *a.cc_);
+	}
+
+	if (bits > 16) {
+		preprocessProcessArray(bits, { { 16, 256 }, { 20, 272 }, { 24, 320 }, { 28, 336 } }, mask_size, repetitions_original, slots, level, noise, cc, *a.cc_);
+	}
+
+	if (bits > 32) {
+		preprocessProcessArray(bits,
+		  { { 32, 1024 }, { 36, 1040 }, { 40, 1088 }, { 44, 1104 }, { 48, 1280 }, { 52, 1296 }, { 56, 1344 }, { 60, 1360 } },
+		  mask_size,
+		  repetitions_original,
+		  slots,
+		  level,
+		  noise,
+		  cc,
+		  *a.cc_);
+	}
+
+	if (bits > 64) {
+		preprocessProcessArray(bits,
+		  { { 64, 4096 },
+			{ 68, 4112 },
+			{ 72, 4160 },
+			{ 76, 4176 },
+			{ 80, 4352 },
+			{ 84, 4368 },
+			{ 88, 4416 },
+			{ 92, 4432 },
+			{ 96, 5120 },
+			{ 100, 5136 },
+			{ 104, 5184 },
+			{ 108, 5200 },
+			{ 112, 5376 },
+			{ 116, 5392 },
+			{ 120, 5440 },
+			{ 124, 5456 } },
+		  mask_size,
+		  repetitions_original,
+		  slots,
+		  level,
+		  noise,
+		  cc,
+		  *a.cc_);
+	}
+
+	if (bits > 128) {
+		preprocessProcessArray(bits,
+		  { { 128, 16384 },
+			{ 132, 16400 },
+			{ 136, 16448 },
+			{ 140, 16464 },
+			{ 144, 16640 },
+			{ 148, 16656 },
+			{ 152, 16704 },
+			{ 156, 16720 },
+			{ 160, 17408 },
+			{ 164, 17424 },
+			{ 168, 17472 },
+			{ 172, 17488 },
+			{ 176, 17664 },
+			{ 180, 17680 },
+			{ 184, 17728 },
+			{ 188, 17744 },
+			{ 192, 20480 },
+			{ 196, 20496 },
+			{ 200, 20544 },
+			{ 204, 20560 },
+			{ 208, 20736 },
+			{ 212, 20752 },
+			{ 216, 20800 },
+			{ 220, 20816 },
+			{ 224, 21504 },
+			{ 228, 21520 },
+			{ 232, 21568 },
+			{ 236, 21584 },
+			{ 240, 21760 },
+			{ 244, 21776 },
+			{ 248, 21824 },
+			{ 252, 21840 } },
+		  mask_size,
+		  repetitions_original,
+		  slots,
+		  level,
+		  noise,
+		  cc,
+		  *a.cc_);
+	}
+
+	if (bits > 8) {
+		preprocessProcessArray(bits, { { 8, 32 }, { 12, 40 } }, mask_size, repetitions_original, b.slots, b.getLevel(), static_cast<size_t>(b.NoiseLevel), cc, *b.cc_, true);
+	}
+
+	if (bits > 16) {
+		preprocessProcessArray(
+		  bits, { { 16, 128 }, { 20, 136 }, { 24, 160 }, { 28, 168 } }, mask_size, repetitions_original, b.slots, b.getLevel(), static_cast<size_t>(b.NoiseLevel), cc, *b.cc_, true);
+	}
+
+	if (bits > 32) {
+		preprocessProcessArray(bits,
+		  { { 32, 512 }, { 36, 520 }, { 40, 544 }, { 44, 552 }, { 48, 640 }, { 52, 648 }, { 56, 672 }, { 60, 680 } },
+		  mask_size,
+		  repetitions_original,
+		  b.slots,
+		  b.getLevel(),
+		  static_cast<size_t>(b.NoiseLevel),
+		  cc,
+		  *b.cc_,
+		  true);
+	}
+
+	if (bits > 64) {
+		preprocessProcessArray(bits,
+		  { { 64, 2048 },
+			{ 68, 2056 },
+			{ 72, 2080 },
+			{ 76, 2088 },
+			{ 80, 2176 },
+			{ 84, 2184 },
+			{ 88, 2208 },
+			{ 92, 2216 },
+			{ 96, 2560 },
+			{ 100, 2568 },
+			{ 104, 2592 },
+			{ 108, 2600 },
+			{ 112, 2688 },
+			{ 116, 2696 },
+			{ 120, 2720 },
+			{ 124, 2728 } },
+		  mask_size,
+		  repetitions_original,
+		  b.slots,
+		  b.getLevel(),
+		  static_cast<size_t>(b.NoiseLevel),
+		  cc,
+		  *b.cc_,
+		  true);
+	}
+
+	if (bits > 128) {
+		preprocessProcessArray(bits,
+		  { { 128, 8192 },
+			{ 132, 8200 },
+			{ 136, 8224 },
+			{ 140, 8232 },
+			{ 144, 8320 },
+			{ 148, 8328 },
+			{ 152, 8352 },
+			{ 156, 8360 },
+			{ 160, 8704 },
+			{ 164, 8712 },
+			{ 168, 8736 },
+			{ 172, 8744 },
+			{ 176, 8832 },
+			{ 180, 8840 },
+			{ 184, 8864 },
+			{ 188, 8872 },
+			{ 192, 10240 },
+			{ 196, 10248 },
+			{ 200, 10272 },
+			{ 204, 10280 },
+			{ 208, 10368 },
+			{ 212, 10376 },
+			{ 216, 10400 },
+			{ 220, 10408 },
+			{ 224, 10752 },
+			{ 228, 10760 },
+			{ 232, 10784 },
+			{ 236, 10792 },
+			{ 240, 10880 },
+			{ 244, 10888 },
+			{ 248, 10912 },
+			{ 252, 10920 } },
+		  mask_size,
+		  repetitions_original,
+		  b.slots,
+		  b.getLevel(),
+		  static_cast<size_t>(b.NoiseLevel),
+		  cc,
+		  *b.cc_,
+		  true);
+	}
+
+	return result;
+}
+
+Ciphertext<DCRTPoly>
+CryptoContextImpl<DCRTPoly>::ProcessArray(const Ciphertext<DCRTPoly>& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep) {
+	FIDESlib::CudaNvtxRange r("API");
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW("ProcessArray has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
+	}
+
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
+
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*c);
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto c_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
 
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
 	FIDESlib::CKKS::processArray(*res_gpu, *c_gpu, mask_roll_pairs, mask_size, rep, context);
- 
+
 	return result;
 }
 
@@ -1014,12 +1147,12 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTP
 
 	// Fall back to CPU.
 	if (this->devices.empty()) {
-		auto& context                   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl                    = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto& ptImpl                    = std::any_cast<lbcrypto::Plaintext&>(pt->cpu);
-		auto ct                         = context->EvalAdd(ctImpl, ptImpl);
+		auto& context					= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ctImpl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+		auto& ptImpl					= std::any_cast<lbcrypto::Plaintext&>(pt->cpu);
+		auto ct							= context->EvalAdd(ctImpl, ptImpl);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -1028,8 +1161,8 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTP
 	this->LoadPlaintext(pt);
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto pt_gpu                 = std::static_pointer_cast<FIDESlib::CKKS::Plaintext>(this->GetDevicePlaintext(pt->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto pt_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Plaintext>(this->GetDevicePlaintext(pt->gpu));
 	res_gpu->addPt(*pt_gpu);
 
 	return result;
@@ -1045,11 +1178,11 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTP
 
 	// Fall back to CPU.
 	if (this->devices.empty()) {
-		auto& context                   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl                    = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto ct                         = context->EvalAdd(ctImpl, scalar);
+		auto& context					= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ctImpl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+		auto ct							= context->EvalAdd(ctImpl, scalar);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -1057,7 +1190,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTP
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	res_gpu->addScalar(scalar);
 
 	return result;
@@ -1110,7 +1243,7 @@ void CryptoContextImpl<DCRTPoly>::EvalAddInPlace(Ciphertext<DCRTPoly>& ct1, Plai
 	this->LoadPlaintext(pt);
 
 	auto res_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct1->gpu));
-	auto pt_gpu  = std::static_pointer_cast<FIDESlib::CKKS::Plaintext>(this->GetDevicePlaintext(pt->gpu));
+	auto pt_gpu	 = std::static_pointer_cast<FIDESlib::CKKS::Plaintext>(this->GetDevicePlaintext(pt->gpu));
 	res_gpu->addPt(*pt_gpu);
 }
 
@@ -1179,9 +1312,9 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAddMany(const std::vector<
 		for (const auto& ct : ciphertexts) {
 			ctImpls.push_back(std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu));
 		}
-		auto ct                         = context->EvalAddMany(ctImpls);
+		auto ct							= context->EvalAddMany(ctImpls);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -1193,17 +1326,17 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAddMany(const std::vector<
 
 	// Initialize result with the first ciphertext.
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ciphertexts[0]);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 
 	const size_t inSize = ciphertexts.size();
-	const size_t lim    = inSize * 2 - 2;
+	const size_t lim	= inSize * 2 - 2;
 	std::vector<Ciphertext<DCRTPoly>> ciphertextSumVec;
 	ciphertextSumVec.resize(inSize - 1);
 	size_t ctrIndex = 0;
 
 	for (size_t i = 0; i < lim; i = i + 2) {
 		ciphertextSumVec[ctrIndex++] =
-			this->EvalAdd(i < inSize ? ciphertexts[i] : ciphertextSumVec[i - inSize], i + 1 < inSize ? ciphertexts[i + 1] : ciphertextSumVec[i + 1 - inSize]);
+		  this->EvalAdd(i < inSize ? ciphertexts[i] : ciphertextSumVec[i - inSize], i + 1 < inSize ? ciphertexts[i + 1] : ciphertextSumVec[i + 1 - inSize]);
 	}
 
 	return ciphertextSumVec.back();
@@ -1254,12 +1387,12 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSub(const Ciphertext<DCRTP
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		auto& context                   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ct1Impl                   = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct1->cpu);
-		auto& ct2Impl                   = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct2->cpu);
-		auto ct                         = context->EvalSub(ct1Impl, ct2Impl);
+		auto& context					= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ct1Impl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct1->cpu);
+		auto& ct2Impl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct2->cpu);
+		auto ct							= context->EvalSub(ct1Impl, ct2Impl);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -1268,8 +1401,8 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSub(const Ciphertext<DCRTP
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct2));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto ct2_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto ct2_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
 	res_gpu->sub(*ct2_gpu);
 
 	return result;
@@ -1281,12 +1414,12 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSub(const Ciphertext<DCRTP
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		auto& context                   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl                    = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto& ptImpl                    = std::any_cast<lbcrypto::Plaintext&>(pt->cpu);
-		auto ct                         = context->EvalSub(ctImpl, ptImpl);
+		auto& context					= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ctImpl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+		auto& ptImpl					= std::any_cast<lbcrypto::Plaintext&>(pt->cpu);
+		auto ct							= context->EvalSub(ctImpl, ptImpl);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -1295,8 +1428,8 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSub(const Ciphertext<DCRTP
 	this->LoadPlaintext(pt);
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto pt_gpu                 = std::static_pointer_cast<FIDESlib::CKKS::Plaintext>(this->GetDevicePlaintext(pt->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto pt_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Plaintext>(this->GetDevicePlaintext(pt->gpu));
 	res_gpu->subPt(*pt_gpu);
 
 	return result;
@@ -1308,12 +1441,12 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSub(Plaintext& pt, const C
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		auto& context                   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl                    = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto& ptImpl                    = std::any_cast<lbcrypto::Plaintext&>(pt->cpu);
-		auto ct                         = context->EvalSub(ptImpl, ctImpl);
+		auto& context					= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ctImpl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+		auto& ptImpl					= std::any_cast<lbcrypto::Plaintext&>(pt->cpu);
+		auto ct							= context->EvalSub(ptImpl, ctImpl);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -1322,8 +1455,8 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSub(Plaintext& pt, const C
 	this->LoadPlaintext(pt);
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto pt_gpu                 = std::static_pointer_cast<FIDESlib::CKKS::Plaintext>(this->GetDevicePlaintext(pt->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto pt_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Plaintext>(this->GetDevicePlaintext(pt->gpu));
 	res_gpu->multScalar(-1.0);
 	res_gpu->addPt(*pt_gpu);
 
@@ -1336,11 +1469,11 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSub(const Ciphertext<DCRTP
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		auto& context                   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl                    = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto ct                         = context->EvalSub(ctImpl, scalar);
+		auto& context					= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ctImpl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+		auto ct							= context->EvalSub(ctImpl, scalar);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -1348,7 +1481,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSub(const Ciphertext<DCRTP
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	res_gpu->addScalar(-scalar);
 
 	return result;
@@ -1360,11 +1493,11 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSub(double scalar, const C
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		auto& context                   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl                    = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto ct                         = context->EvalSub(scalar, ctImpl);
+		auto& context					= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ctImpl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+		auto ct							= context->EvalSub(scalar, ctImpl);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -1372,7 +1505,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSub(double scalar, const C
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	res_gpu->multScalar(-1.0);
 	res_gpu->addScalar(scalar);
 	res_gpu->multScalar(-1.0);
@@ -1471,12 +1604,12 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMult(const Ciphertext<DCRT
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		auto& context                   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ct1Impl                   = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct1->cpu);
-		auto& ct2Impl                   = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct2->cpu);
-		auto ct                         = context->EvalMult(ct1Impl, ct2Impl);
+		auto& context					= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ct1Impl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct1->cpu);
+		auto& ct2Impl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct2->cpu);
+		auto ct							= context->EvalMult(ct1Impl, ct2Impl);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -1485,8 +1618,8 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMult(const Ciphertext<DCRT
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct2));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto ct2_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto ct2_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
 	res_gpu->mult(*ct2_gpu);
 
 	return result;
@@ -1498,12 +1631,12 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMult(const Ciphertext<DCRT
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		auto& context                   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ct1Impl                   = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct1->cpu);
-		auto& ptImpl                    = std::any_cast<const lbcrypto::ConstPlaintext&>(pt->cpu);
-		auto ct                         = context->EvalMult(ct1Impl, ptImpl);
+		auto& context					= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ct1Impl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct1->cpu);
+		auto& ptImpl					= std::any_cast<const lbcrypto::ConstPlaintext&>(pt->cpu);
+		auto ct							= context->EvalMult(ct1Impl, ptImpl);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -1512,8 +1645,8 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMult(const Ciphertext<DCRT
 	this->LoadPlaintext(pt);
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto pt_gpu                 = std::static_pointer_cast<FIDESlib::CKKS::Plaintext>(this->GetDevicePlaintext(pt->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto pt_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Plaintext>(this->GetDevicePlaintext(pt->gpu));
 	res_gpu->multPt(*pt_gpu);
 
 	return result;
@@ -1530,11 +1663,11 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMult(const Ciphertext<DCRT
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		auto& context                   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ct1Impl                   = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct1->cpu);
-		auto ct                         = context->EvalMult(ct1Impl, scalar);
+		auto& context					= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ct1Impl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct1->cpu);
+		auto ct							= context->EvalMult(ct1Impl, scalar);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -1542,7 +1675,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMult(const Ciphertext<DCRT
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct1));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	res_gpu->multScalar(scalar);
 
 	return result;
@@ -1562,8 +1695,8 @@ void CryptoContextImpl<DCRTPoly>::EvalMultInPlace(Ciphertext<DCRTPoly>& ct1, Pla
 		EnsureMutableCpuCiphertext(ct1);
 		auto& ct1Impl = std::any_cast<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct1->cpu);
 		auto& ptImpl  = std::any_cast<const lbcrypto::ConstPlaintext&>(pt->cpu);
-		auto res      = context->EvalMult(ct1Impl, ptImpl);
-		ct1->cpu      = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(res);
+		auto res	  = context->EvalMult(ct1Impl, ptImpl);
+		ct1->cpu	  = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(res);
 		return;
 	}
 
@@ -1572,7 +1705,7 @@ void CryptoContextImpl<DCRTPoly>::EvalMultInPlace(Ciphertext<DCRTPoly>& ct1, Pla
 	this->LoadPlaintext(pt);
 
 	auto res_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct1->gpu));
-	auto pt_gpu  = std::static_pointer_cast<FIDESlib::CKKS::Plaintext>(this->GetDevicePlaintext(pt->gpu));
+	auto pt_gpu	 = std::static_pointer_cast<FIDESlib::CKKS::Plaintext>(this->GetDevicePlaintext(pt->gpu));
 	res_gpu->multPt(*pt_gpu);
 }
 
@@ -1643,11 +1776,11 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSquare(const Ciphertext<DC
 
 	// Fall back to CPU.
 	if (this->devices.empty()) {
-		auto& context                   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl                    = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto ct                         = context->EvalSquare(ctImpl);
+		auto& context					= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ctImpl					= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+		auto ct							= context->EvalSquare(ctImpl);
 		Ciphertext<DCRTPoly> ciphertext = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		ciphertext->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return ciphertext;
 	}
 
@@ -1655,7 +1788,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSquare(const Ciphertext<DC
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	res_gpu->square();
 
 	return result;
@@ -1694,20 +1827,20 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalRotate(const Ciphertext<DC
 		// Fall back to CPU.
 		if (this->devices.empty()) {
 
-			auto& context               = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-			auto& ctImpl                = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
-			auto ct                     = context->EvalRotate(ctImpl, index);
+			auto& context				= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+			auto& ctImpl				= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
+			auto ct						= context->EvalRotate(ctImpl, index);
 			Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-			result->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+			result->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 			return result;
 		}
 	}
 	// GPU path.
-	
+
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ciphertext));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ciphertext);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	res_gpu->rotate(index);
 
 	return result;
@@ -1718,9 +1851,9 @@ void CryptoContextImpl<DCRTPoly>::EvalRotateInPlace(Ciphertext<DCRTPoly>& cipher
 
 	// Fall back to CPU.
 	if (this->devices.empty()) {
-		auto& context   = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl    = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
-		auto ct         = context->EvalRotate(ctImpl, index);
+		auto& context	= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ctImpl	= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
+		auto ct			= context->EvalRotate(ctImpl, index);
 		ciphertext->cpu = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return;
 	}
@@ -1758,10 +1891,10 @@ CryptoContextImpl<DCRTPoly>::EvalFastRotation(const Ciphertext<DCRTPoly>& ct, co
 	if (this->devices.empty()) {
 
 		auto& context = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto casted = std::static_pointer_cast<std::vector<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>>(precomp);
+		auto& ctImpl  = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+		auto casted	  = std::static_pointer_cast<std::vector<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>>(precomp);
 		Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		result->cpu = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(context->EvalFastRotation(ctImpl, index, m, casted));
+		result->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(context->EvalFastRotation(ctImpl, index, m, casted));
 		return result;
 	}
 
@@ -1770,28 +1903,25 @@ CryptoContextImpl<DCRTPoly>::EvalFastRotation(const Ciphertext<DCRTPoly>& ct, co
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto ct_gpu                 = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto ct_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
 	res_gpu->copy(*ct_gpu);
 	res_gpu->rotate((int)index, true);
 
 	return result;
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalFastRotationExt(const Ciphertext<DCRTPoly>& ct,
-                                                                      const int32_t index,
-                                                                      const std::shared_ptr<void>& digits,
-                                                                      bool addFirst) {
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalFastRotationExt(const Ciphertext<DCRTPoly>& ct, const int32_t index, const std::shared_ptr<void>& digits, bool addFirst) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
 		auto& context = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto casted = std::static_pointer_cast<std::vector<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>>(digits);
+		auto& ctImpl  = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+		auto casted	  = std::static_pointer_cast<std::vector<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>>(digits);
 		Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		result->cpu = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(context->EvalFastRotationExt(ctImpl, index, casted, addFirst));
+		result->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(context->EvalFastRotationExt(ctImpl, index, casted, addFirst));
 		return result;
 	}
 
@@ -1800,8 +1930,8 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalFastRotationExt(const Ciph
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto ct_gpu                 = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto ct_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
 	// ct_gpu->rotate((int)index, false);
 	res_gpu->copy(*ct_gpu);
 	res_gpu->rotate((int)index, false);
@@ -1810,10 +1940,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalFastRotationExt(const Ciph
 }
 
 std::vector<Ciphertext<DCRTPoly>>
-CryptoContextImpl<DCRTPoly>::EvalFastRotation(const Ciphertext<DCRTPoly>& ct,
-                                              const std::vector<int32_t>& indices,
-                                              const uint32_t m,
-                                              const std::shared_ptr<void>& precomp) {
+CryptoContextImpl<DCRTPoly>::EvalFastRotation(const Ciphertext<DCRTPoly>& ct, const std::vector<int32_t>& indices, const uint32_t m, const std::shared_ptr<void>& precomp) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	std::vector<Ciphertext<DCRTPoly>> results;
@@ -1822,11 +1949,11 @@ CryptoContextImpl<DCRTPoly>::EvalFastRotation(const Ciphertext<DCRTPoly>& ct,
 	if (this->devices.empty()) {
 		auto& context = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 		auto& ctImpl  = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto casted   = std::static_pointer_cast<std::vector<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>>(precomp);
+		auto casted	  = std::static_pointer_cast<std::vector<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>>(precomp);
 
 		for (const auto& index : indices) {
 			Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-			result->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(context->EvalFastRotation(ctImpl, index, m, casted));
+			result->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(context->EvalFastRotation(ctImpl, index, m, casted));
 			results.push_back(result);
 		}
 		return results;
@@ -1856,10 +1983,7 @@ CryptoContextImpl<DCRTPoly>::EvalFastRotation(const Ciphertext<DCRTPoly>& ct,
 }
 
 std::vector<Ciphertext<DCRTPoly>>
-CryptoContextImpl<DCRTPoly>::EvalFastRotationExt(const Ciphertext<DCRTPoly>& ct,
-                                                 const std::vector<int32_t>& indices,
-                                                 const std::shared_ptr<void>& digits,
-                                                 bool addFirst) {
+CryptoContextImpl<DCRTPoly>::EvalFastRotationExt(const Ciphertext<DCRTPoly>& ct, const std::vector<int32_t>& indices, const std::shared_ptr<void>& digits, bool addFirst) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	std::vector<Ciphertext<DCRTPoly>> results;
@@ -1868,7 +1992,7 @@ CryptoContextImpl<DCRTPoly>::EvalFastRotationExt(const Ciphertext<DCRTPoly>& ct,
 	if (this->devices.empty()) {
 		auto& context = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 		auto& ctImpl  = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto casted   = std::static_pointer_cast<std::vector<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>>(digits);
+		auto casted	  = std::static_pointer_cast<std::vector<lbcrypto::DCRTPolyImpl<bigintdyn::mubintvec<bigintdyn::ubint<unsigned long>>>>>(digits);
 
 		for (const auto& index : indices) {
 			Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
@@ -1897,7 +2021,7 @@ CryptoContextImpl<DCRTPoly>::EvalFastRotationExt(const Ciphertext<DCRTPoly>& ct,
 	}
 
 	ct_gpu->rotate_hoisted(indices_real, results_gpu, true);
-	
+
 	return results;
 }
 
@@ -1907,11 +2031,11 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalChebyshevSeries(const Ciph
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		auto& context               = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl                = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto ct                     = context->EvalChebyshevSeries(ctImpl, coeffs, a, b);
+		auto& context				= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ctImpl				= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
+		auto ct						= context->EvalChebyshevSeries(ctImpl, coeffs, a, b);
 		Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		result->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		result->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return result;
 	}
 
@@ -1919,7 +2043,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalChebyshevSeries(const Ciph
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	FIDESlib::CKKS::evalChebyshevSeries(*res_gpu, coeffs, a, b);
 
 	return result;
@@ -1934,8 +2058,8 @@ void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesInPlace(Ciphertext<DCRTPoly
 		auto& context = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 		EnsureMutableCpuCiphertext(ct);
 		auto& ctImpl = std::any_cast<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ct->cpu);
-		auto res     = context->EvalChebyshevSeries(ctImpl, coeffs, a, b);
-		ct->cpu      = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(res);
+		auto res	 = context->EvalChebyshevSeries(ctImpl, coeffs, a, b);
+		ct->cpu		 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(res);
 		return;
 	}
 
@@ -1951,10 +2075,10 @@ std::vector<double> CryptoContextImpl<DCRTPoly>::GetChebyshevCoefficients(std::f
 	return FIDESlib::CKKS::get_chebyshev_coefficients(func, a, b, degree);
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatch(
-    const Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b) {
+Ciphertext<DCRTPoly>
+CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatch(const Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b) {
 	FIDESlib::CudaNvtxRange r("API");
- 
+
 	// NOTE: unlike EvalChebyshevSeries, there is no CPU fallback here: plain
 	// OpenFHE has no per-slot Chebyshev evaluator. Only
 	// lorenzorovida/openfhe-development-chebyshevSIMD provides
@@ -1962,91 +2086,82 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatch(
 	// CPU side. If you need CPU support, either link against that fork and
 	// re-enable the branch below, or run this only with devices configured.
 	if (this->devices.empty()) {
-		OPENFHE_THROW(
-		    "EvalChebyshevSeriesPSBatch has no CPU fallback with the OpenFHE "
-		    "library currently linked. Configure at least one GPU device, or "
-		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
-		    "to enable the CPU path.");
+		OPENFHE_THROW("EvalChebyshevSeriesPSBatch has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
 	}
- 
+
 	// GPU path.
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
- 
-	auto& context               = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
+	auto& context				= std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	FIDESlib::CKKS::evalChebyshevSeriesPSBatch(context, *res_gpu, batchOfCoeffs, a, b);
- 
+
 	return result;
 }
- 
-void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchInPlace(
-    Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b) {
+
+void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchInPlace(Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b) {
 	FIDESlib::CudaNvtxRange r("API");
- 
+
 	if (this->devices.empty()) {
-		OPENFHE_THROW(
-		    "EvalChebyshevSeriesPSBatchInPlace has no CPU fallback with the OpenFHE "
-		    "library currently linked. Configure at least one GPU device, or "
-		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
-		    "to enable the CPU path.");
+		OPENFHE_THROW("EvalChebyshevSeriesPSBatchInPlace has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
 	}
- 
+
 	// GPU path.
 	this->LoadCiphertext(ct);
- 
+
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 	auto res_gpu  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
 	FIDESlib::CKKS::evalChebyshevSeriesPSBatch(context, *res_gpu, batchOfCoeffs, a, b);
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchRepeated(
-    const Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& coefficientSets, double a, double b) {
+Ciphertext<DCRTPoly>
+CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchRepeated(const Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& coefficientSets, double a, double b) {
 	FIDESlib::CudaNvtxRange r("API");
- 
+
 	// Same CPU-fallback caveat as EvalChebyshevSeriesPSBatch: no plain-OpenFHE
 	// equivalent exists.
 	if (this->devices.empty()) {
-		OPENFHE_THROW(
-		    "EvalChebyshevSeriesPSBatchRepeated has no CPU fallback with the OpenFHE "
-		    "library currently linked. Configure at least one GPU device, or "
-		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
-		    "to enable the CPU path.");
+		OPENFHE_THROW("EvalChebyshevSeriesPSBatchRepeated has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
 	}
- 
+
 	// GPU path.
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
- 
-	auto& context               = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
+	auto& context				= std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	FIDESlib::CKKS::evalChebyshevSeriesPSBatchRepeated(context, *res_gpu, coefficientSets, a, b);
- 
+
 	return result;
 }
- 
-void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchRepeatedInPlace(
-    Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& coefficientSets, double a, double b) {
+
+void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchRepeatedInPlace(Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& coefficientSets, double a, double b) {
 	FIDESlib::CudaNvtxRange r("API");
- 
+
 	if (this->devices.empty()) {
-		OPENFHE_THROW(
-		    "EvalChebyshevSeriesPSBatchRepeatedInPlace has no CPU fallback with the OpenFHE "
-		    "library currently linked. Configure at least one GPU device, or "
-		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
-		    "to enable the CPU path.");
+		OPENFHE_THROW("EvalChebyshevSeriesPSBatchRepeatedInPlace has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
 	}
- 
+
 	// GPU path.
 	this->LoadCiphertext(ct);
- 
+
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 	auto res_gpu  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
 	FIDESlib::CKKS::evalChebyshevSeriesPSBatchRepeated(context, *res_gpu, coefficientSets, a, b);
 }
-
-
-
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::Rescale(const Ciphertext<DCRTPoly>& ciphertext) {
 	FIDESlib::CudaNvtxRange r("API");
@@ -2054,11 +2169,11 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::Rescale(const Ciphertext<DCRTP
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		auto& context               = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-		auto& ctImpl                = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
-		auto ct                     = context->Rescale(ctImpl);
+		auto& context				= std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+		auto& ctImpl				= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
+		auto ct						= context->Rescale(ctImpl);
 		Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		result->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		result->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return result;
 	}
 
@@ -2066,7 +2181,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::Rescale(const Ciphertext<DCRTP
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ciphertext));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ciphertext);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	res_gpu->rescale();
 
 	return result;
@@ -2080,8 +2195,8 @@ void CryptoContextImpl<DCRTPoly>::RescaleInPlace(Ciphertext<DCRTPoly>& ciphertex
 
 		auto& context = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 		EnsureMutableCpuCiphertext(ciphertext);
-		auto& ctImpl    = std::any_cast<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
-		auto ct         = context->Rescale(ctImpl);
+		auto& ctImpl	= std::any_cast<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
+		auto ct			= context->Rescale(ctImpl);
 		ciphertext->cpu = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return;
 	}
@@ -2098,20 +2213,17 @@ void CryptoContextImpl<DCRTPoly>::SetLevel(Ciphertext<DCRTPoly>& ct, size_t leve
 	ct->SetLevel(level);
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalBootstrap(const Ciphertext<DCRTPoly>& ciphertext,
-                                                                uint32_t numIterations,
-                                                                uint32_t precision,
-                                                                bool prescaled) {
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalBootstrap(const Ciphertext<DCRTPoly>& ciphertext, uint32_t numIterations, uint32_t precision, bool prescaled) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	auto& context = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		auto& ctImpl                = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
-		auto ct                     = context->EvalBootstrap(ctImpl, numIterations, precision);
+		auto& ctImpl				= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
+		auto ct						= context->EvalBootstrap(ctImpl, numIterations, precision);
 		Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		result->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		result->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return result;
 	}
 
@@ -2119,7 +2231,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalBootstrap(const Ciphertext
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ciphertext));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ciphertext);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 
 	FIDESlib::CKKS::Bootstrap(*res_gpu, res_gpu->slots, prescaled);
 
@@ -2133,11 +2245,11 @@ void CryptoContextImpl<DCRTPoly>::EvalBootstrapInPlace(Ciphertext<DCRTPoly>& cip
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		auto& ctImpl                = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
-		auto ct                     = context->EvalBootstrap(ctImpl, numIterations, precision);
+		auto& ctImpl				= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
+		auto ct						= context->EvalBootstrap(ctImpl, numIterations, precision);
 		Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		result->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
-		ciphertext                  = result;
+		result->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext					= result;
 		return;
 	}
 
@@ -2149,106 +2261,90 @@ void CryptoContextImpl<DCRTPoly>::EvalBootstrapInPlace(Ciphertext<DCRTPoly>& cip
 	FIDESlib::CKKS::Bootstrap(*res_gpu, res_gpu->slots, prescaled);
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalBootstrapStCFirst(const Ciphertext<DCRTPoly>& ciphertext,
-                                                                        uint32_t numIterations,
-                                                                        uint32_t precision,
-                                                                        bool prescaled) {
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalBootstrapStCFirst(const Ciphertext<DCRTPoly>& ciphertext, uint32_t numIterations, uint32_t precision, bool prescaled) {
 	FIDESlib::CudaNvtxRange r("API");
- 
+
 	auto& context = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 	// Fall back to CPU. Requires an OpenFHE version with EvalBootstrapStCFirst
 	// (present in the OpenFHE 1.5.1.1 FIDESlib is pinned to).
 	if (this->devices.empty()) {
-		auto& ctImpl                = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
-		auto ct                     = context->EvalBootstrapStCFirst(ctImpl, numIterations, precision);
+		auto& ctImpl				= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
+		auto ct						= context->EvalBootstrapStCFirst(ctImpl, numIterations, precision);
 		Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		result->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		result->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
 		return result;
 	}
- 
+
 	// GPU path.
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ciphertext));
- 
+
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ciphertext);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
- 
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+
 	FIDESlib::CKKS::BootstrapStCFirst(*res_gpu, res_gpu->slots, prescaled);
- 
+
 	return result;
 }
- 
-void CryptoContextImpl<DCRTPoly>::EvalBootstrapStCFirstInPlace(Ciphertext<DCRTPoly>& ciphertext,
-                                                                uint32_t numIterations,
-                                                                uint32_t precision,
-                                                                bool prescaled) {
+
+void CryptoContextImpl<DCRTPoly>::EvalBootstrapStCFirstInPlace(Ciphertext<DCRTPoly>& ciphertext, uint32_t numIterations, uint32_t precision, bool prescaled) {
 	FIDESlib::CudaNvtxRange r("API");
 	auto& context = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
- 
+
 	// Fall back to CPU.
 	if (this->devices.empty()) {
-		auto& ctImpl                = std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
-		auto ct                     = context->EvalBootstrapStCFirst(ctImpl, numIterations, precision);
+		auto& ctImpl				= std::any_cast<const lbcrypto::Ciphertext<lbcrypto::DCRTPoly>&>(ciphertext->cpu);
+		auto ct						= context->EvalBootstrapStCFirst(ctImpl, numIterations, precision);
 		Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		result->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
-		ciphertext                  = result;
+		result->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(ct);
+		ciphertext					= result;
 		return;
 	}
- 
+
 	// GPU path.
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ciphertext));
- 
+
 	auto res_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ciphertext->gpu));
- 
+
 	FIDESlib::CKKS::BootstrapStCFirst(*res_gpu, res_gpu->slots, prescaled);
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalBootstrapStCFirstBits(const Ciphertext<DCRTPoly>& ciphertext,
-                                                                             uint32_t numIterations,
-                                                                             uint32_t precision,
-                                                                             bool prescaled) {
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalBootstrapStCFirstBits(const Ciphertext<DCRTPoly>& ciphertext, uint32_t numIterations, uint32_t precision, bool prescaled) {
 	FIDESlib::CudaNvtxRange r("API");
- 
+
 	// No CPU fallback: the extra precision-correction step (coscoeffs +
 	// custom double-angle iterations) is FIDESlib-specific, with no
 	// upstream OpenFHE CPU equivalent.
 	if (this->devices.empty()) {
-		OPENFHE_THROW(
-		    "EvalBootstrapStCFirstBits has no CPU fallback. Configure at "
-		    "least one GPU device.");
+		OPENFHE_THROW("EvalBootstrapStCFirstBits has no CPU fallback. Configure at "
+					  "least one GPU device.");
 	}
- 
+
 	// GPU path.
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ciphertext));
- 
+
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ciphertext);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
- 
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+
 	FIDESlib::CKKS::BootstrapStCFirstBits(*res_gpu, res_gpu->slots, prescaled);
- 
+
 	return result;
 }
- 
-void CryptoContextImpl<DCRTPoly>::EvalBootstrapStCFirstBitsInPlace(Ciphertext<DCRTPoly>& ciphertext,
-                                                                    uint32_t numIterations,
-                                                                    uint32_t precision,
-                                                                    bool prescaled) {
+
+void CryptoContextImpl<DCRTPoly>::EvalBootstrapStCFirstBitsInPlace(Ciphertext<DCRTPoly>& ciphertext, uint32_t numIterations, uint32_t precision, bool prescaled) {
 	FIDESlib::CudaNvtxRange r("API");
- 
+
 	if (this->devices.empty()) {
-		OPENFHE_THROW(
-		    "EvalBootstrapStCFirstBitsInPlace has no CPU fallback. Configure "
-		    "at least one GPU device.");
+		OPENFHE_THROW("EvalBootstrapStCFirstBitsInPlace has no CPU fallback. Configure "
+					  "at least one GPU device.");
 	}
- 
+
 	// GPU path.
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ciphertext));
- 
+
 	auto res_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ciphertext->gpu));
- 
+
 	FIDESlib::CKKS::BootstrapStCFirstBits(*res_gpu, res_gpu->slots, prescaled);
 }
-
-
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::AccumulateSum(const Ciphertext<DCRTPoly>& ct, int slots, int stride) {
 	FIDESlib::CudaNvtxRange r("API");
@@ -2261,12 +2357,12 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::AccumulateSum(const Ciphertext
 
 		for (int i = 0; i < log2(slots); i++) {
 			int rot_idx = stride * (1 << i);
-			auto tmp    = context->EvalRotate(result_ct, rot_idx);
+			auto tmp	= context->EvalRotate(result_ct, rot_idx);
 			context->EvalAddInPlace(result_ct, tmp);
 		}
 
 		Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(this->self_reference.lock());
-		result->cpu                 = std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(result_ct);
+		result->cpu					= std::make_any<lbcrypto::Ciphertext<lbcrypto::DCRTPoly>>(result_ct);
 		return result;
 	}
 
@@ -2274,7 +2370,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::AccumulateSum(const Ciphertext
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 
 	FIDESlib::CKKS::Accumulate(*res_gpu, 4, stride, slots);
 
@@ -2291,7 +2387,7 @@ void CryptoContextImpl<DCRTPoly>::AccumulateSumInPlace(Ciphertext<DCRTPoly>& ct,
 
 		for (int i = 0; i < log2(slots); i++) {
 			int rot_idx = stride * (1 << i);
-			auto tmp    = context->EvalRotate(ctImpl, rot_idx);
+			auto tmp	= context->EvalRotate(ctImpl, rot_idx);
 			context->EvalAddInPlace(ctImpl, tmp);
 		}
 
@@ -2315,7 +2411,7 @@ void CryptoContextImpl<DCRTPoly>::AccumulateSumInPlace(Ciphertext<DCRTPoly>& ct,
 
 		for (int s = start; s < slots; s <<= 1) {
 			int rot_idx = stride * s;
-			auto tmp    = context->EvalRotate(ctImpl, rot_idx);
+			auto tmp	= context->EvalRotate(ctImpl, rot_idx);
 			context->EvalAddInPlace(ctImpl, tmp);
 		}
 
@@ -2331,12 +2427,12 @@ void CryptoContextImpl<DCRTPoly>::AccumulateSumInPlace(Ciphertext<DCRTPoly>& ct,
 }
 
 void CryptoContextImpl<DCRTPoly>::ConvolutionTransformInPlace(Ciphertext<DCRTPoly>& ct,
-                                                              int gStep,
-                                                              int bStep,
-                                                              const std::vector<Plaintext>& pts,
-                                                              const std::vector<int>& indexes,
-                                                              int stride,
-                                                              int rowSize) {
+  int gStep,
+  int bStep,
+  const std::vector<Plaintext>& pts,
+  const std::vector<int>& indexes,
+  int stride,
+  int rowSize) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	if (this->devices.empty()) {
@@ -2362,14 +2458,14 @@ void CryptoContextImpl<DCRTPoly>::ConvolutionTransformInPlace(Ciphertext<DCRTPol
 }
 
 void CryptoContextImpl<DCRTPoly>::SpecialConvolutionTransformInPlace(Ciphertext<DCRTPoly>& ct,
-                                                                     int gStep,
-                                                                     int bStep,
-                                                                     const std::vector<Plaintext>& pts,
-                                                                     Plaintext& mask,
-                                                                     const std::vector<int>& indexes,
-                                                                     int stride,
-                                                                     int maskRotationStride,
-                                                                     int rowSize) {
+  int gStep,
+  int bStep,
+  const std::vector<Plaintext>& pts,
+  Plaintext& mask,
+  const std::vector<int>& indexes,
+  int stride,
+  int maskRotationStride,
+  int rowSize) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	if (this->devices.empty()) {
@@ -2407,8 +2503,8 @@ uint32_t CryptoContextImpl<DCRTPoly>::CopyDeviceCiphertext(const CiphertextImpl<
 	}
 
 	auto& context_gpu = std::any_cast<FIDESlib::CKKS::Context&>(this->gpu);
-	auto ct_gpu       = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct.gpu));
-	auto new_ct       = std::make_shared<FIDESlib::CKKS::Ciphertext>(context_gpu);
+	auto ct_gpu		  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct.gpu));
+	auto new_ct		  = std::make_shared<FIDESlib::CKKS::Ciphertext>(context_gpu);
 	new_ct->copy(*ct_gpu);
 	uint32_t handle = this->RegisterDeviceCiphertext(std::move(new_ct));
 	return handle;

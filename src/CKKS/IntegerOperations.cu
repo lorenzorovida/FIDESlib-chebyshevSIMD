@@ -146,14 +146,13 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
 
 	corrected.multPt(sum, correctionPt, true);
 
-    a.copy(corrected);
+	a.copy(corrected);
 
-    if (a.NoiseLevel == 2) {
-        a.dropToLevel(5, false);
-    } else {
-        a.dropToLevel(4, false);
-    }
-
+	if (a.NoiseLevel == 2) {
+		a.dropToLevel(5, false);
+	} else {
+		a.dropToLevel(4, false);
+	}
 
 	BootstrapStCFirstBits(a, a.slots, false);
 }
@@ -250,85 +249,23 @@ void evalIntegerMult(Ciphertext& out,
 		// --------------------------------------------------------
 
 		if (bits_original > 8) {
-
-			processArray(a_processed, a, { { 8, 64 }, { 12, 80 } }, mask_size, repetitions_original, cc);
+			processArray(a_processed, a, precomp8);
 		}
 
 		if (bits_original > 16) {
-
-			processArray(a_processed, a, { { 16, 256 }, { 20, 272 }, { 24, 320 }, { 28, 336 } }, mask_size, repetitions_original, cc);
+			processArray(a_processed, a, precomp16);
 		}
 
 		if (bits_original > 32) {
-
-			processArray(
-			  a_processed, a, { { 32, 1024 }, { 36, 1040 }, { 40, 1088 }, { 44, 1104 }, { 48, 1280 }, { 52, 1296 }, { 56, 1344 }, { 60, 1360 } }, mask_size, repetitions_original, cc);
+			processArray(a_processed, a, precomp32);
 		}
 
 		if (bits_original > 64) {
-
-			processArray(a_processed,
-			  a,
-			  { { 64, 4096 },
-				{ 68, 4112 },
-				{ 72, 4160 },
-				{ 76, 4176 },
-				{ 80, 4352 },
-				{ 84, 4368 },
-				{ 88, 4416 },
-				{ 92, 4432 },
-				{ 96, 5120 },
-				{ 100, 5136 },
-				{ 104, 5184 },
-				{ 108, 5200 },
-				{ 112, 5376 },
-				{ 116, 5392 },
-				{ 120, 5440 },
-				{ 124, 5456 } },
-			  mask_size,
-			  repetitions_original,
-			  cc);
+			processArray(a_processed, a, precomp64);
 		}
 
 		if (bits_original > 128) {
-
-			processArray(a_processed,
-			  a,
-			  { { 128, 16384 },
-				{ 132, 16400 },
-				{ 136, 16448 },
-				{ 140, 16464 },
-				{ 144, 16640 },
-				{ 148, 16656 },
-				{ 152, 16704 },
-				{ 156, 16720 },
-				{ 160, 17408 },
-				{ 164, 17424 },
-				{ 168, 17472 },
-				{ 172, 17488 },
-				{ 176, 17664 },
-				{ 180, 17680 },
-				{ 184, 17728 },
-				{ 188, 17744 },
-				{ 192, 20480 },
-				{ 196, 20496 },
-				{ 200, 20544 },
-				{ 204, 20560 },
-				{ 208, 20736 },
-				{ 212, 20752 },
-				{ 216, 20800 },
-				{ 220, 20816 },
-				{ 224, 21504 },
-				{ 228, 21520 },
-				{ 232, 21568 },
-				{ 236, 21584 },
-				{ 240, 21760 },
-				{ 244, 21776 },
-				{ 248, 21824 },
-				{ 252, 21840 } },
-			  mask_size,
-			  repetitions_original,
-			  cc);
+			processArray(a_processed, a, precomp128);
 		}
 
 		// --------------------------------------------------------
@@ -413,85 +350,23 @@ void evalIntegerMult(Ciphertext& out,
 		// --------------------------------------------------------
 
 		if (bits_original > 8) {
-
-			processArray(b_processed, b, { { 8, 32 }, { 12, 40 } }, mask_size, repetitions_original, cc);
+			processArray(b_processed, b, precomp8b);
 		}
 
 		if (bits_original > 16) {
-
-			processArray(b_processed, b, { { 16, 128 }, { 20, 136 }, { 24, 160 }, { 28, 168 } }, mask_size, repetitions_original, cc);
+			processArray(b_processed, b, precomp1b);
 		}
 
 		if (bits_original > 32) {
-
-			processArray(
-			  b_processed, b, { { 32, 512 }, { 36, 520 }, { 40, 544 }, { 44, 552 }, { 48, 640 }, { 52, 648 }, { 56, 672 }, { 60, 680 } }, mask_size, repetitions_original, cc);
+			processArray(b_processed, b, precomp32b);
 		}
 
 		if (bits_original > 64) {
-
-			processArray(b_processed,
-			  b,
-			  { { 64, 2048 },
-				{ 68, 2056 },
-				{ 72, 2080 },
-				{ 76, 2088 },
-				{ 80, 2176 },
-				{ 84, 2184 },
-				{ 88, 2208 },
-				{ 92, 2216 },
-				{ 96, 2560 },
-				{ 100, 2568 },
-				{ 104, 2592 },
-				{ 108, 2600 },
-				{ 112, 2688 },
-				{ 116, 2696 },
-				{ 120, 2720 },
-				{ 124, 2728 } },
-			  mask_size,
-			  repetitions_original,
-			  cc);
+			processArray(b_processed, b, precomp64b);
 		}
 
 		if (bits_original > 128) {
-
-			processArray(b_processed,
-			  b,
-			  { { 128, 8192 },
-				{ 132, 8200 },
-				{ 136, 8224 },
-				{ 140, 8232 },
-				{ 144, 8320 },
-				{ 148, 8328 },
-				{ 152, 8352 },
-				{ 156, 8360 },
-				{ 160, 8704 },
-				{ 164, 8712 },
-				{ 168, 8736 },
-				{ 172, 8744 },
-				{ 176, 8832 },
-				{ 180, 8840 },
-				{ 184, 8864 },
-				{ 188, 8872 },
-				{ 192, 10240 },
-				{ 196, 10248 },
-				{ 200, 10272 },
-				{ 204, 10280 },
-				{ 208, 10368 },
-				{ 212, 10376 },
-				{ 216, 10400 },
-				{ 220, 10408 },
-				{ 224, 10752 },
-				{ 228, 10760 },
-				{ 232, 10784 },
-				{ 236, 10792 },
-				{ 240, 10880 },
-				{ 244, 10888 },
-				{ 248, 10912 },
-				{ 252, 10920 } },
-			  mask_size,
-			  repetitions_original,
-			  cc);
+			processArray(b_processed, b, precomp128b);
 		}
 
 		// --------------------------------------------------------
@@ -708,11 +583,11 @@ void evalIntegerMult(Ciphertext& out,
 
 		csa4(result, p1, p2, p3, p4, bits);
 
-        if (result.NoiseLevel == 2) {
-            result.dropToLevel(5, false);
-        } else {
-            result.dropToLevel(4, false);
-        }
+		if (result.NoiseLevel == 2) {
+			result.dropToLevel(5, false);
+		} else {
+			result.dropToLevel(4, false);
+		}
 
 		BootstrapStCFirstBits(result, result.slots, false);
 	}
@@ -771,7 +646,7 @@ void processArray(Ciphertext& c_processed,
 			rolled_mask[k] = mask[src];
 		}
 
-		
+
 
 		Ciphertext masked(c.cc_);
 
@@ -794,113 +669,157 @@ void processArray(Ciphertext& c_processed,
 	c_processed.copy(result);
 }
 */
-void preprocessProcessArray(
-    std::vector<ProcessArrayMask>& masks,
-    const std::vector<std::pair<int, int>>& mask_roll_pairs,
-    int mask_size,
-    int rep,
-    int slots,
-    size_t noise,
-    lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-    FIDESlib::CKKS::Context& cc_)
-{
-	int level = 12;
-	
-    const int total_size = mask_size * rep;
+void FIDESlib::CKKS::preprocessProcessArray(int bits,
+  const std::vector<std::pair<int, int>>& mask_roll_pairs,
+  int mask_size,
+  int rep,
+  int slots,
+  int level,
+  size_t noise,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+  FIDESlib::CKKS::Context& cc_,
+  bool forB) {
+	if (mask_size <= 0) {
+		throw std::invalid_argument("preprocessProcessArray: mask_size must be > 0");
+	}
 
-    masks.clear();
-    masks.reserve(mask_roll_pairs.size());
+	if (rep <= 0) {
+		throw std::invalid_argument("preprocessProcessArray: rep must be > 0");
+	}
 
-    for (const auto& [start, roll_base] :
-         mask_roll_pairs) {
+	if (slots <= 0) {
+		throw std::invalid_argument("preprocessProcessArray: slots must be > 0");
+	}
 
-        std::vector<double> mask(
-            total_size,
-            0.0);
+	ProcessArrayPrecomputation & precomp;
 
-        for (int i = 0; i < rep; ++i) {
-            for (int j = 0; j < 4; ++j) {
+	if (forB) {
+		if (bits > 8)
+			precomp = precomp8b;
+		if (bits > 16)
+			precomp = precomp16b;
+		if (bits > 32)
+			precomp = precomp32b;
+		if (bits > 64)
+			precomp = precomp64b;
+		if (bits > 128)
+			precomp = precomp128b;
+	} else {
+		if (bits > 8)
+			precomp = precomp8;
+		if (bits > 16)
+			precomp = precomp16;
+		if (bits > 32)
+			precomp = precomp32;
+		if (bits > 64)
+			precomp = precomp64;
+		if (bits > 128)
+			precomp = precomp128;
+	}
 
-                mask[
-                    i * mask_size +
-                    start +
-                    j
-                ] = 1.0;
-            }
-        }
+	const int total_size = mask_size * rep;
 
-        const int shift =
-            roll_base - start;
+	precomp.entries.clear();
+	precomp.entries.reserve(mask_roll_pairs.size());
 
-        std::vector<double> rolled_mask(
-            total_size,
-            0.0);
+	for (const auto& [start, roll_base] : mask_roll_pairs) {
 
-        for (int k = 0; k < total_size; ++k) {
+		if (start < 0 || start + 3 >= mask_size) {
+			throw std::invalid_argument("preprocessProcessArray: invalid start position");
+		}
 
-            int src =
-                (k + shift) % total_size;
+		// --------------------------------------------------------
+		// Construct the original mask
+		//
+		// mask[i * mask_size + start + j] = 1
+		// for j = 0..3
+		// --------------------------------------------------------
 
-            if (src < 0)
-                src += total_size;
+		std::vector<double> mask(total_size, 0.0);
 
-            rolled_mask[k] = mask[src];
-        }
+		for (int i = 0; i < rep; ++i) {
 
-        auto pt =
-            cc.MakeCKKSPackedPlaintext(
-                rolled_mask,
-                noise,
-                level,
-                nullptr,
-                slots);
+			for (int j = 0; j < 4; ++j) {
 
-        FIDESlib::CKKS::RawPlainText raw =
-            FIDESlib::CKKS::GetRawPlainText(
-                cc,
-                pt);
+				const int index = i * mask_size + start + j;
 
-        Plaintext maskP(
-            cc_,
-            raw);
+				mask[index] = 1.0;
+			}
+		}
 
-        masks.push_back({
-            shift,
-            maskP
-        });
-    }
+		// --------------------------------------------------------
+		// Compute rotation
+		// --------------------------------------------------------
+
+		const int shift = roll_base - start;
+
+		// --------------------------------------------------------
+		// rolled_mask = rot(mask, -shift)
+		//
+		// Original code:
+		//
+		// vector<int> rolled_mask = rot(mask, -shift);
+		// --------------------------------------------------------
+
+		std::vector<double> rolled_mask(total_size, 0.0);
+
+		for (int k = 0; k < total_size; ++k) {
+
+			int src = (k + shift) % total_size;
+
+			if (src < 0) {
+				src += total_size;
+			}
+
+			rolled_mask[k] = mask[src];
+		}
+
+		// --------------------------------------------------------
+		// Make OpenFHE plaintext
+		// --------------------------------------------------------
+
+		auto pt = cc->MakeCKKSPackedPlaintext(rolled_mask, noise, level, nullptr, slots);
+
+		// --------------------------------------------------------
+		// Convert OpenFHE plaintext -> FIDESlib plaintext
+		// --------------------------------------------------------
+
+		FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
+
+		Plaintext maskP(cc_, raw);
+
+		// --------------------------------------------------------
+		// Store precomputed entry
+		// --------------------------------------------------------
+
+		ProcessArrayPrecomputation::Entry entry{ shift, maskP };
+
+		precomp.entries.push_back(std::move(entry));
+	}
 }
 
-void FIDESlib::CKKS::processArray(
-    Ciphertext& out,
-    const Ciphertext& c,
-    const std::vector<ProcessArrayMask>& masks)
-{
-    for (const auto& m : masks) {
+void FIDESlib::CKKS::processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp) {
+	for (const auto& entry : precomp.entries) {
 
-        Ciphertext rotated(c.cc_);
+		// rolled_ctxt = rot(c, -shift)
+		Ciphertext rolled_ctxt(c.cc_);
 
-        rotated.rotate(
-            c,
-            -m.shift);
+		rolled_ctxt.rotate(c, -entry.shift);
 
-        Ciphertext masked(c.cc_);
+		// masked = rolled_ctxt * precomputed_mask
+		Ciphertext masked(c.cc_);
 
-        masked.multPt(
-            rotated,
-            m.mask,
-            true);
+		masked.multPt(rolled_ctxt, entry.mask, true);
 
-        out.add(masked);
+		// out += masked
+		out.add(masked);
 
-        if (out.cc.rescaleTechnique ==
-            FIDESlib::CKKS::FIXEDMANUAL) {
+		if (out.cc.rescaleTechnique == FIDESlib::CKKS::FIXEDMANUAL) {
 
-            out.rescale();
-        }
-    }
+			out.rescale();
+		}
+	}
 }
-
 
 void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 	FIDESlib::CKKS::Context cc_ = ctxtA.cc_;
@@ -922,12 +841,12 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 
 	evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
 
-    if (result.NoiseLevel == 2) {
-        result.dropToLevel(5, false);
-    } else {
-        result.dropToLevel(4, false);
-    }
-    
+	if (result.NoiseLevel == 2) {
+		result.dropToLevel(5, false);
+	} else {
+		result.dropToLevel(4, false);
+	}
+
 	BootstrapStCFirstBits(result, result.slots, false);
 }
 
