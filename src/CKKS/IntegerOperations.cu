@@ -669,7 +669,7 @@ void processArray(Ciphertext& c_processed,
 	c_processed.copy(result);
 }
 */
-void FIDESlib::CKKS::preprocessProcessArray(int bits,
+void preprocessProcessArray(int bits,
   const std::vector<std::pair<int, int>>& mask_roll_pairs,
   int mask_size,
   int rep,
@@ -802,7 +802,7 @@ void FIDESlib::CKKS::preprocessProcessArray(int bits,
 	}
 }
 
-void FIDESlib::CKKS::processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp) {
+void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp) {
 	for (const auto& entry : precomp.entries) {
 
 		// rolled_ctxt = rot(c, -shift)
