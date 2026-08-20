@@ -985,7 +985,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::BinToDec(const Ciphertext<DCRT
 	return result;
 }
 
-Ciphertext<DCRTPoly> ProcessArray(const Ciphertext<DCRTPoly>& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep) {
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::ProcessArray(const Ciphertext<DCRTPoly>& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
 
