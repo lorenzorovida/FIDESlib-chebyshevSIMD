@@ -662,8 +662,7 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
         // 4-bit multiplier
         // --------------------------------------------------------
 
-        multiplier4bits(
-            result,
+        result = multiplier4bits(
             a_decimal,
             b_decimal,
             repetitions * 4,
