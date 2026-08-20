@@ -146,7 +146,7 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
 
 	corrected.multPt(sum, correctionPt, false);
 
-	BootstrapStCFirstBits(corrected, corrected.slots, false);
+    a.copy(corrected);
 
     cudaError_t err = cudaDeviceSynchronize();
 
@@ -158,9 +158,25 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
 
         throw std::runtime_error(
             cudaGetErrorString(err));
+    } else {
+        std::cout << "Before BTS all good" << std::endl;
     }
 
-    a.copy(corrected);
+	BootstrapStCFirstBits(a, a.slots, false);
+
+    err = cudaDeviceSynchronize();
+
+    if (err != cudaSuccess) {
+        std::cerr
+            << "Bootstrap failed: "
+            << cudaGetErrorString(err)
+            << std::endl;
+
+        throw std::runtime_error(
+            cudaGetErrorString(err));
+    }
+
+    
 }
 
 void evalIntegerMult(Ciphertext& out,
