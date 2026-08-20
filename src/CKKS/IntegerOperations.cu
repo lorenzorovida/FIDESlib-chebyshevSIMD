@@ -171,7 +171,7 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
         const int mask_size =
             bits_original * (bits_original / 2);
 
-        std::vector<int> masklow(
+        std::vector<double> masklow(
             a.slots,
             0);
 
@@ -208,7 +208,7 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
         // maskhigh
         // --------------------------------------------------------
 
-        std::vector<int> maskhigh(
+        std::vector<double> maskhigh(
             a.slots,
             0);
 
@@ -687,7 +687,7 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
         //     repetitions_original,
         //     overflow);
 
-        mulInteger(
+        evalIntegerMult(
             result,
             a,
             b,
