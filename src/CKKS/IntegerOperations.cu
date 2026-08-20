@@ -777,7 +777,7 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
         cc);
 	*/
 
-	noise = result.NoiseFactor;
+	size_t noise = result.NoiseFactor;
 
 	auto pt = cc->MakeCKKSPackedPlaintext(
 		mask1,
