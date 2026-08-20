@@ -912,7 +912,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::BinToDec(const Ciphertext<DCRT
 	return result;
 }
 
-void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<DCRTPoly>& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep, int bits, int slots, int noise ) {
+void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int slots, int noise ) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
 
