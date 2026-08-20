@@ -912,8 +912,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::BinToDec(const Ciphertext<DCRT
 	return result;
 }
 
-Ciphertext<DCRTPoly>
-CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<DCRTPoly>& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep) {
+void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<DCRTPoly>& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep, int bits) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
 
@@ -1022,12 +1021,11 @@ CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<DCRTPo
 	}
 
 	if (bits > 8) {
-		preprocessProcessArray(bits, { { 8, 32 }, { 12, 40 } }, mask_size, repetitions_original, b.slots, b.getLevel(), static_cast<size_t>(b.NoiseLevel), cc, *b.cc_, true);
+		preprocessProcessArray(bits, { { 8, 32 }, { 12, 40 } }, mask_size, repetitions_original, slots, level, noise, , cc, *b.cc_, true);
 	}
 
 	if (bits > 16) {
-		preprocessProcessArray(
-		  bits, { { 16, 128 }, { 20, 136 }, { 24, 160 }, { 28, 168 } }, mask_size, repetitions_original, b.slots, b.getLevel(), static_cast<size_t>(b.NoiseLevel), cc, *b.cc_, true);
+		preprocessProcessArray(bits, { { 16, 128 }, { 20, 136 }, { 24, 160 }, { 28, 168 } }, mask_size, repetitions_original, slots, level, noise, cc, *b.cc_, true);
 	}
 
 	if (bits > 32) {
@@ -1035,9 +1033,9 @@ CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<DCRTPo
 		  { { 32, 512 }, { 36, 520 }, { 40, 544 }, { 44, 552 }, { 48, 640 }, { 52, 648 }, { 56, 672 }, { 60, 680 } },
 		  mask_size,
 		  repetitions_original,
-		  b.slots,
-		  b.getLevel(),
-		  static_cast<size_t>(b.NoiseLevel),
+		  slots,
+		  level,
+		  noise,
 		  cc,
 		  *b.cc_,
 		  true);
@@ -1063,9 +1061,9 @@ CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<DCRTPo
 			{ 124, 2728 } },
 		  mask_size,
 		  repetitions_original,
-		  b.slots,
-		  b.getLevel(),
-		  static_cast<size_t>(b.NoiseLevel),
+		  slots,
+		  level,
+		  noise,
 		  cc,
 		  *b.cc_,
 		  true);
@@ -1107,15 +1105,13 @@ CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<DCRTPo
 			{ 252, 10920 } },
 		  mask_size,
 		  repetitions_original,
-		  b.slots,
-		  b.getLevel(),
-		  static_cast<size_t>(b.NoiseLevel),
+		  slots,
+		  level,
+		  noise,
 		  cc,
 		  *b.cc_,
 		  true);
 	}
-
-	return result;
 }
 
 Ciphertext<DCRTPoly>
