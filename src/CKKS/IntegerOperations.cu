@@ -1193,6 +1193,67 @@ void csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b
 	majorityBit(C, a, b, c);
 }
 
+void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c, const Ciphertext& d, int bits) {
+    // ------------------------------------------------------------
+    // First CSA:
+    //
+    // (s1, c1) = csa3(a, b, c)
+    // ------------------------------------------------------------
+
+    Ciphertext s1(a.cc_);
+    Ciphertext c1(a.cc_);
+
+    csa3(
+        s1,
+        c1,
+        a,
+        b,
+        c);
+
+    // c1 = rot(c1, -1)
+    Ciphertext c1_rot(a.cc_);
+
+    c1_rot.rotate(
+        c1,
+        -1);
+
+
+    // ------------------------------------------------------------
+    // Second CSA:
+    //
+    // (s2, c2) = csa3(s1, c1_rot, d)
+    // ------------------------------------------------------------
+
+    Ciphertext s2(a.cc_);
+    Ciphertext c2(a.cc_);
+
+    csa3(
+        s2,
+        c2,
+        s1,
+        c1_rot,
+        d);
+
+    // c2 = rot(c2, -1)
+    Ciphertext c2_rot(a.cc_);
+
+    c2_rot.rotate(
+        c2,
+        -1);
+
+
+    // ------------------------------------------------------------
+    // result = add_integer(s2, c2_rot, bits, false)
+    // ------------------------------------------------------------
+
+    out.copy(s2);
+
+    evalIntegerAdd(
+        out,
+        c2_rot,
+        bits);
+}
+
 void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, const Ciphertext& c, int repetitions) {
 	FIDESlib::CKKS::Context& cc_ = c.cc_;
 

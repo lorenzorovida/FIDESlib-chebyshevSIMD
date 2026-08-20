@@ -23,6 +23,8 @@ void clean(Ciphertext& out, const Ciphertext& c);
 void mod2Shallow(Ciphertext& out, const Ciphertext& c);
 void majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c);
 void csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c);
+void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c, const Ciphertext& d, int bits);
+
 void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, const Ciphertext& c, int repetitions);
 // Can be heavily optimized by precomputing masks
 void processArray(Ciphertext& c_processed, const Ciphertext& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_);
