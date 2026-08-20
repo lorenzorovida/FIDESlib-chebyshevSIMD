@@ -209,7 +209,7 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	Ciphertext<DCRTPoly> CsaCarry(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c);
 	Ciphertext<DCRTPoly> MajorityBit(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c);
 	Ciphertext<DCRTPoly> BinToDec(const Ciphertext<DCRTPoly>& ct, int repetitions);
-	void ProcessArrayPrecomputations(const Ciphertext<DCRTPoly>& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep, int bits) {
+	void ProcessArrayPrecomputations(const Ciphertext<DCRTPoly>& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep, int bits);
 	
 	
 	
