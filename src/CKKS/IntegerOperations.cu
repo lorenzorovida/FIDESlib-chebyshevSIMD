@@ -287,8 +287,7 @@ void evalIntegerMult(Ciphertext& out,
 				{ 124, 5456 } },
 			  mask_size,
 			  repetitions_original,
-			  cc,
-			  cc_);
+			  cc);
 		}
 
 		if (bits_original > 128) {
@@ -329,8 +328,7 @@ void evalIntegerMult(Ciphertext& out,
 				{ 252, 21840 } },
 			  mask_size,
 			  repetitions_original,
-			  cc,
-			  cc_);
+			  cc);
 		}
 
 		// --------------------------------------------------------
@@ -452,8 +450,7 @@ void evalIntegerMult(Ciphertext& out,
 				{ 124, 2728 } },
 			  mask_size,
 			  repetitions_original,
-			  cc,
-			  cc_);
+			  cc);
 		}
 
 		if (bits_original > 128) {
@@ -494,8 +491,7 @@ void evalIntegerMult(Ciphertext& out,
 				{ 252, 10920 } },
 			  mask_size,
 			  repetitions_original,
-			  cc,
-			  cc_);
+			  cc);
 		}
 
 		// --------------------------------------------------------
