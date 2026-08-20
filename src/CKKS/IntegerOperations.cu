@@ -720,6 +720,7 @@ void evalIntegerMult(Ciphertext& out,
 	out.copy(result);
 }
 
+/*
 void processArray(Ciphertext& c_processed,
   const Ciphertext& c,
   const std::vector<std::pair<int, int>>& mask_roll_pairs,
@@ -736,13 +737,6 @@ void processArray(Ciphertext& c_processed,
 		throw std::invalid_argument("processArray: rep must be > 0");
 	}
 
-	/*
-	 * Original:
-	 *
-	 * Ctxt c_processed_clone = c_processed->Clone();
-	 *
-	 * We use c_processed itself as the output buffer.
-	 */
 	Ciphertext result(c_processed.cc_);
 	result.copy(c_processed);
 
@@ -750,15 +744,6 @@ void processArray(Ciphertext& c_processed,
 
 	for (const auto& [start, roll_base] : mask_roll_pairs) {
 
-		/*
-		 * mask = [0, ..., 0]
-		 *
-		 * with four consecutive 1s at:
-		 *
-		 * i * mask_size + start + j
-		 *
-		 * for every i.
-		 */
 		std::vector<double> mask(total_size, 0);
 
 		for (int i = 0; i < rep; ++i) {
@@ -767,37 +752,16 @@ void processArray(Ciphertext& c_processed,
 			}
 		}
 
-		/*
-		 * shift = roll_base - start
-		 */
 		const int shift = roll_base - start;
 
-		/*
-		 * rolled_ctxt = rot_fast(c, -shift)
-		 *
-		 * For now use the normal FIDESlib GPU rotation.
-		 */
+
 		Ciphertext rolled_ctxt(c.cc_);
 		rolled_ctxt.rotate(c, -shift);
 
-		/*
-		 * rolled_mask = rot(mask, -shift)
-		 *
-		 * This is a plaintext/vector rotation.
-		 *
-		 * We do not actually need to construct rolled_mask
-		 * explicitly if the plaintext multiplication API can
-		 * apply the rotated mask directly.
-		 */
 		std::vector<double> rolled_mask(total_size, 0);
 
 		for (int k = 0; k < total_size; ++k) {
 
-			/*
-			 * Match the semantics of the original rot(mask, -shift).
-			 *
-			 * Positive modulo is required for negative shifts.
-			 */
 			int src = (k + shift) % total_size;
 
 			if (src < 0) {
@@ -807,28 +771,11 @@ void processArray(Ciphertext& c_processed,
 			rolled_mask[k] = mask[src];
 		}
 
-		/*
-		 * rolled_ctxt * rolled_mask
-		 *
-		 * Then:
-		 *
-		 * c_processed_clone =
-		 *     add(c_processed_clone,
-		 *         mult(rolled_ctxt, rolled_mask));
-		 *
-		 * The exact FIDESlib plaintext-multiplication API depends
-		 * on how your branch represents plaintext vectors.
-		 */
+		
 
 		Ciphertext masked(c.cc_);
 
-		/*
-		 * TODO:
-		 *
-		 * Replace this with the FIDESlib plaintext multiplication
-		 * function available in your checkout.
-		 */
-		// masked.mult(rolled_ctxt, rolled_mask);
+
 
 		size_t noise					 = static_cast<size_t>(rolled_ctxt.NoiseLevel);
 		auto pt							 = cc->MakeCKKSPackedPlaintext(rolled_mask, noise, rolled_ctxt.getLevel(), nullptr, rolled_ctxt.slots);
@@ -846,6 +793,114 @@ void processArray(Ciphertext& c_processed,
 
 	c_processed.copy(result);
 }
+*/
+void preprocessProcessArray(
+    std::vector<ProcessArrayMask>& masks,
+    const std::vector<std::pair<int, int>>& mask_roll_pairs,
+    int mask_size,
+    int rep,
+    int slots,
+    size_t noise,
+    lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+    FIDESlib::CKKS::Context& cc_)
+{
+	int level = 12;
+	
+    const int total_size = mask_size * rep;
+
+    masks.clear();
+    masks.reserve(mask_roll_pairs.size());
+
+    for (const auto& [start, roll_base] :
+         mask_roll_pairs) {
+
+        std::vector<double> mask(
+            total_size,
+            0.0);
+
+        for (int i = 0; i < rep; ++i) {
+            for (int j = 0; j < 4; ++j) {
+
+                mask[
+                    i * mask_size +
+                    start +
+                    j
+                ] = 1.0;
+            }
+        }
+
+        const int shift =
+            roll_base - start;
+
+        std::vector<double> rolled_mask(
+            total_size,
+            0.0);
+
+        for (int k = 0; k < total_size; ++k) {
+
+            int src =
+                (k + shift) % total_size;
+
+            if (src < 0)
+                src += total_size;
+
+            rolled_mask[k] = mask[src];
+        }
+
+        auto pt =
+            cc.MakeCKKSPackedPlaintext(
+                rolled_mask,
+                noise,
+                level,
+                nullptr,
+                slots);
+
+        FIDESlib::CKKS::RawPlainText raw =
+            FIDESlib::CKKS::GetRawPlainText(
+                cc,
+                pt);
+
+        Plaintext maskP(
+            cc_,
+            raw);
+
+        masks.push_back({
+            shift,
+            maskP
+        });
+    }
+}
+
+void FIDESlib::CKKS::processArray(
+    Ciphertext& out,
+    const Ciphertext& c,
+    const std::vector<ProcessArrayMask>& masks)
+{
+    for (const auto& m : masks) {
+
+        Ciphertext rotated(c.cc_);
+
+        rotated.rotate(
+            c,
+            -m.shift);
+
+        Ciphertext masked(c.cc_);
+
+        masked.multPt(
+            rotated,
+            m.mask,
+            true);
+
+        out.add(masked);
+
+        if (out.cc.rescaleTechnique ==
+            FIDESlib::CKKS::FIXEDMANUAL) {
+
+            out.rescale();
+        }
+    }
+}
+
 
 void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 	FIDESlib::CKKS::Context cc_ = ctxtA.cc_;
