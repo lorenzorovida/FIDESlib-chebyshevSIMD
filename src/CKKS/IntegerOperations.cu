@@ -144,9 +144,9 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
 
 	Ciphertext corrected(sum.cc_);
 
-	corrected.multPt(sum, correctionPt, false);
+	a.multPt(sum, correctionPt, false);
 
-	//BootstrapStCFirstBits(corrected, corrected.slots, false);
+	BootstrapStCFirstBits(a, corrected.slots, false);
 }
 
 void evalIntegerMult(Ciphertext& out,
