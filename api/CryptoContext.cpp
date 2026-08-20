@@ -928,16 +928,16 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 	auto c_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
 
-	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	auto& cc = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
 	int level = 12;
 
 	if (bits > 8) {
-		preprocessProcessArray(bits, { { 8, 64 }, { 12, 80 } }, mask_size, rep, slots, level, noise, cc, *c.cc_);
+		preprocessProcessArray(bits, { { 8, 64 }, { 12, 80 } }, mask_size, rep, slots, level, noise, cc, res_gpu->cc_);
 	}
 
 	if (bits > 16) {
-		preprocessProcessArray(bits, { { 16, 256 }, { 20, 272 }, { 24, 320 }, { 28, 336 } }, mask_size, rep, slots, level, noise, cc, *c.cc_);
+		preprocessProcessArray(bits, { { 16, 256 }, { 20, 272 }, { 24, 320 }, { 28, 336 } }, mask_size, rep, slots, level, noise, cc, res_gpu->cc_);
 	}
 
 	if (bits > 32) {
@@ -949,7 +949,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 		  level,
 		  noise,
 		  cc,
-		  *c.cc_);
+		  res_gpu->cc_);
 	}
 
 	if (bits > 64) {
@@ -976,7 +976,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 		  level,
 		  noise,
 		  cc,
-		  *c.cc_);
+		  res_gpu->cc_);
 	}
 
 	if (bits > 128) {
@@ -1019,15 +1019,15 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 		  level,
 		  noise,
 		  cc,
-		  *c.cc_);
+		  res_gpu->cc_);
 	}
 
 	if (bits > 8) {
-		preprocessProcessArray(bits, { { 8, 32 }, { 12, 40 } }, mask_size, rep, slots, level, noise, , cc, *c.cc_, true);
+		preprocessProcessArray(bits, { { 8, 32 }, { 12, 40 } }, mask_size, rep, slots, level, noise, , cc, res_gpu->cc_, true);
 	}
 
 	if (bits > 16) {
-		preprocessProcessArray(bits, { { 16, 128 }, { 20, 136 }, { 24, 160 }, { 28, 168 } }, mask_size, rep, slots, level, noise, cc, *c.cc_, true);
+		preprocessProcessArray(bits, { { 16, 128 }, { 20, 136 }, { 24, 160 }, { 28, 168 } }, mask_size, rep, slots, level, noise, cc, res_gpu->cc_, true);
 	}
 
 	if (bits > 32) {
@@ -1039,7 +1039,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 		  level,
 		  noise,
 		  cc,
-		  *c.cc_,
+		  res_gpu->cc_,
 		  true);
 	}
 
@@ -1067,7 +1067,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 		  level,
 		  noise,
 		  cc,
-		  *c.cc_,
+		  res_gpu->cc_,
 		  true);
 	}
 
@@ -1111,7 +1111,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 		  level,
 		  noise,
 		  cc,
-		  *c.cc_,
+		  res_gpu->cc_,
 		  true);
 	}
 }
