@@ -16,6 +16,12 @@ namespace FIDESlib::CKKS {
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 
+void cleanAndReduce(Ciphertext& out, const Ciphertext& c);
+void clean(Ciphertext& out, const Ciphertext& c);
+void mod2Shallow(Ciphertext& out, const Ciphertext& c);
+void majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c);
+void csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c);
+void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, const Ciphertext& c, int repetitions);
 
 // Can be heavily optimized by precomputing masks
 void processArray(Ciphertext& c_processed,

@@ -325,5 +325,211 @@ void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std:
     FIDESlib::CKKS::BootstrapStCFirstBits(result, result.slots, false);
 }
 
+void FIDESlib::CKKS::cleanAndReduce(Ciphertext& out, const Ciphertext& c) {
+	FIDESlib::CudaNvtxRange r(std::string{ scia::current().function_name() });
+	FIDESlib::CKKS::Context& cc_ = c.cc_;
+
+	// sqC := c^2
+	Ciphertext sqC(cc_);
+	sqC.square(c, false);
+	if (sqC.NoiseLevel == 2)
+		sqC.rescale();
+
+	// shifted := (c - 2)^2
+	Ciphertext shifted(cc_);
+	shifted.copy(c);
+	shifted.addScalar(-2.0);
+	shifted.square(false);
+	if (shifted.NoiseLevel == 2)
+		shifted.rescale();
+
+	// out := sqC * shifted
+	out.mult(sqC, shifted, false);
+}
+
+void FIDESlib::CKKS::clean(Ciphertext& out, const Ciphertext& c) {
+	FIDESlib::CudaNvtxRange r(std::string{ scia::current().function_name() });
+	FIDESlib::CKKS::Context& cc_ = c.cc_;
+
+	// sq := c^2
+	Ciphertext sq(cc_);
+	sq.square(c, false);
+	if (sq.NoiseLevel == 2)
+		sq.rescale();
+
+	// t1 := c * (-2)
+	Ciphertext t1(cc_);
+	t1.multScalar(c, -2.0, false);
+	if (t1.NoiseLevel == 2)
+		t1.rescale();
+
+	// termA := sq * t1
+	Ciphertext termA(cc_);
+	termA.mult(sq, t1, false);
+
+	// termB := sq * 3
+	Ciphertext termB(cc_);
+	termB.multScalar(sq, 3.0, false);
+
+	// out := termA + termB
+	out.add(termA, termB);
+}
+
+void FIDESlib::CKKS::mod2Shallow(Ciphertext& out, const Ciphertext& c) {
+	FIDESlib::CudaNvtxRange r(std::string{ scia::current().function_name() });
+	FIDESlib::CKKS::Context& cc_ = c.cc_;
+
+	// doubled := c * 2
+	Ciphertext doubled(cc_);
+	doubled.multScalar(c, 2.0, false);
+
+	// sq := c^2
+	Ciphertext sq(cc_);
+	sq.square(c, false);
+	if (sq.NoiseLevel == 2)
+		sq.rescale();
+
+	// out := doubled - sq
+	out.sub(doubled, sq);
+}
+
+void FIDESlib::CKKS::majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c) {
+	FIDESlib::CudaNvtxRange r(std::string{ scia::current().function_name() });
+	FIDESlib::CKKS::Context& cc_ = a.cc_;
+
+	// total := a + b + c
+	Ciphertext total(cc_);
+	total.add(a, b);
+	total.add(c);
+
+	// sq := total^2
+	Ciphertext sq(cc_);
+	sq.square(total, false);
+	if (sq.NoiseLevel == 2)
+		sq.rescale();
+
+	// t1 := total * (-1/3)
+	Ciphertext t1(cc_);
+	t1.multScalar(total, -1.0 / 3.0, false);
+	if (t1.NoiseLevel == 2)
+		t1.rescale();
+
+	// termA := t1 * sq
+	Ciphertext termA(cc_);
+	termA.mult(t1, sq, false);
+
+	// termB := sq * 3/2
+	Ciphertext termB(cc_);
+	termB.multScalar(sq, 3.0 / 2.0, false);
+
+	// termC := total * (-7/6)
+	Ciphertext termC(cc_);
+	termC.multScalar(total, -7.0 / 6.0, false);
+
+	// out := termA + termB + termC
+	Ciphertext ab(cc_);
+	ab.add(termA, termB);
+	out.add(ab, termC);
+}
+
+void FIDESlib::CKKS::csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c, bool cleanVals) {
+	FIDESlib::CudaNvtxRange r(std::string{ scia::current().function_name() });
+	FIDESlib::CKKS::Context& cc_ = a.cc_;
+
+	if (cleanVals) {
+		// S := cleanAndReduce(a + b)
+		Ciphertext ab(cc_);
+		ab.add(a, b);
+		cleanAndReduce(S, ab);
+
+		// S := mod2Shallow(S + clean(c))
+		Ciphertext cleanC(cc_);
+		clean(cleanC, c);
+		Ciphertext sPlusCleanC(cc_);
+		sPlusCleanC.add(S, cleanC);
+		mod2Shallow(S, sPlusCleanC);
+	} else {
+		// S := mod2Shallow(a + b)
+		Ciphertext ab(cc_);
+		ab.add(a, b);
+		mod2Shallow(S, ab);
+
+		// S := mod2Shallow(S + c)
+		Ciphertext sPlusC(cc_);
+		sPlusC.add(S, c);
+		mod2Shallow(S, sPlusC);
+	}
+
+	majorityBit(C, a, b, c);
+}
+
+void FIDESlib::CKKS::bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, const Ciphertext& c, int repetitions) {
+	FIDESlib::CudaNvtxRange r(std::string{ scia::current().function_name() });
+	FIDESlib::CKKS::Context& cc_ = c.cc_;
+
+	// Build the {1,2,4,8,0,0,0,0}-repeated mask, encoded at c's level, and
+	// the second {sqrt(1/(225/2)), 0,0,0,0,0,0,0}-repeated rescaling mask,
+	// mirroring OpenFHE's bintodec exactly (including the folding rotation
+	// pattern +1,+2 then -1,-2,-4).
+	std::vector<double> mask1;
+	mask1.reserve(static_cast<size_t>(repetitions) * 8);
+	for (int i = 0; i < repetitions; i++) {
+		mask1.insert(mask1.end(), { 1.0, 2.0, 4.0, 8.0, 0.0, 0.0, 0.0, 0.0 });
+	}
+
+	std::vector<double> mask2;
+	mask2.reserve(static_cast<size_t>(repetitions) * 8);
+	double rescaleFactor = std::sqrt(1.0 / (225.0 / 2.0));
+	for (int i = 0; i < repetitions; i++) {
+		mask2.insert(mask2.end(), { rescaleFactor, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
+	}
+
+	// Same level-convention caveat as ApproxModEvalBatch.cu's
+	// makePerSlotPlaintext: FIDESlib's core getLevel() counts DOWN from
+	// cc.L, while MakeCKKSPackedPlaintext's `level` counts UP from 0, and
+	// noiseScaleDeg must match the target ciphertext's real NoiseLevel.
+	auto makeMaskPt = [&](const std::vector<double>& values, const Ciphertext& like) -> Plaintext {
+		uint32_t openfheLevel = static_cast<uint32_t>(like.cc.L - like.getLevel());
+		size_t noiseScaleDeg  = static_cast<size_t>(like.NoiseLevel);
+		auto pt               = cc->MakeCKKSPackedPlaintext(values, /*noiseScaleDeg=*/noiseScaleDeg,
+		                                                      /*level=*/openfheLevel, nullptr,
+		                                                      /*slots=*/like.slots);
+		FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
+		return Plaintext(cc_, raw);
+	};
+
+	// res := c * mask1  (weights 1,2,4,8 at slots 0..3 of each group)
+	Ciphertext res(cc_);
+	Plaintext maskPt1 = makeMaskPt(mask1, c);
+	res.multPt(c, maskPt1, true);
+
+	// res := res + rot(res, 1) + rot(res, 2)  -- sums the 4 weighted bits
+	// into slot 0 of each group.
+	Ciphertext rot1(cc_);
+	rot1.rotate(res, 1);
+	res.add(rot1);
+	Ciphertext rot2(cc_);
+	rot2.rotate(res, 2);
+	res.add(rot2);
+
+	// res := res * mask2  (keeps only slot 0 of each group, rescaled)
+	Plaintext maskPt2 = makeMaskPt(mask2, res);
+	res.multPt(maskPt2, true);
+
+	// res := res + rot(res,-1) + rot(res,-2) + rot(res,-4)  -- broadcasts
+	// the decoded value back across the low 4 slots of each group.
+	Ciphertext rotm1(cc_);
+	rotm1.rotate(res, -1);
+	res.add(rotm1);
+	Ciphertext rotm2(cc_);
+	rotm2.rotate(res, -2);
+	res.add(rotm2);
+	Ciphertext rotm4(cc_);
+	rotm4.rotate(res, -4);
+	res.add(rotm4);
+
+	out.copy(res);
+}
+
 
 } // namespace FIDESlib::CKKS

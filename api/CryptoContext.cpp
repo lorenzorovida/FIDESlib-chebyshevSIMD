@@ -776,7 +776,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphert
 	if (this->devices.empty()) {
 
 		OPENFHE_THROW(
-		    "EvalAddInteger has no CPU fallback with the OpenFHE "
+		    "EvalEqualInteger has no CPU fallback with the OpenFHE "
 		    "library currently linked. Configure at least one GPU device, or "
 		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
 		    "to enable the CPU path.");
@@ -823,6 +823,110 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphert
 
     return result;
 }
+
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::CsaSum(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b,
+                                                          const Ciphertext<DCRTPoly>& c, bool cleanVals) {
+	FIDESlib::CudaNvtxRange r("API");
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW(
+		    "CsaSum has no CPU fallback with the OpenFHE "
+		    "library currently linked. Configure at least one GPU device, or "
+		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+		    "to enable the CPU path.");
+	}
+ 
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(a));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(b));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
+ 
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*a);
+	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto a_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(a->gpu));
+	auto b_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(b->gpu));
+	auto c_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
+ 
+	// CsaSum/CsaCarry each recompute csa3() independently (it produces both
+	// outputs together): simplest and safest for now, at the cost of doing
+	// the shared work twice. Worth optimizing once this is used inside the
+	// larger mul_integer pipeline.
+	FIDESlib::CKKS::Ciphertext dummyCarry(res_gpu->cc_);
+	FIDESlib::CKKS::csa3(*res_gpu, dummyCarry, *a_gpu, *b_gpu, *c_gpu, cleanVals);
+ 
+	return result;
+}
+ 
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::CsaCarry(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b,
+                                                            const Ciphertext<DCRTPoly>& c, bool cleanVals) {
+	FIDESlib::CudaNvtxRange r("API");
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW(
+		    "CsaCarry has no CPU fallback with the OpenFHE "
+		    "library currently linked. Configure at least one GPU device, or "
+		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+		    "to enable the CPU path.");
+	}
+ 
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(a));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(b));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
+ 
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*a);
+	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto a_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(a->gpu));
+	auto b_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(b->gpu));
+	auto c_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
+ 
+	FIDESlib::CKKS::Ciphertext dummySum(res_gpu->cc_);
+	FIDESlib::CKKS::csa3(dummySum, *res_gpu, *a_gpu, *b_gpu, *c_gpu, cleanVals);
+ 
+	return result;
+}
+ 
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::MajorityBit(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b,
+                                                               const Ciphertext<DCRTPoly>& c) {
+	FIDESlib::CudaNvtxRange r("API");
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW(
+		    "MajorityBits has no CPU fallback with the OpenFHE "
+		    "library currently linked. Configure at least one GPU device, or "
+		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+		    "to enable the CPU path.");
+	}
+ 
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(a));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(b));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
+ 
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*a);
+	auto res_gpu                = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto a_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(a->gpu));
+	auto b_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(b->gpu));
+	auto c_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
+ 
+	FIDESlib::CKKS::majorityBit(*res_gpu, *a_gpu, *b_gpu, *c_gpu);
+ 
+	return result;
+}
+ 
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::BinToDec(const Ciphertext<DCRTPoly>& ct, int repetitions) {
+	FIDESlib::CudaNvtxRange r("API");
+	ThrowIfNoDevicesForIntegerArith(this->devices.empty(), "BinToDec");
+ 
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
+ 
+	auto& context                = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
+	auto res_gpu                 = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto ct_gpu                  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
+ 
+	FIDESlib::CKKS::bintodec(context, *res_gpu, *ct_gpu, repetitions);
+ 
+	return result;
+}
+
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTPoly>& ct, Plaintext& pt) {
 	FIDESlib::CudaNvtxRange r("API");
