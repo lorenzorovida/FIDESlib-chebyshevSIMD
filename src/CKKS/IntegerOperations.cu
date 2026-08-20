@@ -796,9 +796,9 @@ void FIDESlib::CKKS::preprocessProcessArray(int bits,
 		// Store precomputed entry
 		// --------------------------------------------------------
 
-		ProcessArrayPrecomputation::Entry entry{ shift, maskP };
+		ProcessArrayPrecomputation::Entry entry{ shift, std::move(maskP) };
 
-		precomp->entries.push_back({ shift, maskP });
+		precomp->entries.push_back(std::move(entry));
 	}
 }
 
