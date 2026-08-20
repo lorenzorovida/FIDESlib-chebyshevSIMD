@@ -691,7 +691,7 @@ void FIDESlib::CKKS::preprocessProcessArray(int bits,
 		throw std::invalid_argument("preprocessProcessArray: slots must be > 0");
 	}
 
-	const ProcessArrayPrecomputation* precomp = nullptr;
+	ProcessArrayPrecomputation* precomp = nullptr;
 
 	if (forB) {
 		if (bits > 128)
@@ -717,10 +717,14 @@ void FIDESlib::CKKS::preprocessProcessArray(int bits,
 			precomp = &precomp8;
 	}
 
+	if (precomp == nullptr) {
+		throw std::invalid_argument("preprocessProcessArray: bits must be > 8");
+	}
+
 	const int total_size = mask_size * rep;
 
-	precomp.entries.clear();
-	precomp.entries.reserve(mask_roll_pairs.size());
+	precomp->entries.clear();
+	precomp->entries.reserve(mask_roll_pairs.size());
 
 	for (const auto& [start, roll_base] : mask_roll_pairs) {
 
@@ -794,7 +798,7 @@ void FIDESlib::CKKS::preprocessProcessArray(int bits,
 
 		ProcessArrayPrecomputation::Entry entry{ shift, maskP };
 
-		precomp.entries.push_back(std::move(entry));
+		precomp->entries.push_back({ shift, maskP });
 	}
 }
 
