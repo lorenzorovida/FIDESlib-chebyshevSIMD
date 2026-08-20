@@ -1266,7 +1266,7 @@ std::vector<double> rotateMask(const std::vector<double>& mask, int shift)
 {
     const int n = static_cast<int>(mask.size());
 
-    std::vector<int> result(n);
+    std::vector<double> result(n);
 
     for (int i = 0; i < n; ++i) {
         int src = (i + shift) % n;
