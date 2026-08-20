@@ -729,8 +729,9 @@ void processArray(Ciphertext& c_processed,
   const std::vector<std::pair<int, int>>& mask_roll_pairs,
   int mask_size,
   int rep,
-  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-  FIDESlib::CKKS::Context& cc_) {
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+	FIDESlib::CKKS::Context cc_ = c.cc_;
+
 	if (mask_size <= 0) {
 		throw std::invalid_argument("processArray: mask_size must be > 0");
 	}

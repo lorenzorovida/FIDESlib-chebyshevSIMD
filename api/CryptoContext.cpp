@@ -1004,7 +1004,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::ProcessArray(const Ciphertext<
 
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
-	FIDESlib::CKKS::processArray(*res_gpu, *c_gpu, mask_roll_pairs, mask_size, rep, context)
+	FIDESlib::CKKS::processArray(*res_gpu, *c_gpu, mask_roll_pairs, mask_size, rep, context);
  
 	return result;
 }
