@@ -683,14 +683,19 @@ void processArray(Ciphertext& c_processed,
 */
 void preprocessProcessArray(int bits,
   const std::vector<std::pair<int, int>>& mask_roll_pairs,
-  int mask_size,
-  int rep,
   int slots,
   int level,
   size_t noise,
   lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   FIDESlib::CKKS::Context& cc_,
   bool forB) {
+
+	int mask_size = bits * (bits / 2);
+
+    //Assuming full reps?
+    int rep = (slots * 2) / (bits * bits);
+
+
 	if (mask_size <= 0) {
 		throw std::invalid_argument("preprocessProcessArray: mask_size must be > 0");
 	}

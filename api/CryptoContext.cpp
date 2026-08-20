@@ -933,18 +933,16 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	int level = 12;
 
 	if (bits > 8) {
-		preprocessProcessArray(bits, { { 8, 64 }, { 12, 80 } }, mask_size, rep, slots, level, noise, cc, res_gpu->cc_);
+		preprocessProcessArray(bits, { { 8, 64 }, { 12, 80 } }, slots, level, noise, cc, res_gpu->cc_);
 	}
 
 	if (bits > 16) {
-		preprocessProcessArray(bits, { { 16, 256 }, { 20, 272 }, { 24, 320 }, { 28, 336 } }, mask_size, rep, slots, level, noise, cc, res_gpu->cc_);
+		preprocessProcessArray(bits, { { 16, 256 }, { 20, 272 }, { 24, 320 }, { 28, 336 } }, slots, level, noise, cc, res_gpu->cc_);
 	}
 
 	if (bits > 32) {
 		preprocessProcessArray(bits,
 		  { { 32, 1024 }, { 36, 1040 }, { 40, 1088 }, { 44, 1104 }, { 48, 1280 }, { 52, 1296 }, { 56, 1344 }, { 60, 1360 } },
-		  mask_size,
-		  rep,
 		  slots,
 		  level,
 		  noise,
@@ -970,8 +968,6 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 			{ 116, 5392 },
 			{ 120, 5440 },
 			{ 124, 5456 } },
-		  mask_size,
-		  rep,
 		  slots,
 		  level,
 		  noise,
@@ -1013,8 +1009,6 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 			{ 244, 21776 },
 			{ 248, 21824 },
 			{ 252, 21840 } },
-		  mask_size,
-		  rep,
 		  slots,
 		  level,
 		  noise,
@@ -1023,18 +1017,16 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	}
 
 	if (bits > 8) {
-		preprocessProcessArray(bits, { { 8, 32 }, { 12, 40 } }, mask_size, rep, slots, level, noise, cc, res_gpu->cc_, true);
+		preprocessProcessArray(bits, { { 8, 32 }, { 12, 40 } }, slots, level, noise, cc, res_gpu->cc_, true);
 	}
 
 	if (bits > 16) {
-		preprocessProcessArray(bits, { { 16, 128 }, { 20, 136 }, { 24, 160 }, { 28, 168 } }, mask_size, rep, slots, level, noise, cc, res_gpu->cc_, true);
+		preprocessProcessArray(bits, { { 16, 128 }, { 20, 136 }, { 24, 160 }, { 28, 168 } }, slots, level, noise, cc, res_gpu->cc_, true);
 	}
 
 	if (bits > 32) {
 		preprocessProcessArray(bits,
 		  { { 32, 512 }, { 36, 520 }, { 40, 544 }, { 44, 552 }, { 48, 640 }, { 52, 648 }, { 56, 672 }, { 60, 680 } },
-		  mask_size,
-		  rep,
 		  slots,
 		  level,
 		  noise,
@@ -1061,8 +1053,6 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 			{ 116, 2696 },
 			{ 120, 2720 },
 			{ 124, 2728 } },
-		  mask_size,
-		  rep,
 		  slots,
 		  level,
 		  noise,
@@ -1105,8 +1095,6 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 			{ 244, 10888 },
 			{ 248, 10912 },
 			{ 252, 10920 } },
-		  mask_size,
-		  rep,
 		  slots,
 		  level,
 		  noise,

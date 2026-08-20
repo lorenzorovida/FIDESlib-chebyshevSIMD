@@ -61,8 +61,6 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 
 void preprocessProcessArray(int bits,
   const std::vector<std::pair<int, int>>& mask_roll_pairs,
-  int mask_size,
-  int rep,
   int slots,
   int level,
   size_t noise,
