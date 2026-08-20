@@ -30,7 +30,7 @@ void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std:
 
 
 
-std::vector<int> rotateMask(const std::vector<int>& mask, int shift);
+std::vector<double> rotateMask(const std::vector<double>& mask, int shift);
 
 
 } // namespace FIDESlib::CKKS

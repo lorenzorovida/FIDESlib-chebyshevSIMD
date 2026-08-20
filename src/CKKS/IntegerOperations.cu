@@ -239,11 +239,11 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
 			nullptr,
 			a_rot.slots);
 
-		FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
-		Plaintext maskP(cc_, raw);
+		raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
+		Plaintext maskP2(cc_, raw);
 		
 
-		a_high.multPt(a_rot, maskP, false);
+		a_high.multPt(a_rot, maskP2, false);
 
         a_low.add(a_high);
 
@@ -446,7 +446,7 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
         Ciphertext b_rot(a.cc_);
         b_rot.rotate(b, -4);
 
-        std::vector<int> maskhigh_b =
+        std::vector<double> maskhigh_b =
             rotateMask(maskhigh, 4);
 
         Ciphertext b_high(a.cc_);
