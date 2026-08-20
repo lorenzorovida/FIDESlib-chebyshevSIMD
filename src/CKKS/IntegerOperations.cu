@@ -200,7 +200,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		Ciphertext a_low(a.cc_);
 
-		size_t noise = a.NoiseFactor;
+		size_t noise = static_cast<size_t>(a.NoiseLevel);
 
 		auto pt = cc->MakeCKKSPackedPlaintext(masklow, noise, a.getLevel(), nullptr, a.slots);
 
@@ -231,7 +231,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		Ciphertext a_high(a.cc_);
 
-		noise = a_rot.NoiseFactor;
+		noise = static_cast<size_t>(a_rot.NoiseLevel);
 
 		pt = cc->MakeCKKSPackedPlaintext(maskhigh_rot, noise, a_rot.getLevel(), nullptr, a_rot.slots);
 
@@ -385,7 +385,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		Ciphertext b_processed(a.cc_);
 
-		noise = b.NoiseFactor;
+		noise = static_cast<size_t>(b.NoiseLevel);
 
 		pt = cc->MakeCKKSPackedPlaintext(masklow, noise, b.getLevel(), nullptr, b.slots);
 
@@ -400,7 +400,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		Ciphertext b_high(a.cc_);
 
-		noise = b_rot.NoiseFactor;
+		noise = static_cast<size_t>(b_rot.NoiseLevel);
 
 		pt = cc->MakeCKKSPackedPlaintext(maskhigh_b, noise, b_rot.getLevel(), nullptr, b_rot.slots);
 
@@ -620,7 +620,7 @@ void evalIntegerMult(Ciphertext& out,
 		cc);
 	*/
 
-	size_t noise = result.NoiseFactor;
+	size_t noise = static_cast<size_t>(result.NoiseLevel);
 
 	auto pt = cc->MakeCKKSPackedPlaintext(mask1, noise, result.getLevel(), nullptr, result.slots);
 
@@ -649,7 +649,7 @@ void evalIntegerMult(Ciphertext& out,
 		mask2,
 		cc);
 	*/
-	noise = result.NoiseFactor;
+	size_t noise = static_cast<size_t>(result.NoiseLevel);
 
 	pt = cc->MakeCKKSPackedPlaintext(mask2, noise, result.getLevel(), nullptr, result.slots);
 
