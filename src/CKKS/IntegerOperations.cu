@@ -144,7 +144,7 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
 
 	Ciphertext corrected(sum.cc_);
 
-	corrected.multPt(sum, correctionPt, false);
+	corrected.multPt(sum, correctionPt, true);
 
     a.copy(corrected);
 
@@ -207,7 +207,7 @@ void evalIntegerMult(Ciphertext& out,
 		FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 		Plaintext maskP(cc_, raw);
 
-		a_low.multPt(a, maskP, false);
+		a_low.multPt(a, maskP, true);
 
 		// --------------------------------------------------------
 		// maskhigh
@@ -238,7 +238,7 @@ void evalIntegerMult(Ciphertext& out,
 		raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 		Plaintext maskP2(cc_, raw);
 
-		a_high.multPt(a_rot, maskP2, false);
+		a_high.multPt(a_rot, maskP2, true);
 
 		a_low.add(a_high);
 
@@ -391,7 +391,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 		Plaintext maskP3(cc_, raw);
-		b_processed.multPt(b, maskP3);
+		b_processed.multPt(b, maskP3, true);
 
 		Ciphertext b_rot(a.cc_);
 		b_rot.rotate(b, -4);
@@ -406,7 +406,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 		Plaintext maskP4(cc_, raw);
-		b_high.multPt(b_rot, maskP4);
+		b_high.multPt(b_rot, maskP4, true);
 
 		b_processed.add(b_high);
 
@@ -626,7 +626,7 @@ void evalIntegerMult(Ciphertext& out,
 
 	FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 	Plaintext maskP5(cc_, raw);
-	p1.multPt(result, maskP5);
+	p1.multPt(result, maskP5, true);
 
 	// ------------------------------------------------------------
 	// p2 = rot(p1, -(-rep_size/2 + bits/2))
@@ -655,7 +655,7 @@ void evalIntegerMult(Ciphertext& out,
 
 	raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 	Plaintext maskP6(cc_, raw);
-	masked2.multPt(result, maskP6);
+	masked2.multPt(result, maskP6, true);
 
 	Ciphertext p3(a.cc_);
 
@@ -838,7 +838,7 @@ void processArray(Ciphertext& c_processed,
 		FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 		Plaintext maskP					 = Plaintext(cc_, raw);
 
-		masked.multPt(rolled_ctxt, maskP, false);
+		masked.multPt(rolled_ctxt, maskP, true);
 
 		result.add(masked);
 
