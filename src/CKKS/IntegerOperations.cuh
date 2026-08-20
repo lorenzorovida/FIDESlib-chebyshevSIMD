@@ -63,7 +63,7 @@ void preprocessProcessArray(int bits,
   size_t noise,
   lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   FIDESlib::CKKS::Context& cc_,
-  bool forB);
+  bool forB = false);
 
 void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp);
 
