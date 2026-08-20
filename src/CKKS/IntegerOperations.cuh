@@ -22,16 +22,17 @@ struct ProcessArrayPrecomputation {
     std::vector<Entry> entries;
 };
 
-ProcessArrayPrecomputation precomp8;
-ProcessArrayPrecomputation precomp16;
-ProcessArrayPrecomputation precomp32;
-ProcessArrayPrecomputation precomp64;
-ProcessArrayPrecomputation precomp128;
-ProcessArrayPrecomputation precomp8b;
-ProcessArrayPrecomputation precomp16b;
-ProcessArrayPrecomputation precomp32b;
-ProcessArrayPrecomputation precomp64b;
-ProcessArrayPrecomputation precomp128b;
+extern ProcessArrayPrecomputation precomp8;
+extern ProcessArrayPrecomputation precomp16;
+extern ProcessArrayPrecomputation precomp32;
+extern ProcessArrayPrecomputation precomp64;
+extern ProcessArrayPrecomputation precomp128;
+
+extern ProcessArrayPrecomputation precomp8b;
+extern ProcessArrayPrecomputation precomp16b;
+extern ProcessArrayPrecomputation precomp32b;
+extern ProcessArrayPrecomputation precomp64b;
+extern ProcessArrayPrecomputation precomp128b;
 
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, int depth);

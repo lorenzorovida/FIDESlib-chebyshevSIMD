@@ -5,6 +5,18 @@
 
 namespace FIDESlib::CKKS {
 
+ProcessArrayPrecomputation precomp8;
+ProcessArrayPrecomputation precomp16;
+ProcessArrayPrecomputation precomp32;
+ProcessArrayPrecomputation precomp64;
+ProcessArrayPrecomputation precomp128;
+
+ProcessArrayPrecomputation precomp8b;
+ProcessArrayPrecomputation precomp16b;
+ProcessArrayPrecomputation precomp32b;
+ProcessArrayPrecomputation precomp64b;
+ProcessArrayPrecomputation precomp128b;
+
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
 	if (bits <= 0) {
 		throw std::invalid_argument("evalIntegerAdd: bits must be > 0");
