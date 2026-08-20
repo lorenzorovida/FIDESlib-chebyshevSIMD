@@ -149,12 +149,14 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
 	BootstrapStCFirstBits(corrected, corrected.slots, false);
 }
 
-void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, int bits, int bits_original, int repetitions, int repetitions_original, bool overflow, std::vector<std::vector<double>>& coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_)
+void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, int bits, int bits_original, int repetitions, int repetitions_original, bool overflow, std::vector<std::vector<double>>& coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc)
 {
     const int rep_size = bits * bits / 2;
 
     // Size of basic multiplier.
     const int base_mult = 8;
+
+	FIDESlib::CKKS::Context& cc_ = a.cc_;
 
     Ciphertext result(a.cc_);
 
