@@ -117,7 +117,7 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
 		sum.add(rotated);
 	}
 
-	//evalChebyshevSeries(sum, coeffsSinc, 0, 256);
+	evalChebyshevSeries(sum, coeffsSinc, 0, 256);
 
 	// ------------------------------------------------------------
 	// correction mask
@@ -146,7 +146,7 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
 
 	corrected.multPt(sum, correctionPt, false);
 
-	BootstrapStCFirstBits(corrected, corrected.slots, false);
+	//BootstrapStCFirstBits(corrected, corrected.slots, false);
 }
 
 void evalIntegerMult(Ciphertext& out,
