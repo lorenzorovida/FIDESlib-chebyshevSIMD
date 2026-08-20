@@ -149,13 +149,743 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
 	BootstrapStCFirstBits(corrected, corrected.slots, false);
 }
 
-void processArray(Ciphertext& c_processed,
-  const Ciphertext& c,
-  const std::vector<std::pair<int, int>>& mask_roll_pairs,
-  int mask_size,
-  int rep,
-  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-  FIDESlib::CKKS::Context& cc_) {
+void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, int bits, int bits_original, int repetitions, int repetitions_original, bool overflow, std::vector<std::vector<double>>& coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_)
+{
+    const int rep_size = bits * bits / 2;
+
+    // Size of basic multiplier.
+    const int base_mult = 8;
+
+    Ciphertext result(a.cc_);
+
+    // ============================================================
+    // BASE CASE: 8-bit multiplier
+    // ============================================================
+
+    if (bits == 8) {
+
+        // --------------------------------------------------------
+        // A
+        // --------------------------------------------------------
+
+        const int mask_size =
+            bits_original * (bits_original / 2);
+
+        std::vector<int> masklow(
+            a.slots,
+            0);
+
+        for (int j = 0;
+             j < repetitions_original;
+             ++j)
+        {
+            masklow[0 + j * mask_size] = 1;
+            masklow[1 + j * mask_size] = 1;
+            masklow[2 + j * mask_size] = 1;
+            masklow[3 + j * mask_size] = 1;
+        }
+
+        Ciphertext a_low(a.cc_);
+
+		auto pt = cc->MakeCKKSPackedPlaintext(
+			masklow,
+			noise,
+			a.getLevel(),
+			nullptr,
+			a.slots);
+
+		FIDESlib::CKKS::RawPlainText raw =
+			FIDESlib::CKKS::GetRawPlainText(&cc, pt);
+
+		Plaintext maskP(ctxt.cc_, raw);
+
+		a_low.multPt(a, maskP, false);
+
+
+        // --------------------------------------------------------
+        // maskhigh
+        // --------------------------------------------------------
+
+        std::vector<int> maskhigh(
+            a.slots,
+            0);
+
+        for (int j = 0;
+             j < repetitions_original;
+             ++j)
+        {
+            maskhigh[4 + j * mask_size] = 1;
+            maskhigh[5 + j * mask_size] = 1;
+            maskhigh[6 + j * mask_size] = 1;
+            maskhigh[7 + j * mask_size] = 1;
+        }
+
+        const int highShift = -(16 - 4);
+
+        Ciphertext a_rot(a.cc_);
+        a_rot.rotate(a, highShift);
+
+        std::vector<int> maskhigh_rot =
+            rotateMask(maskhigh, -highShift);
+
+        Ciphertext a_high(a.cc_);
+
+		pt = cc->MakeCKKSPackedPlaintext(
+			maskhigh_rot,
+			noise,
+			a_rot.getLevel(),
+			nullptr,
+			a_rot.slots);
+
+		FIDESlib::CKKS::RawPlainText raw =
+			FIDESlib::CKKS::GetRawPlainText(&cc, pt);
+
+		Plaintext maskP(ctxt.cc_, raw);
+
+		a_high.multPt(a_rot, maskP, false);
+
+        a_low.add(a_high);
+
+        Ciphertext a_processed(a.cc_);
+        a_processed.copy(a_low);
+
+
+        // --------------------------------------------------------
+        // process_array(...)
+        // --------------------------------------------------------
+
+        if (bits_original > 8) {
+
+            processArray(
+                a_processed,
+                a,
+                {
+                    {8, 64},
+                    {12, 80}
+                },
+                mask_size,
+                repetitions_original,
+                cc,
+                cc_);
+        }
+
+        if (bits_original > 16) {
+
+            processArray(
+                a_processed,
+                a,
+                {
+                    {16, 256},
+                    {20, 272},
+                    {24, 320},
+                    {28, 336}
+                },
+                mask_size,
+                repetitions_original,
+                cc,
+                cc_);
+        }
+
+        if (bits_original > 32) {
+
+            processArray(
+                a_processed,
+                a,
+                {
+                    {32, 1024},
+                    {36, 1040},
+                    {40, 1088},
+                    {44, 1104},
+                    {48, 1280},
+                    {52, 1296},
+                    {56, 1344},
+                    {60, 1360}
+                },
+                mask_size,
+                repetitions_original,
+                cc,
+                cc_);
+        }
+
+        if (bits_original > 64) {
+
+            processArray(
+                a_processed,
+                a,
+                {
+                    {64, 4096},
+                    {68, 4112},
+                    {72, 4160},
+                    {76, 4176},
+                    {80, 4352},
+                    {84, 4368},
+                    {88, 4416},
+                    {92, 4432},
+                    {96, 5120},
+                    {100, 5136},
+                    {104, 5184},
+                    {108, 5200},
+                    {112, 5376},
+                    {116, 5392},
+                    {120, 5440},
+                    {124, 5456}
+                },
+                mask_size,
+                repetitions_original,
+                cc,
+                cc_);
+        }
+
+        if (bits_original > 128) {
+
+            processArray(
+                a_processed,
+                a,
+                {
+                    {128, 16384},
+                    {132, 16400},
+                    {136, 16448},
+                    {140, 16464},
+                    {144, 16640},
+                    {148, 16656},
+                    {152, 16704},
+                    {156, 16720},
+                    {160, 17408},
+                    {164, 17424},
+                    {168, 17472},
+                    {172, 17488},
+                    {176, 17664},
+                    {180, 17680},
+                    {184, 17728},
+                    {188, 17744},
+                    {192, 20480},
+                    {196, 20496},
+                    {200, 20544},
+                    {204, 20560},
+                    {208, 20736},
+                    {212, 20752},
+                    {216, 20800},
+                    {220, 20816},
+                    {224, 21504},
+                    {228, 21520},
+                    {232, 21568},
+                    {236, 21584},
+                    {240, 21760},
+                    {244, 21776},
+                    {248, 21824},
+                    {252, 21840}
+                },
+                mask_size,
+                repetitions_original,
+                cc,
+                cc_);
+        }
+
+
+        // --------------------------------------------------------
+        // Combine A
+        // --------------------------------------------------------
+
+        if (bits_original > 4) {
+
+            Ciphertext tmp(a.cc_);
+            tmp.rotate(a_processed, -8);
+            a_processed.add(tmp);
+        }
+
+        if (bits_original > 8) {
+
+            Ciphertext tmp(a.cc_);
+            tmp.rotate(a_processed, -32);
+            a_processed.add(tmp);
+        }
+
+        if (bits_original > 16) {
+
+            Ciphertext tmp(a.cc_);
+            tmp.rotate(a_processed, -128);
+            a_processed.add(tmp);
+        }
+
+        if (bits_original > 32) {
+
+            Ciphertext tmp(a.cc_);
+            tmp.rotate(a_processed, -512);
+            a_processed.add(tmp);
+        }
+
+        if (bits_original > 64) {
+
+            Ciphertext tmp(a.cc_);
+            tmp.rotate(a_processed, -2048);
+            a_processed.add(tmp);
+        }
+
+        if (bits_original > 128) {
+
+            Ciphertext tmp(a.cc_);
+            tmp.rotate(a_processed, -8192);
+            a_processed.add(tmp);
+        }
+
+
+        // ========================================================
+        // B
+        // ========================================================
+
+        Ciphertext b_processed(a.cc_);
+
+        multMask(
+            b_processed,
+            b,
+            masklow,
+            cc);
+
+
+        Ciphertext b_rot(a.cc_);
+        b_rot.rotate(b, -4);
+
+        std::vector<int> maskhigh_b =
+            rotateMask(maskhigh, 4);
+
+        Ciphertext b_high(a.cc_);
+
+        multMask(
+            b_high,
+            b_rot,
+            maskhigh_b,
+            cc);
+
+        b_processed.add(b_high);
+
+
+        // --------------------------------------------------------
+        // process B
+        // --------------------------------------------------------
+
+        if (bits_original > 8) {
+
+            processArray(
+                b_processed,
+                b,
+                {
+                    {8, 32},
+                    {12, 40}
+                },
+                mask_size,
+                repetitions_original,
+                cc,
+                cc_);
+        }
+
+        if (bits_original > 16) {
+
+            processArray(
+                b_processed,
+                b,
+                {
+                    {16, 128},
+                    {20, 136},
+                    {24, 160},
+                    {28, 168}
+                },
+                mask_size,
+                repetitions_original,
+                cc,
+                cc_);
+        }
+
+        if (bits_original > 32) {
+
+            processArray(
+                b_processed,
+                b,
+                {
+                    {32, 512},
+                    {36, 520},
+                    {40, 544},
+                    {44, 552},
+                    {48, 640},
+                    {52, 648},
+                    {56, 672},
+                    {60, 680}
+                },
+                mask_size,
+                repetitions_original,
+                cc,
+                cc_);
+        }
+
+        if (bits_original > 64) {
+
+            processArray(
+                b_processed,
+                b,
+                {
+                    {64, 2048},
+                    {68, 2056},
+                    {72, 2080},
+                    {76, 2088},
+                    {80, 2176},
+                    {84, 2184},
+                    {88, 2208},
+                    {92, 2216},
+                    {96, 2560},
+                    {100, 2568},
+                    {104, 2592},
+                    {108, 2600},
+                    {112, 2688},
+                    {116, 2696},
+                    {120, 2720},
+                    {124, 2728}
+                },
+                mask_size,
+                repetitions_original,
+                cc,
+                cc_);
+        }
+
+        if (bits_original > 128) {
+
+            processArray(
+                b_processed,
+                b,
+                {
+                    {128, 8192},
+                    {132, 8200},
+                    {136, 8224},
+                    {140, 8232},
+                    {144, 8320},
+                    {148, 8328},
+                    {152, 8352},
+                    {156, 8360},
+                    {160, 8704},
+                    {164, 8712},
+                    {168, 8736},
+                    {172, 8744},
+                    {176, 8832},
+                    {180, 8840},
+                    {184, 8864},
+                    {188, 8872},
+                    {192, 10240},
+                    {196, 10248},
+                    {200, 10272},
+                    {204, 10280},
+                    {208, 10368},
+                    {212, 10376},
+                    {216, 10400},
+                    {220, 10408},
+                    {224, 10752},
+                    {228, 10760},
+                    {232, 10784},
+                    {236, 10792},
+                    {240, 10880},
+                    {244, 10888},
+                    {248, 10912},
+                    {252, 10920}
+                },
+                mask_size,
+                repetitions_original,
+                cc,
+                cc_);
+        }
+
+
+        // --------------------------------------------------------
+        // Combine B
+        // --------------------------------------------------------
+
+        if (bits_original > 4) {
+
+            Ciphertext tmp(a.cc_);
+            tmp.rotate(b_processed, -16);
+            b_processed.add(tmp);
+        }
+
+        if (bits_original > 8) {
+
+            Ciphertext tmp(a.cc_);
+            tmp.rotate(b_processed, -64);
+            b_processed.add(tmp);
+        }
+
+        if (bits_original > 16) {
+
+            Ciphertext tmp(a.cc_);
+            tmp.rotate(b_processed, -256);
+            b_processed.add(tmp);
+        }
+
+        if (bits_original > 32) {
+
+            Ciphertext tmp(a.cc_);
+            tmp.rotate(b_processed, -1024);
+            b_processed.add(tmp);
+        }
+
+        if (bits_original > 64) {
+
+            Ciphertext tmp(a.cc_);
+            tmp.rotate(b_processed, -4096);
+            b_processed.add(tmp);
+        }
+
+        if (bits_original > 128) {
+
+            Ciphertext tmp(a.cc_);
+            tmp.rotate(b_processed, -16384);
+            b_processed.add(tmp);
+        }
+
+
+        // --------------------------------------------------------
+        // Convert binary to decimal
+        // --------------------------------------------------------
+
+        Ciphertext a_decimal(a.cc_);
+        bintodec(
+            cc,
+            a_decimal,
+            a_processed,
+            repetitions * 4);
+
+        Ciphertext b_decimal(a.cc_);
+        bintodec(
+            cc,
+            b_decimal,
+            b_processed,
+            repetitions * 4);
+
+
+        // --------------------------------------------------------
+        // 4-bit multiplier
+        // --------------------------------------------------------
+
+        multiplier4bits(
+            result,
+            a_decimal,
+            b_decimal,
+            repetitions * 4,
+            coeffs,
+            cc);
+    }
+    else {
+
+        // Recursive case:
+        //
+        // result =
+        // mul_integer(
+        //     a,
+        //     b,
+        //     bits / 2,
+        //     bits_original,
+        //     4 * repetitions,
+        //     repetitions_original,
+        //     overflow);
+
+        mulInteger(
+            result,
+            a,
+            b,
+            bits / 2,
+            bits_original,
+            4 * repetitions,
+            repetitions_original,
+            overflow,
+            coeffs,
+            cc,
+            cc_);
+    }
+
+
+    // ============================================================
+    // Recombine multiplication result
+    // ============================================================
+
+    const int dunn =
+        (bits * bits / base_mult) * 2;
+
+
+    std::vector<double> mask1(
+        a.slots,
+        0.0);
+
+    for (int j = 0; j < repetitions; ++j) {
+
+        for (int i = 0; i < bits; ++i) {
+
+            mask1[
+                (j * rep_size) + i
+            ] = 1.0;
+
+            mask1[
+                (j * rep_size) + i + dunn
+            ] = 1.0;
+        }
+    }
+
+
+    std::vector<double> mask2(
+        a.slots,
+        0.0);
+
+    for (int j = 0; j < repetitions; ++j) {
+
+        for (int i = 0; i < bits; ++i) {
+
+            mask2[
+                (j * rep_size) +
+                rep_size / 4 +
+                i
+            ] = 1.0;
+
+            mask2[
+                (j * rep_size) +
+                rep_size / 4 +
+                i +
+                dunn
+            ] = 1.0;
+        }
+    }
+
+
+    // ------------------------------------------------------------
+    // p1 = result * mask1
+    // ------------------------------------------------------------
+
+    Ciphertext p1(a.cc_);
+
+    multMask(
+        p1,
+        result,
+        mask1,
+        cc);
+
+
+    // ------------------------------------------------------------
+    // p2 = rot(p1, -(-rep_size/2 + bits/2))
+    // ------------------------------------------------------------
+
+    Ciphertext p2(a.cc_);
+
+    p2.rotate(
+        p1,
+        -(-rep_size / 2 + bits / 2));
+
+
+    // ------------------------------------------------------------
+    // p3
+    // ------------------------------------------------------------
+
+    Ciphertext masked2(a.cc_);
+
+    multMask(
+        masked2,
+        result,
+        mask2,
+        cc);
+
+    Ciphertext p3(a.cc_);
+
+    if (bits == 8) {
+
+        p3.rotate(
+            masked2,
+            16);
+
+    }
+    else {
+
+        p3.rotate(
+            masked2,
+            -(-rep_size / 4 + bits / 2));
+    }
+
+
+    // ------------------------------------------------------------
+    // p4
+    // ------------------------------------------------------------
+
+    Ciphertext p4(a.cc_);
+
+    if (bits == 8) {
+
+        p4.rotate(
+            p3,
+            -12);
+
+    }
+    else {
+
+        p4.rotate(
+            masked2,
+            ((bits - 2) * (3 * bits - 2)) / 8);
+    }
+
+
+    // ============================================================
+    // Final CSA + bootstrap
+    // ============================================================
+
+    if (!overflow && bits == bits_original) {
+
+        Ciphertext S(a.cc_);
+        Ciphertext C(a.cc_);
+
+        csa3(
+            S,
+            C,
+            p1,
+            p2,
+            p3);
+
+        Ciphertext rotatedC(a.cc_);
+
+        rotatedC.rotate(
+            C,
+            -1);
+
+        // add_integer(S, rot(C, -1), bits)
+        evalIntegerAdd(
+            S,
+            rotatedC,
+            bits);
+
+        // binboot(...)
+        //
+        // Replace with your FIDESlib binboot implementation.
+        //
+        // result = binboot(S);
+
+        result.copy(S);
+    }
+    else {
+
+        // Your currently exposed .cuh does NOT contain csa4.
+        //
+        // You need:
+        //
+        // void csa4(
+        //     Ciphertext& S,
+        //     Ciphertext& C,
+        //     const Ciphertext& a,
+        //     const Ciphertext& b,
+        //     const Ciphertext& c,
+        //     const Ciphertext& d,
+        //     int bits);
+        //
+        // followed by binboot(csa4(...)).
+        //
+        // For now:
+        throw std::runtime_error(
+            "mulInteger: csa4/binboot GPU path not exposed yet");
+    }
+
+    out.copy(result);
+}
+
+
+void processArray(Ciphertext& c_processed, const Ciphertext& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_) {
 	if (mask_size <= 0) {
 		throw std::invalid_argument("processArray: mask_size must be > 0");
 	}
