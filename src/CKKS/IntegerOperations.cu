@@ -691,7 +691,7 @@ void FIDESlib::CKKS::preprocessProcessArray(int bits,
 		throw std::invalid_argument("preprocessProcessArray: slots must be > 0");
 	}
 
-	ProcessArrayPrecomputation & precomp;
+	ProcessArrayPrecomputation precomp;
 
 	if (forB) {
 		if (bits > 8)

@@ -14,8 +14,12 @@
 namespace FIDESlib::CKKS {
 
 struct ProcessArrayPrecomputation {
-	std::vector<int> shifts;
-	std::vector<Plaintext> masks;
+    struct Entry {
+        int shift;
+        Plaintext mask;
+    };
+
+    std::vector<Entry> entries;
 };
 
 ProcessArrayPrecomputation precomp8;
