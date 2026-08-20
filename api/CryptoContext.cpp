@@ -820,8 +820,6 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphert
 		context
 	);
 
-	FIDESlib::CKKS::BootstrapStCFirstBits(*res_gpu, res_gpu->slots, false);
-
     return result;
 }
 
