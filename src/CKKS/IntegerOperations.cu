@@ -326,7 +326,6 @@ void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std:
 }
 
 void FIDESlib::CKKS::cleanAndReduce(Ciphertext& out, const Ciphertext& c) {
-	FIDESlib::CudaNvtxRange r(std::string{ scia::current().function_name() });
 	FIDESlib::CKKS::Context& cc_ = c.cc_;
 
 	// sqC := c^2
@@ -348,7 +347,6 @@ void FIDESlib::CKKS::cleanAndReduce(Ciphertext& out, const Ciphertext& c) {
 }
 
 void FIDESlib::CKKS::clean(Ciphertext& out, const Ciphertext& c) {
-	FIDESlib::CudaNvtxRange r(std::string{ scia::current().function_name() });
 	FIDESlib::CKKS::Context& cc_ = c.cc_;
 
 	// sq := c^2
@@ -376,7 +374,6 @@ void FIDESlib::CKKS::clean(Ciphertext& out, const Ciphertext& c) {
 }
 
 void FIDESlib::CKKS::mod2Shallow(Ciphertext& out, const Ciphertext& c) {
-	FIDESlib::CudaNvtxRange r(std::string{ scia::current().function_name() });
 	FIDESlib::CKKS::Context& cc_ = c.cc_;
 
 	// doubled := c * 2
@@ -394,7 +391,6 @@ void FIDESlib::CKKS::mod2Shallow(Ciphertext& out, const Ciphertext& c) {
 }
 
 void FIDESlib::CKKS::majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c) {
-	FIDESlib::CudaNvtxRange r(std::string{ scia::current().function_name() });
 	FIDESlib::CKKS::Context& cc_ = a.cc_;
 
 	// total := a + b + c
@@ -433,7 +429,6 @@ void FIDESlib::CKKS::majorityBit(Ciphertext& out, const Ciphertext& a, const Cip
 }
 
 void FIDESlib::CKKS::csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c, bool cleanVals) {
-	FIDESlib::CudaNvtxRange r(std::string{ scia::current().function_name() });
 	FIDESlib::CKKS::Context& cc_ = a.cc_;
 
 	if (cleanVals) {
@@ -464,7 +459,6 @@ void FIDESlib::CKKS::csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, con
 }
 
 void FIDESlib::CKKS::bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, const Ciphertext& c, int repetitions) {
-	FIDESlib::CudaNvtxRange r(std::string{ scia::current().function_name() });
 	FIDESlib::CKKS::Context& cc_ = c.cc_;
 
 	// Build the {1,2,4,8,0,0,0,0}-repeated mask, encoded at c's level, and

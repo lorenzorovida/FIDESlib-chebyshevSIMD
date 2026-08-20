@@ -825,7 +825,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphert
 }
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::CsaSum(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b,
-                                                          const Ciphertext<DCRTPoly>& c, bool cleanVals) {
+                                                          const Ciphertext<DCRTPoly>& c) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
 
@@ -857,7 +857,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::CsaSum(const Ciphertext<DCRTPo
 }
  
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::CsaCarry(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b,
-                                                            const Ciphertext<DCRTPoly>& c, bool cleanVals) {
+                                                            const Ciphertext<DCRTPoly>& c) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
 
