@@ -95,84 +95,59 @@ void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
 }
 
 void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
-    Ciphertext sum(a.cc_);
+	Ciphertext sum(a.cc_);
 
-    sum.copy(a);
-    sum.sub(b);
-    sum.square();
+	sum.copy(a);
+	sum.sub(b);
+	sum.square();
 
+	// ------------------------------------------------------------
+	// sum = sum + rotations of sum
+	// ------------------------------------------------------------
 
-    // ------------------------------------------------------------
-    // sum = sum + rotations of sum
-    // ------------------------------------------------------------
+	const int rounds = static_cast<int>(std::log2(bits));
 
-    const int rounds =
-        static_cast<int>(std::log2(bits));
+	for (int i = 0; i < rounds; ++i) {
 
-    for (int i = 0; i < rounds; ++i) {
+		const int rotation = 1 << i;
 
-        const int rotation = 1 << i;
+		Ciphertext rotated(a.cc_);
+		rotated.rotate(sum, rotation);
 
-        Ciphertext rotated(a.cc_);
-        rotated.rotate(sum, rotation);
+		sum.add(rotated);
+	}
 
-        sum.add(rotated);
-    }
+	evalChebyshevSeries(sum, coeffsSinc, 0, 256);
 
+	// ------------------------------------------------------------
+	// correction mask
+	// ------------------------------------------------------------
 
-    evalChebyshevSeries(sum, coeffsSinc, 0, 256);
+	std::vector<double> correction(a.slots, 0.0);
 
-    // ------------------------------------------------------------
-    // correction mask
-    // ------------------------------------------------------------
+	for (int i = 0; i < zslots; ++i) {
 
-    std::vector<double> correction(
-        a.slots,
-        0.0);
+		correction[i * (bits * bits) / 2] = 1.0;
+	}
 
-    for (int i = 0; i < zslots; ++i) {
+	// ------------------------------------------------------------
+	// Convert correction to FIDESlib plaintext
+	// ------------------------------------------------------------
 
-        correction[
-            i * (bits * bits) / 2
-        ] = 1.0;
-    }
+	size_t noise = static_cast<size_t>(sum.NoiseLevel);
 
-    // ------------------------------------------------------------
-    // Convert correction to FIDESlib plaintext
-    // ------------------------------------------------------------
+	auto pt = cc->MakeCKKSPackedPlaintext(correction, noise, sum.getLevel(), nullptr, sum.slots);
 
-    size_t noise =
-        static_cast<size_t>(sum.NoiseLevel);
+	FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 
-    auto pt = cc->MakeCKKSPackedPlaintext(
-        correction,
-        noise,
-        sum.getLevel(),
-        nullptr,
-        sum.slots);
+	Plaintext correctionPt(sum.cc_, raw);
 
-    FIDESlib::CKKS::RawPlainText raw =
-        FIDESlib::CKKS::GetRawPlainText(
-            cc,
-            pt);
+	Ciphertext corrected(sum.cc_);
 
-    Plaintext correctionPt(
-        sum.cc_,
-        raw);
+	corrected.multPt(sum, correctionPt, false);
 
-    Ciphertext corrected(
-        sum.cc_);
-
-    corrected.multPt(
-        sum,
-        correctionPt,
-        false);
-
-    BootstrapStCFirstBits(corrected, corrected.slots, false);
-
-
+	BootstrapStCFirstBits(corrected, corrected.slots, false);
 }
-
 
 void processArray(Ciphertext& c_processed,
   const Ciphertext& c,
@@ -301,9 +276,9 @@ void processArray(Ciphertext& c_processed,
 }
 
 void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
-    FIDESlib::CKKS::Context cc_ = ctxtA.cc_;
-    
-    Ciphertext result(cc_);
+	FIDESlib::CKKS::Context cc_ = ctxtA.cc_;
+
+	Ciphertext result(cc_);
 
 	result.mult(ctxtA, ctxtB);
 
@@ -319,10 +294,10 @@ void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std:
 	Plaintext minusOnePt(result.cc_, raw);
 
 	result.addPt(minusOnePt);
-    
-    FIDESlib::CKKS::evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
 
-    FIDESlib::CKKS::BootstrapStCFirstBits(result, result.slots, false);
+	FIDESlib::CKKS::evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
+
+	FIDESlib::CKKS::BootstrapStCFirstBits(result, result.slots, false);
 }
 
 void cleanAndReduce(Ciphertext& out, const Ciphertext& c) {
@@ -431,29 +406,15 @@ void majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, cons
 void csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c) {
 	FIDESlib::CKKS::Context& cc_ = a.cc_;
 
-	if (cleanVals) {
-		// S := cleanAndReduce(a + b)
-		Ciphertext ab(cc_);
-		ab.add(a, b);
-		cleanAndReduce(S, ab);
+	// S := mod2Shallow(a + b)
+	Ciphertext ab(cc_);
+	ab.add(a, b);
+	mod2Shallow(S, ab);
 
-		// S := mod2Shallow(S + clean(c))
-		Ciphertext cleanC(cc_);
-		clean(cleanC, c);
-		Ciphertext sPlusCleanC(cc_);
-		sPlusCleanC.add(S, cleanC);
-		mod2Shallow(S, sPlusCleanC);
-	} else {
-		// S := mod2Shallow(a + b)
-		Ciphertext ab(cc_);
-		ab.add(a, b);
-		mod2Shallow(S, ab);
-
-		// S := mod2Shallow(S + c)
-		Ciphertext sPlusC(cc_);
-		sPlusC.add(S, c);
-		mod2Shallow(S, sPlusC);
-	}
+	// S := mod2Shallow(S + c)
+	Ciphertext sPlusC(cc_);
+	sPlusC.add(S, c);
+	mod2Shallow(S, sPlusC);
 
 	majorityBit(C, a, b, c);
 }
@@ -483,11 +444,13 @@ void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, 
 	// cc.L, while MakeCKKSPackedPlaintext's `level` counts UP from 0, and
 	// noiseScaleDeg must match the target ciphertext's real NoiseLevel.
 	auto makeMaskPt = [&](const std::vector<double>& values, const Ciphertext& like) -> Plaintext {
-		uint32_t openfheLevel = static_cast<uint32_t>(like.cc.L - like.getLevel());
-		size_t noiseScaleDeg  = static_cast<size_t>(like.NoiseLevel);
-		auto pt               = cc->MakeCKKSPackedPlaintext(values, /*noiseScaleDeg=*/noiseScaleDeg,
-		                                                      /*level=*/openfheLevel, nullptr,
-		                                                      /*slots=*/like.slots);
+		uint32_t openfheLevel			 = static_cast<uint32_t>(like.cc.L - like.getLevel());
+		size_t noiseScaleDeg			 = static_cast<size_t>(like.NoiseLevel);
+		auto pt							 = cc->MakeCKKSPackedPlaintext(values,
+		  /*noiseScaleDeg=*/noiseScaleDeg,
+		  /*level=*/openfheLevel,
+		  nullptr,
+		  /*slots=*/like.slots);
 		FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 		return Plaintext(cc_, raw);
 	};
@@ -524,6 +487,5 @@ void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, 
 
 	out.copy(res);
 }
-
 
 } // namespace FIDESlib::CKKS
