@@ -225,7 +225,7 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
         Ciphertext a_rot(a.cc_);
         a_rot.rotate(a, highShift);
 
-        std::vector<int> maskhigh_rot =
+        std::vector<double> maskhigh_rot =
             rotateMask(maskhigh, -highShift);
 
         Ciphertext a_high(a.cc_);
@@ -1217,6 +1217,24 @@ void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, 
 	res.add(rotm4);
 
 	out.copy(res);
+}
+
+std::vector<int> rotateMask(const std::vector<int>& mask, int shift)
+{
+    const int n = static_cast<int>(mask.size());
+
+    std::vector<int> result(n);
+
+    for (int i = 0; i < n; ++i) {
+        int src = (i + shift) % n;
+
+        if (src < 0)
+            src += n;
+
+        result[i] = mask[src];
+    }
+
+    return result;
 }
 
 } // namespace FIDESlib::CKKS
