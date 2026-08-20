@@ -662,7 +662,8 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
         // 4-bit multiplier
         // --------------------------------------------------------
 
-        result = multiplier4bits(
+        multiplier4bits(
+			result,
             a_decimal,
             b_decimal,
             repetitions * 4,
@@ -1005,10 +1006,8 @@ void processArray(Ciphertext& c_processed, const Ciphertext& c, const std::vecto
 	c_processed.copy(result);
 }
 
-void multiplier4bits(Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 	FIDESlib::CKKS::Context cc_ = ctxtA.cc_;
-
-	Ciphertext result(cc_);
 
 	result.mult(ctxtA, ctxtB);
 
