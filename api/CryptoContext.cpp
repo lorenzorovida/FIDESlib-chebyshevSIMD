@@ -824,7 +824,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphert
     return result;
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, bool overflow) {
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, bool overflow, std::vector<std::vector<double>> coeffsMultipler4bits) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	// Fall back to CPU.
@@ -867,7 +867,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Cipherte
         zslots,
         zslots,
         overflow,
-        coeffs,
+        coeffsMultipler4bits,
         this->cc,
         this->cc_);
 
