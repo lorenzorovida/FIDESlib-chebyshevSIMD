@@ -711,6 +711,13 @@ void evalIntegerMult(Ciphertext& out,
 	} else {
 
 		csa4(result, p1, p2, p3, p4, bits);
+
+        if (result.NoiseLevel == 2) {
+            result.dropToLevel(5, false);
+        } else {
+            result.dropToLevel(4, false);
+        }
+
 		BootstrapStCFirstBits(result, result.slots, false);
 	}
 
@@ -861,9 +868,15 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 
 	result.addPt(minusOnePt);
 
-	FIDESlib::CKKS::evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
+	evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
 
-	FIDESlib::CKKS::BootstrapStCFirstBits(result, result.slots, false);
+    if (result.NoiseLevel == 2) {
+        result.dropToLevel(5, false);
+    } else {
+        result.dropToLevel(4, false);
+    }
+    
+	BootstrapStCFirstBits(result, result.slots, false);
 }
 
 void cleanAndReduce(Ciphertext& out, const Ciphertext& c) {
