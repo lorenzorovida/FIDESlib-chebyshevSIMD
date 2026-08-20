@@ -824,6 +824,56 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphert
     return result;
 }
 
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, bool overflow) {
+	FIDESlib::CudaNvtxRange r("API");
+
+	// Fall back to CPU.
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW(
+		    "EvalMultInteger has no CPU fallback with the OpenFHE "
+		    "library currently linked. Configure at least one GPU device, or "
+		    "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+		    "to enable the CPU path.");
+	}
+
+	this->LoadCiphertext(
+        const_cast<Ciphertext<DCRTPoly>&>(ct1));
+
+    this->LoadCiphertext(
+        const_cast<Ciphertext<DCRTPoly>&>(ct2));
+
+    Ciphertext<DCRTPoly> result =
+        std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
+
+    auto res_gpu =
+        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
+            this->GetDeviceCiphertext(result->gpu));
+
+    auto ct1_gpu =
+        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
+            this->GetDeviceCiphertext(ct1->gpu));
+
+    auto ct2_gpu =
+        std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(
+            this->GetDeviceCiphertext(ct2->gpu));
+
+    FIDESlib::CKKS::mulInteger(
+        *res_gpu,
+        *ct1_gpu,
+        *ct2_gpu,
+        bits,
+        bits,
+        zslots,
+        zslots,
+        overflow,
+        coeffs,
+        this->cc,
+        this->cc_);
+
+    return result;
+}
+
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::CsaSum(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b,
                                                           const Ciphertext<DCRTPoly>& c) {
 	FIDESlib::CudaNvtxRange r("API");
