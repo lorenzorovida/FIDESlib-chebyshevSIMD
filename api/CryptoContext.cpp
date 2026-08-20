@@ -1116,29 +1116,6 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	}
 }
 
-Ciphertext<DCRTPoly>
-CryptoContextImpl<DCRTPoly>::ProcessArray(const Ciphertext<DCRTPoly>& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep) {
-	FIDESlib::CudaNvtxRange r("API");
-	if (this->devices.empty()) {
-
-		OPENFHE_THROW("ProcessArray has no CPU fallback with the OpenFHE "
-					  "library currently linked. Configure at least one GPU device, or "
-					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
-					  "to enable the CPU path.");
-	}
-
-	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
-
-	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*c);
-	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto c_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
-
-	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-
-	FIDESlib::CKKS::processArray(*res_gpu, *c_gpu, mask_roll_pairs, mask_size, rep, context);
-
-	return result;
-}
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTPoly>& ct, Plaintext& pt) {
 	FIDESlib::CudaNvtxRange r("API");

@@ -210,7 +210,7 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	Ciphertext<DCRTPoly> MajorityBit(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c);
 	Ciphertext<DCRTPoly> BinToDec(const Ciphertext<DCRTPoly>& ct, int repetitions);
     void ProcessArrayPrecomputations(const Ciphertext<DCRTPoly>& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep, int bits, int slots, int noise );
-	
+
 	
 	
 	Ciphertext<DCRTPoly> Multiplier4bits(const Ciphertext<DCRTPoly>& ctxtA, const Ciphertext<DCRTPoly>& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs);
