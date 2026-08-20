@@ -1023,7 +1023,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	}
 
 	if (bits > 8) {
-		preprocessProcessArray(bits, { { 8, 32 }, { 12, 40 } }, mask_size, rep, slots, level, noise, , cc, res_gpu->cc_, true);
+		preprocessProcessArray(bits, { { 8, 32 }, { 12, 40 } }, mask_size, rep, slots, level, noise, cc, res_gpu->cc_, true);
 	}
 
 	if (bits > 16) {
@@ -1062,7 +1062,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 			{ 120, 2720 },
 			{ 124, 2728 } },
 		  mask_size,
-		  repetitions_original,
+		  rep,
 		  slots,
 		  level,
 		  noise,
@@ -1106,7 +1106,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 			{ 248, 10912 },
 			{ 252, 10920 } },
 		  mask_size,
-		  repetitions_original,
+		  rep,
 		  slots,
 		  level,
 		  noise,
