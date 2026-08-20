@@ -691,30 +691,30 @@ void FIDESlib::CKKS::preprocessProcessArray(int bits,
 		throw std::invalid_argument("preprocessProcessArray: slots must be > 0");
 	}
 
-	ProcessArrayPrecomputation precomp;
+	const ProcessArrayPrecomputation* precomp = nullptr;
 
 	if (forB) {
-		if (bits > 8)
-			precomp = precomp8b;
-		if (bits > 16)
-			precomp = precomp16b;
-		if (bits > 32)
-			precomp = precomp32b;
-		if (bits > 64)
-			precomp = precomp64b;
 		if (bits > 128)
-			precomp = precomp128b;
+			precomp = &precomp128b;
+		else if (bits > 64)
+			precomp = &precomp64b;
+		else if (bits > 32)
+			precomp = &precomp32b;
+		else if (bits > 16)
+			precomp = &precomp16b;
+		else if (bits > 8)
+			precomp = &precomp8b;
 	} else {
-		if (bits > 8)
-			precomp = precomp8;
-		if (bits > 16)
-			precomp = precomp16;
-		if (bits > 32)
-			precomp = precomp32;
-		if (bits > 64)
-			precomp = precomp64;
 		if (bits > 128)
-			precomp = precomp128;
+			precomp = &precomp128;
+		else if (bits > 64)
+			precomp = &precomp64;
+		else if (bits > 32)
+			precomp = &precomp32;
+		else if (bits > 16)
+			precomp = &precomp16;
+		else if (bits > 8)
+			precomp = &precomp8;
 	}
 
 	const int total_size = mask_size * rep;
