@@ -205,12 +205,12 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	Ciphertext<DCRTPoly> EvalEqualInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, std::vector<double> coeffsSinc, int depth);
 	Ciphertext<DCRTPoly> EvalMultInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, bool overflow, std::vector<std::vector<double>> coeffsMultipler4bits);
 
-
 	Ciphertext<DCRTPoly> CsaSum(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c);
 	Ciphertext<DCRTPoly> CsaCarry(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c);
 	Ciphertext<DCRTPoly> MajorityBit(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c);
 	Ciphertext<DCRTPoly> BinToDec(const Ciphertext<DCRTPoly>& ct, int repetitions);
-
+	Ciphertext<DCRTPoly> ProcessArray(const Ciphertext<DCRTPoly>& c, const std::vector<std::pair<int, int>>& mask_roll_pairs, int mask_size, int rep);
+	Ciphertext<DCRTPoly> Multiplier4bits(const Ciphertext<DCRTPoly>& ctxtA, const Ciphertext<DCRTPoly>& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs);
 
 	
 	Ciphertext<DCRTPoly> Rescale(const Ciphertext<DCRTPoly>& ciphertext);
