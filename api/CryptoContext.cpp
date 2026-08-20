@@ -868,8 +868,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Cipherte
         zslots,
         overflow,
         coeffsMultipler4bits,
-        this->cc,
-        this->cc_);
+        this->cc);
 
     return result;
 }
