@@ -354,7 +354,7 @@ void evalIntegerMult(Ciphertext& out,
 		}
 
 		if (bits_original > 16) {
-			processArray(b_processed, b, precomp1b);
+			processArray(b_processed, b, precomp16b);
 		}
 
 		if (bits_original > 32) {
