@@ -820,6 +820,9 @@ void preprocessProcessArray(int bits,
 }
 
 void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp) {
+	if (precomp.entries.size() == 0) {
+		std::cerr << "No precomputations found for multiplications! Call ProcessArrayPrecomputations" << std::endl;
+	}
 	for (const auto& entry : precomp.entries) {
 
 		// rolled_ctxt = rot(c, -shift)
