@@ -14,7 +14,7 @@
 namespace FIDESlib::CKKS {
 
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
-void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
+void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, int depth);
 void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, int bits, int bits_original, int repetitions, int repetitions_original, bool overflow, std::vector<std::vector<double>>& coeffsFor4Bits, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 
 

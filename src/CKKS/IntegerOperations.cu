@@ -94,7 +94,7 @@ void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
 	ctxtA.square();
 }
 
-void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, int depth) {
 	Ciphertext sum(a.cc_);
 
 	sum.copy(a);
@@ -148,34 +148,14 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
 
     a.copy(corrected);
 
-    cudaError_t err = cudaDeviceSynchronize();
-
-    if (err != cudaSuccess) {
-        std::cerr
-            << "Bootstrap failed: "
-            << cudaGetErrorString(err)
-            << std::endl;
-
-        throw std::runtime_error(
-            cudaGetErrorString(err));
+    if (a.NoiseLevel == 2) {
+        a.dropToLevel(depth - 5, false);
     } else {
-        std::cout << "Before BTS all good" << std::endl;
+        a.dropToLevel(depth - 4, false);
     }
 
-	//BootstrapStCFirstBits(a, a.slots, false);
 
-    err = cudaDeviceSynchronize();
-
-    if (err != cudaSuccess) {
-        std::cerr
-            << "Bootstrap failed: "
-            << cudaGetErrorString(err)
-            << std::endl;
-
-        throw std::runtime_error(
-            cudaGetErrorString(err));
-    }
-
+	BootstrapStCFirstBits(a, a.slots, false);
     
 }
 
