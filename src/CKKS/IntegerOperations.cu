@@ -197,7 +197,7 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
 			a.slots);
 
 		FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
-		Plaintext maskP(ctxt.cc_, raw);
+		Plaintext maskP(cc_, raw);
 
 		a_low.multPt(a, maskP, false);
 
@@ -240,7 +240,7 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
 			a_rot.slots);
 
 		FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
-		Plaintext maskP(ctxt.cc_, raw);
+		Plaintext maskP(cc_, raw);
 		
 
 		a_high.multPt(a_rot, maskP, false);
