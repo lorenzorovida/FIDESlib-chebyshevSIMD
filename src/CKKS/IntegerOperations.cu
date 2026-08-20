@@ -779,14 +779,14 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
 
 	noise = result.NoiseFactor;
 
-	pt = cc->MakeCKKSPackedPlaintext(
+	auto pt = cc->MakeCKKSPackedPlaintext(
 		mask1,
 		noise,
 		result.getLevel(),
 		nullptr,
 		result.slots);
 
-	raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
+	FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 	Plaintext maskP5(cc_, raw);
 	p1.multPt(result, maskP5);
 
