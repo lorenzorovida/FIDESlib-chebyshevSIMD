@@ -189,7 +189,7 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
 
 		auto pt = cc->MakeCKKSPackedPlaintext(
 			masklow,
-			noise,
+			a.NoiseFactor,
 			a.getLevel(),
 			nullptr,
 			a.slots);
@@ -232,7 +232,7 @@ void evalIntegerMult(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, 
 
 		pt = cc->MakeCKKSPackedPlaintext(
 			maskhigh_rot,
-			noise,
+			a.NoiseFactor,
 			a_rot.getLevel(),
 			nullptr,
 			a_rot.slots);
