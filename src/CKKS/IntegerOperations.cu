@@ -788,16 +788,8 @@ void preprocessProcessArray(int bits,
 
 		std::vector<double> rolled_mask(total_size, 0.0);
 
-		for (int k = 0; k < total_size; ++k) {
+		rolled_mask = rotateMask(rolled_mask, -shift);
 
-			int src = (k + shift) % total_size;
-
-			if (src < 0) {
-				src += total_size;
-			}
-
-			rolled_mask[k] = mask[src];
-		}
 
 		// --------------------------------------------------------
 		// Make OpenFHE plaintext
@@ -835,6 +827,8 @@ void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecom
 		Ciphertext rolled_ctxt(c.cc_);
 
 		rolled_ctxt.rotate(c, -entry.shift);
+		
+		std::cout << "Rotating by " << -entry.shift << std::endl;
 
 		// masked = rolled_ctxt * precomputed_mask
 		Ciphertext masked(c.cc_);
@@ -844,10 +838,6 @@ void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecom
 		// out += masked
 		out.add(masked);
 
-		if (out.cc.rescaleTechnique == FIDESlib::CKKS::FIXEDMANUAL) {
-
-			out.rescale();
-		}
 	}
 }
 
