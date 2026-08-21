@@ -962,12 +962,16 @@ void majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, cons
 	FIDESlib::CKKS::Context& cc_ = a.cc_;
 
 	// total := a + b + c
-	out.copy(b);
-	return;
+	// a is right
+	// b seems right
+	
 
 	Ciphertext total(cc_);
 	total.add(a, b);
 	total.add(c);
+
+	out.copy(total);
+	return;
 
 	
 
