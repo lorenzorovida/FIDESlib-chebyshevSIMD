@@ -568,8 +568,8 @@ void evalIntegerMult(Ciphertext& out,
 	//return;
 
 	//p3 correct
-	out.copy(p3);
-	return;
+	//out.copy(p3);
+	//return;
 
 	if (!overflow && bits == bits_original) {
 
@@ -577,6 +577,9 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext C(a.cc_);
 
 		csa3(S, C, p1, p2, p3);
+
+		out.copy(S);
+		return;
 
 		Ciphertext rotatedC(a.cc_);
 
