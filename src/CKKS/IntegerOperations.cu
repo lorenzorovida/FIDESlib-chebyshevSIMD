@@ -590,9 +590,9 @@ void evalIntegerMult(Ciphertext& out,
 		csa3(S, C, p1, p2, p3);
 
 		//LAST TODO OK: verificando slot per slot questa S
-		//LAST TODO: verificando la C
-		out.copy(C);
-		return;
+		//LAST TODO: VERIFICHIAMO LA la C
+		//out.copy(C);
+		//return;
 
 		//C correct
 		//out.copy(C);
