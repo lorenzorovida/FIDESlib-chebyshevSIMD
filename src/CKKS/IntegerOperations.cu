@@ -1044,13 +1044,17 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 
 	csa3(s2, c2, s1, c1_rot, d);
 
-	out.copy(s2);
-	return;
+	//Giusto...
+	//out.copy(s2);
+	//return;
 
 	// c2 = rot(c2, -1)
 	Ciphertext c2_rot(a.cc_);
 
 	c2_rot.rotate(c2, -1);
+
+	out.copy(c2_rot);
+	return;
 
 	// ------------------------------------------------------------
 	// result = add_integer(s2, c2_rot, bits, false)
