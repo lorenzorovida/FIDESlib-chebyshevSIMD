@@ -1009,6 +1009,8 @@ void csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b
 	sPlusC.add(S, c);
 	mod2Shallow(S, sPlusC);
 
+	
+
 	majorityBit(C, a, b, c);
 }
 
@@ -1024,12 +1026,9 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 
 	csa3(s1, c1, a, b, c);
 
-	out.copy(s1);
-	return;
-
+	//s1 è giusto
 	//c1 è sbagliato
-	//out.copy(c1);
-	//return;
+
 
 
 	// c1 = rot(c1, -1)
@@ -1051,9 +1050,8 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 
 	csa3(s2, c2, s1, c1_rot, d);
 
-	//Giusto...
-	//out.copy(s2);
-	//return;
+	out.copy(s2);
+	return;
 
 	// c2 = rot(c2, -1)
 	Ciphertext c2_rot(a.cc_);
@@ -1063,8 +1061,6 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 	// ------------------------------------------------------------
 	// result = add_integer(s2, c2_rot, bits, false)
 	// ------------------------------------------------------------
-
-	out.copy(s2);
 
 	evalIntegerAdd(out, c2_rot, bits);
 }
