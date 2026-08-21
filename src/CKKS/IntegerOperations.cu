@@ -440,8 +440,7 @@ void evalIntegerMult(Ciphertext& out,
 		
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, cc);
 
-		out.copy(result);
-		return;
+		//17.30: Il risultato è perfettamente identico a questo punto, top!!
 		
 		// Qua è giusto
 		//Update: ricontrollo TUTTO IL VETTORE
@@ -583,8 +582,8 @@ void evalIntegerMult(Ciphertext& out,
 	//return;
 
 	// all zeros, in clear has something
-	//out.copy(p4);
-	//return;
+	out.copy(p4);
+	return;
 
 	if (false && !overflow && bits == bits_original) {
 
