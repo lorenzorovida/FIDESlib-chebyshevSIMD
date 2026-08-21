@@ -498,7 +498,7 @@ void evalIntegerMult(Ciphertext& out,
 	*/
 
 	p1.copy(result);
-	p1.multPt(makePerSlotPlaintext(cc, cc_, mask1, b_processed));
+	p1.multPt(makePerSlotPlaintext(cc, cc_, mask1, p1));
 
 
 	// ------------------------------------------------------------
@@ -524,7 +524,7 @@ void evalIntegerMult(Ciphertext& out,
 	*/
 
 	masked2.copy(result);
-	masked2.multPt(makePerSlotPlaintext(cc, cc_, mask2, b_processed));
+	masked2.multPt(makePerSlotPlaintext(cc, cc_, mask2, masked2));
 
 	
 
