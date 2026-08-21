@@ -431,11 +431,12 @@ void evalIntegerMult(Ciphertext& out,
 		// 4-bit multiplier
 		// --------------------------------------------------------
 
+		out.copy(a_decimal);
+		return;
 		
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, cc);
 
-		out.copy(result);
-		return;
+		
 		// Qua è giusto
 		//Update: ricontrollo TUTTO IL VETTORE
 
