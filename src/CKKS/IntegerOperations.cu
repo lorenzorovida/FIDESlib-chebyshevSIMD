@@ -205,6 +205,10 @@ void evalIntegerMult(Ciphertext& out,
 			masklow[3 + j * mask_size] = 1;
 		}
 
+		std::cout << "MAH" << std::endl
+				  << masklow[0] << ", " << masklow[1] << ", " << masklow[2] << ", " << masklow[3] << ", " << masklow[4] << ", " << masklow[5] << ", "
+				  << masklow[6] << ", " << std::endl;
+
 		Ciphertext a_low(a.cc_);
 
 		size_t noise = static_cast<size_t>(a.NoiseLevel);
@@ -217,8 +221,6 @@ void evalIntegerMult(Ciphertext& out,
 		a_low.multPt(a, maskP, true);
 		result.copy(a_low);
 		return;
-
-		
 
 		// --------------------------------------------------------
 		// maskhigh
@@ -255,7 +257,6 @@ void evalIntegerMult(Ciphertext& out,
 
 		Ciphertext a_processed(a.cc_);
 		a_processed.copy(a_low);
-
 
 		// --------------------------------------------------------
 		// process_array(...)
@@ -435,7 +436,6 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext a_decimal(a.cc_);
 		bintodec(cc, a_decimal, a_processed, repetitions * 4);
 
-		
 		Ciphertext b_decimal(a.cc_);
 		bintodec(cc, b_decimal, b_processed, repetitions * 4);
 
@@ -445,7 +445,6 @@ void evalIntegerMult(Ciphertext& out,
 
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, cc);
 
-		
 	} else {
 
 		// Recursive case:
@@ -704,9 +703,8 @@ void preprocessProcessArray(int bits,
 
 	int mask_size = bits * (bits / 2);
 
-    //Assuming full reps?
-    int rep = (slots * 2) / (bits * bits);
-
+	// Assuming full reps?
+	int rep = (slots * 2) / (bits * bits);
 
 	if (mask_size <= 0) {
 		throw std::invalid_argument("preprocessProcessArray: mask_size must be > 0");
@@ -798,7 +796,6 @@ void preprocessProcessArray(int bits,
 
 		rolled_mask = rotateMask(rolled_mask, -shift);
 
-
 		// --------------------------------------------------------
 		// Make OpenFHE plaintext
 		// --------------------------------------------------------
@@ -839,7 +836,7 @@ void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecom
 		Ciphertext rolled_ctxt(c.cc_);
 
 		rolled_ctxt.rotate(c, -entry.shift);
-		
+
 		std::cout << "Rotating by " << -entry.shift << std::endl;
 
 		// masked = rolled_ctxt * precomputed_mask
@@ -849,7 +846,6 @@ void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecom
 
 		// out += masked
 		out.add(masked);
-
 	}
 }
 
@@ -872,7 +868,7 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 	result.addPt(minusOnePt);
 
 	evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
-	//evalChebyshevSeries(result, coeffs[0], -1, 1);
+	// evalChebyshevSeries(result, coeffs[0], -1, 1);
 
 	if (result.NoiseLevel == 2) {
 		result.dropToLevel(5, false);
@@ -1114,22 +1110,23 @@ void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, 
 }
 
 std::vector<double> rotateMask(const std::vector<double>& mask, int shift) {
-    int n = mask.size();
-    shift = shift % n;
-    if (shift == 0) return mask;
+	int n = mask.size();
+	shift = shift % n;
+	if (shift == 0)
+		return mask;
 
-    std::vector<double> result = mask;
+	std::vector<double> result = mask;
 
-    if (shift > 0) {
-        // Positive shift → left rotation
-        std::rotate(result.begin(), result.begin() + shift, result.end());
-    } else {
-        // Negative shift → right rotation
-        shift = -shift;
-        std::rotate(result.rbegin(), result.rbegin() + shift, result.rend());
-    }
+	if (shift > 0) {
+		// Positive shift → left rotation
+		std::rotate(result.begin(), result.begin() + shift, result.end());
+	} else {
+		// Negative shift → right rotation
+		shift = -shift;
+		std::rotate(result.rbegin(), result.rbegin() + shift, result.rend());
+	}
 
-    return result;
+	return result;
 }
 
 } // namespace FIDESlib::CKKS
