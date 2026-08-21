@@ -153,12 +153,8 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
 	FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 
 	Plaintext correctionPt(sum.cc_, raw);
-
-	Ciphertext corrected(sum.cc_);
-
-	corrected.multPt(sum, correctionPt, true);
-
-	a.copy(corrected);
+	
+	a.multPt(sum, correctionPt, false);
 
 	if (a.NoiseLevel == 2) {
 		a.dropToLevel(5, false);
