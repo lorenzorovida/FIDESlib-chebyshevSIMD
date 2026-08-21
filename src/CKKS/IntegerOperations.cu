@@ -627,10 +627,13 @@ void evalIntegerMult(Ciphertext& out,
 	} else {
 
 		//Il problema è in CSA 4
+		std::cout << "p1" << std::endl;
+		out.copy(p1);
+		return;
+
 		csa4(result, p1, p2, p3, p4, bits);
 
-		out.copy(result);
-		return;
+		
 	
 		if (result.NoiseLevel == 2) {
 			result.dropToLevel(5, false);
