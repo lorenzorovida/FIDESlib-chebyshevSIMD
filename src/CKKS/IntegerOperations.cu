@@ -581,11 +581,8 @@ void evalIntegerMult(Ciphertext& out,
 	//out.copy(p3);
 	//return;
 
-	// all zeros, in clear has something
-	out.copy(p4);
-	return;
 
-	if (false && !overflow && bits == bits_original) {
+	if (!overflow && bits == bits_original) {
 
 		Ciphertext S(a.cc_);
 		Ciphertext C(a.cc_);
@@ -593,8 +590,8 @@ void evalIntegerMult(Ciphertext& out,
 		csa3(S, C, p1, p2, p3);
 
 		//S correct
-		//out.copy(S);
-		//return;
+		out.copy(S);
+		return;
 
 		//C correct
 		//out.copy(C);
