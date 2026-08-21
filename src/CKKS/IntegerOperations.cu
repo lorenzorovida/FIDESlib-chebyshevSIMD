@@ -433,8 +433,8 @@ void evalIntegerMult(Ciphertext& out,
 
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, cc);
 
-		out.copy(result);
-		return;
+		// Qua è giusto
+
 
 	} else {
 
@@ -497,13 +497,9 @@ void evalIntegerMult(Ciphertext& out,
 		cc);
 	*/
 
-	size_t noise = static_cast<size_t>(result.NoiseLevel);
+	p1.copy(result);
+	p1.multPt(makePerSlotPlaintext(cc, cc_, mask1, b_processed));
 
-	auto pt = cc->MakeCKKSPackedPlaintext(mask1, noise, result.getLevel(), nullptr, result.slots);
-
-	FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
-	Plaintext maskP5(cc_, raw);
-	p1.multPt(result, maskP5, true);
 
 	// ------------------------------------------------------------
 	// p2 = rot(p1, -(-rep_size/2 + bits/2))
@@ -526,13 +522,11 @@ void evalIntegerMult(Ciphertext& out,
 		mask2,
 		cc);
 	*/
-	noise = static_cast<size_t>(result.NoiseLevel);
 
-	pt = cc->MakeCKKSPackedPlaintext(mask2, noise, result.getLevel(), nullptr, result.slots);
+	masked2.copy(result);
+	masked2.multPt(makePerSlotPlaintext(cc, cc_, mask2, b_processed));
 
-	raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
-	Plaintext maskP6(cc_, raw);
-	masked2.multPt(result, maskP6, true);
+	
 
 	Ciphertext p3(a.cc_);
 
