@@ -332,14 +332,9 @@ void evalIntegerMult(Ciphertext& out,
 		// ========================================================
 
 		Ciphertext b_processed(a.cc_);
+		b_processed.copy(b);
 
-		noise = static_cast<size_t>(b.NoiseLevel);
-
-		pt = cc->MakeCKKSPackedPlaintext(masklow, noise, b.getLevel(), nullptr, b.slots);
-
-		raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
-		Plaintext maskP3(cc_, raw);
-		b_processed.multPt(b, maskP3, true);
+		b_processed.multPt(makePerSlotPlaintext(cc, cc_, masklow, b_processed));
 
 		Ciphertext b_rot(a.cc_);
 		b_rot.rotate(b, -4);
@@ -347,14 +342,9 @@ void evalIntegerMult(Ciphertext& out,
 		std::vector<double> maskhigh_b = rotateMask(maskhigh, -4);
 
 		Ciphertext b_high(a.cc_);
+		b_high.copy(b);
 
-		noise = static_cast<size_t>(b_rot.NoiseLevel);
-
-		pt = cc->MakeCKKSPackedPlaintext(maskhigh_b, noise, b_rot.getLevel(), nullptr, b_rot.slots);
-
-		raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
-		Plaintext maskP4(cc_, raw);
-		b_high.multPt(b_rot, maskP4, true);
+		b_high.multPt(makePerSlotPlaintext(cc, cc_, maskhigh_b, b_high));
 
 		b_processed.add(b_high);
 
