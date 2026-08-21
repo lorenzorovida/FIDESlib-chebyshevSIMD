@@ -563,7 +563,12 @@ void evalIntegerMult(Ciphertext& out,
 	//out.copy(p1);
 	//return;
 
-	out.copy(p2);
+	//p2 correct
+	//out.copy(p2);
+	//return;
+
+	//p3 correct
+	out.copy(p3);
 	return;
 
 	if (!overflow && bits == bits_original) {
