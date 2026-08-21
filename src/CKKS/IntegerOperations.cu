@@ -1024,14 +1024,16 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 
 	csa3(s1, c1, a, b, c);
 
+	out.copy(c1);
+	return;
+
 
 	// c1 = rot(c1, -1)
 	Ciphertext c1_rot(a.cc_);
 
 	c1_rot.rotate(c1, -1);
 
-	out.copy(c1_rot);
-	return;
+	
 
 	// ------------------------------------------------------------
 	// Second CSA:
