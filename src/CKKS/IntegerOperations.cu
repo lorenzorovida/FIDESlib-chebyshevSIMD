@@ -340,7 +340,7 @@ void evalIntegerMult(Ciphertext& out,
 		std::vector<double> maskhigh_b = rotateMask(maskhigh, -4);
 
 		Ciphertext b_high(a.cc_);
-		b_high.copy(b);
+		b_high.copy(b_rot);
 
 		b_high.multPt(makePerSlotPlaintext(cc, cc_, maskhigh_b, b_high));
 
@@ -433,8 +433,8 @@ void evalIntegerMult(Ciphertext& out,
 
 		//16:54, GUARDO I BINARI DI TUTTO... IL MULTIPLIER AVEVA INTERI GIUSTI MA IN MEZZO VALORI CANNATI ZIO
 		//A DECIMAL è TUTTO GIUSTO
-		out.copy(b_decimal);
-		return;
+		//out.copy(b_decimal);
+		//return;
 		
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, cc);
 
