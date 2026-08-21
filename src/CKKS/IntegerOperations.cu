@@ -153,7 +153,7 @@ void evalIntegerEqual(Ciphertext& a, Ciphertext& b, int bits, int zslots, std::v
 	FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 
 	Plaintext correctionPt(sum.cc_, raw);
-	
+
 	a.multPt(sum, correctionPt, false);
 
 	if (a.NoiseLevel == 2) {
@@ -234,7 +234,7 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext a_rot(a.cc_);
 		a_rot.rotate(a, highShift);
 
-		std::vector<double> maskhigh_rot = rotateMask(maskhigh, -highShift);
+		std::vector<double> maskhigh_rot = rotateMask(maskhigh, highShift);
 
 		Ciphertext a_high(a.cc_);
 
@@ -339,7 +339,7 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext b_rot(a.cc_);
 		b_rot.rotate(b, -4);
 
-		std::vector<double> maskhigh_b = rotateMask(maskhigh, 4);
+		std::vector<double> maskhigh_b = rotateMask(maskhigh, -4);
 
 		Ciphertext b_high(a.cc_);
 
@@ -585,6 +585,14 @@ void evalIntegerMult(Ciphertext& out,
 		// Replace with your FIDESlib binboot implementation.
 		//
 		// result = binboot(S);
+
+		if (S.NoiseLevel == 2) {
+			S.dropToLevel(5, false);
+		} else {
+			S.dropToLevel(4, false);
+		}
+
+		BootstrapStCFirstBits(S, S.slots, false);
 
 		result.copy(S);
 	} else {
