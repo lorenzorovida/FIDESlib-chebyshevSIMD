@@ -438,6 +438,7 @@ void evalIntegerMult(Ciphertext& out,
 		// --------------------------------------------------------
 
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, cc);
+		return;
 	} else {
 
 		// Recursive case:
