@@ -630,6 +630,9 @@ void evalIntegerMult(Ciphertext& out,
 
 		//Il problema è in CSA 4
 		csa4(result, p1, p2, p3, p4, bits);
+
+		out.copy(result);
+		return;
 	
 		if (result.NoiseLevel == 2) {
 			result.dropToLevel(5, false);
