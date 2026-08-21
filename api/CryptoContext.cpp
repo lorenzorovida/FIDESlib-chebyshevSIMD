@@ -1103,9 +1103,9 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 		  cc,
 		  res_gpu->cc_,
 		  true);
-
-		  std::cout << "Done preprocessing with " << bits << " bits! " << std::endl;
 	}
+
+	std::cout << "Done preprocessing with " << bits << " bits! " << std::endl;
 }
 
 
