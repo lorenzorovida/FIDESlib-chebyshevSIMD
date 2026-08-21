@@ -582,12 +582,13 @@ void evalIntegerMult(Ciphertext& out,
 		//out.copy(S);
 		//return;
 
+		//C correct
+		//out.copy(C);
+		//return;
+
 		Ciphertext rotatedC(a.cc_);
 
 		rotatedC.rotate(C, -1);
-
-		out.copy(rotatedC);
-		return;
 
 		// add_integer(S, rot(C, -1), bits)
 		evalIntegerAdd(S, rotatedC, bits);
@@ -1023,14 +1024,14 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 
 	csa3(s1, c1, a, b, c);
 
-	//giusto s1
-	//out.copy(s1);
-	//return;
 
 	// c1 = rot(c1, -1)
 	Ciphertext c1_rot(a.cc_);
 
 	c1_rot.rotate(c1, -1);
+
+	out.copy(c1_rot);
+	return;
 
 	// ------------------------------------------------------------
 	// Second CSA:
@@ -1051,9 +1052,6 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 	Ciphertext c2_rot(a.cc_);
 
 	c2_rot.rotate(c2, -1);
-
-	out.copy(c2_rot);
-	return;
 
 	// ------------------------------------------------------------
 	// result = add_integer(s2, c2_rot, bits, false)
