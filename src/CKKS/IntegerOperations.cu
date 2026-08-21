@@ -216,8 +216,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		a_low.multPt(a, maskP, true);
 
-		result.copy(a_low);
-		return;
+		
 
 		// --------------------------------------------------------
 		// maskhigh
@@ -251,6 +250,9 @@ void evalIntegerMult(Ciphertext& out,
 		a_high.multPt(a_rot, maskP2, true);
 
 		a_low.add(a_high);
+
+		result.copy(a_low);
+		return;
 
 		Ciphertext a_processed(a.cc_);
 		a_processed.copy(a_low);
