@@ -1024,8 +1024,9 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 
 	csa3(s1, c1, a, b, c);
 
-	out.copy(s1);
-	return;
+	//giusto s1
+	//out.copy(s1);
+	//return;
 
 	// c1 = rot(c1, -1)
 	Ciphertext c1_rot(a.cc_);
@@ -1042,6 +1043,9 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 	Ciphertext c2(a.cc_);
 
 	csa3(s2, c2, s1, c1_rot, d);
+
+	out.copy(s2);
+	return;
 
 	// c2 = rot(c2, -1)
 	Ciphertext c2_rot(a.cc_);
