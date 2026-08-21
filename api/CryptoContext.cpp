@@ -930,6 +930,8 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 
 	auto& cc = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
+	std::cout << "Starting preprocessing with " << bits << " bits! " <<< std::endl;
+
 	int level = 12;
 
 	if (bits > 8) {
@@ -1101,6 +1103,8 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 		  cc,
 		  res_gpu->cc_,
 		  true);
+
+		  std::cout << "Done preprocessing with " << bits << " bits! " <<< std::endl;
 	}
 }
 
