@@ -582,8 +582,9 @@ void evalIntegerMult(Ciphertext& out,
 		//out.copy(S);
 		//return;
 
-		out.copy(C);
-		return;
+		//C correct
+		//out.copy(C);
+		//return;
 
 		Ciphertext rotatedC(a.cc_);
 
@@ -591,6 +592,9 @@ void evalIntegerMult(Ciphertext& out,
 
 		// add_integer(S, rot(C, -1), bits)
 		evalIntegerAdd(S, rotatedC, bits);
+
+		out.copy(S);
+		return;
 
 		// binboot(...)
 		//
