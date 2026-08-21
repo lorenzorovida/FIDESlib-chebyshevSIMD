@@ -568,11 +568,12 @@ void evalIntegerMult(Ciphertext& out,
 	//return;
 
 	//p3 correct
-	//out.copy(p3);
-	//return;
-
-	out.copy(p4);
+	out.copy(p3);
 	return;
+
+	// all zeros?
+	//out.copy(p4);
+	//return;
 
 	if (false && !overflow && bits == bits_original) {
 
@@ -620,9 +621,6 @@ void evalIntegerMult(Ciphertext& out,
 		//Il problema è in CSA 4
 		csa4(result, p1, p2, p3, p4, bits);
 	
-		out.copy(result);
-		return;
-
 		if (result.NoiseLevel == 2) {
 			result.dropToLevel(5, false);
 		} else {
@@ -1059,8 +1057,9 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 	Ciphertext s2(a.cc_);
 	Ciphertext c2(a.cc_);
 
-	out.copy(d);
-	return;
+	// all zeros????
+	//out.copy(d);
+	//return;
 
 	csa3(s2, c2, s1, c1_rot, d);
 
