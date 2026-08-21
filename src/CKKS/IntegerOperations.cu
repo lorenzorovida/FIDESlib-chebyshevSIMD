@@ -564,12 +564,12 @@ void evalIntegerMult(Ciphertext& out,
 	//return;
 
 	//p2 correct
-	//out.copy(p2);
-	//return;
-
-	//p3 correct
-	out.copy(p3);
+	out.copy(p2);
 	return;
+
+	//p3 WRONG
+	//out.copy(p3);
+	//return;
 
 	// all zeros?
 	//out.copy(p4);
