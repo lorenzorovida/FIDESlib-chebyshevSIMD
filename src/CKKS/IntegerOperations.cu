@@ -571,6 +571,9 @@ void evalIntegerMult(Ciphertext& out,
 	//out.copy(p3);
 	//return;
 
+	out.copy(p4);
+	return;
+
 	if (false && !overflow && bits == bits_original) {
 
 		Ciphertext S(a.cc_);
