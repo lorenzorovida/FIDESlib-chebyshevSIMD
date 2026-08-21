@@ -252,7 +252,7 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext a_processed(a.cc_);
 		a_processed.copy(a_low);
 
-		result.copy(a);
+		result.copy(a_processed);
 		return;
 
 
