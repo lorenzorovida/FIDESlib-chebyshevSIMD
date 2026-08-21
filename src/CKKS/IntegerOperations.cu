@@ -430,7 +430,7 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext a_decimal(a.cc_);
 		bintodec(cc, a_decimal, a_processed, repetitions * 4);
 
-		result.copy(a_processed);
+		result.copy(a);
 		return;
 
 		Ciphertext b_decimal(a.cc_);
