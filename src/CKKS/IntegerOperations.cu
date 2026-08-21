@@ -1115,11 +1115,11 @@ void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, 
 }
 
 std::vector<double> rotateMask(const std::vector<double>& mask, int shift) {
-    int n = vec.size();
+    int n = mask.size();
     shift = shift % n;
     if (shift == 0) return mask;
 
-    std::vector<double> result = vec;
+    std::vector<double> result = mask;
 
     if (shift > 0) {
         // Positive shift → left rotation
