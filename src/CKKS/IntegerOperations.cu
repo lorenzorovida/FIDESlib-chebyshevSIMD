@@ -431,9 +431,13 @@ void evalIntegerMult(Ciphertext& out,
 		// 4-bit multiplier
 		// --------------------------------------------------------
 
+		
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, cc);
 
+		out.copy(result);
+		return;
 		// Qua è giusto
+		//Update: ricontrollo TUTTO IL VETTORE
 
 
 	} else {
@@ -567,11 +571,11 @@ void evalIntegerMult(Ciphertext& out,
 	//out.copy(p2);
 	//return;
 
-	//p3 WRONG
-	out.copy(p3);
-	return;
+	//p3 all zeros, but also in clear
+	//out.copy(p3);
+	//return;
 
-	// all zeros?
+	// all zeros, in clear has something
 	//out.copy(p4);
 	//return;
 
