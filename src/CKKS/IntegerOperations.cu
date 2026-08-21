@@ -17,6 +17,19 @@ ProcessArrayPrecomputation precomp32b;
 ProcessArrayPrecomputation precomp64b;
 ProcessArrayPrecomputation precomp128b;
 
+Plaintext makePerSlotPlaintext(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+                                FIDESlib::CKKS::Context& cc_,
+                                const std::vector<double>& values,
+                                const Ciphertext& like) {
+	uint32_t openfheLevel = static_cast<uint32_t>(like.cc.L - like.getLevel());
+	size_t noiseScaleDeg   = static_cast<size_t>(like.NoiseLevel);
+	auto pt                = cc->MakeCKKSPackedPlaintext(values, /*noiseScaleDeg=*/noiseScaleDeg,
+	                                                       /*level=*/openfheLevel, nullptr,
+	                                                      /*slots=*/like.slots);
+	FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
+	return Plaintext(cc_, raw);
+}
+
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
 	if (bits <= 0) {
 		throw std::invalid_argument("evalIntegerAdd: bits must be > 0");
@@ -212,14 +225,8 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext a_low(a.cc_);
 		a_low.copy(a);
 
-		size_t noise = static_cast<size_t>(a.NoiseLevel);
-
-		auto pt = cc->MakeCKKSPackedPlaintext(masklow, noise, a.cc.L - a.getLevel(), nullptr, a.slots);
-
-		FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
-		Plaintext maskP(cc_, raw);
-
-		a_low.multPt(maskP);
+		a_low.multPt(makePerSlotPlaintext(cc, cc_, masklow, a_low));
+		
 		result.copy(a_low);
 		return;
 
