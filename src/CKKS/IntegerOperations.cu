@@ -1056,10 +1056,12 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 	Ciphertext s2(a.cc_);
 	Ciphertext c2(a.cc_);
 
+	out.copy(c1_rot);
+	return;
+
 	csa3(s2, c2, s1, c1_rot, d);
 
-	out.copy(s2);
-	return;
+	
 
 	//s2 è sbagliato
 
