@@ -1032,11 +1032,10 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 
 	csa3(s1, c1, a, b, c);
 
-	out.copy(c1);
-	return;
+	
 
 	//s1 è giusto
-	//c1 è sbagliato
+	//c1 è giusto
 
 
 
@@ -1058,6 +1057,9 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 	Ciphertext c2(a.cc_);
 
 	csa3(s2, c2, s1, c1_rot, d);
+
+	out.copy(s2);
+	return;
 
 	//s2 è sbagliato
 
