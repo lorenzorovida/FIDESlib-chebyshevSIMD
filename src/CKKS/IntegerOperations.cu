@@ -431,7 +431,9 @@ void evalIntegerMult(Ciphertext& out,
 		// 4-bit multiplier
 		// --------------------------------------------------------
 
-		out.copy(a_decimal);
+		//16:54, GUARDO I BINARI DI TUTTO... IL MULTIPLIER AVEVA INTERI GIUSTI MA IN MEZZO VALORI CANNATI ZIO
+		//A DECIMAL è TUTTO GIUSTO
+		out.copy(b_decimal);
 		return;
 		
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, cc);
