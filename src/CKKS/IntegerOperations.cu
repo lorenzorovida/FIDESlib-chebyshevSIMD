@@ -1115,20 +1115,22 @@ void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, 
 }
 
 std::vector<double> rotateMask(const std::vector<double>& mask, int shift) {
-	const int n = static_cast<int>(mask.size());
+    int n = vec.size();
+    shift = shift % n;
+    if (shift == 0) return mask;
 
-	std::vector<double> result(n);
+    std::vector<double> result = vec;
 
-	for (int i = 0; i < n; ++i) {
-		int src = (i + shift) % n;
+    if (shift > 0) {
+        // Positive shift → left rotation
+        std::rotate(result.begin(), result.begin() + shift, result.end());
+    } else {
+        // Negative shift → right rotation
+        shift = -shift;
+        std::rotate(result.rbegin(), result.rbegin() + shift, result.rend());
+    }
 
-		if (src < 0)
-			src += n;
-
-		result[i] = mask[src];
-	}
-
-	return result;
+    return result;
 }
 
 } // namespace FIDESlib::CKKS
