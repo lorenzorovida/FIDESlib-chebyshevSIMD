@@ -571,7 +571,7 @@ void evalIntegerMult(Ciphertext& out,
 	//out.copy(p3);
 	//return;
 
-	if (!overflow && bits == bits_original) {
+	if (false && !overflow && bits == bits_original) {
 
 		Ciphertext S(a.cc_);
 		Ciphertext C(a.cc_);
@@ -593,8 +593,9 @@ void evalIntegerMult(Ciphertext& out,
 		// add_integer(S, rot(C, -1), bits)
 		evalIntegerAdd(S, rotatedC, bits);
 
-		out.copy(S);
-		return;
+		//Correct
+		//out.copy(S);
+		//return;
 
 		// binboot(...)
 		//
@@ -614,6 +615,9 @@ void evalIntegerMult(Ciphertext& out,
 	} else {
 
 		csa4(result, p1, p2, p3, p4, bits);
+	
+		out.copy(result);
+		return;
 
 		if (result.NoiseLevel == 2) {
 			result.dropToLevel(5, false);
