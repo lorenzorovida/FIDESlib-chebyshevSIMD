@@ -227,7 +227,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		a_low.multPt(makePerSlotPlaintext(cc, cc_, masklow, a_low));
 
-		result.copy(a_low);
+		out.copy(a_low);
 		return;
 
 
