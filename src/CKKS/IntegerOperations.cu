@@ -966,6 +966,9 @@ void majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, cons
 	total.add(a, b);
 	total.add(c);
 
+	out.copy(total);
+	return;
+
 	// sq := total^2
 	Ciphertext sq(cc_);
 	sq.square(total, true);
