@@ -578,7 +578,11 @@ void evalIntegerMult(Ciphertext& out,
 
 		csa3(S, C, p1, p2, p3);
 
-		out.copy(S);
+		//S correct
+		//out.copy(S);
+		//return;
+
+		out.copy(C);
 		return;
 
 		Ciphertext rotatedC(a.cc_);
