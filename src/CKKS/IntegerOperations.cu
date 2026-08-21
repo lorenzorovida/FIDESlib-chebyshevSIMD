@@ -586,7 +586,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		rotatedC.rotate(C, -1);
 
-		out.copy(C);
+		out.copy(rotatedC);
 		return;
 
 		// add_integer(S, rot(C, -1), bits)
