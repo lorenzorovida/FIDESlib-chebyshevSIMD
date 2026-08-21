@@ -435,6 +435,9 @@ void evalIntegerMult(Ciphertext& out,
 		//A DECIMAL è TUTTO GIUSTO
 		//out.copy(b_decimal);
 		//return;
+
+		out.copy(b_decimal);
+		return;
 		
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, cc);
 
