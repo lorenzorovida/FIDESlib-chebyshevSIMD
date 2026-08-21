@@ -218,9 +218,11 @@ void evalIntegerMult(Ciphertext& out,
 		FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 		Plaintext maskP(cc_, raw);
 
-		a_low.multPt(a, maskP, true);
-		result.copy(a_low);
+		a.multPt(maskP);
+		result.copy(a);
 		return;
+
+		a_low.copy(a);
 
 		// --------------------------------------------------------
 		// maskhigh
