@@ -817,6 +817,8 @@ void preprocessProcessArray(int bits,
 
 		precomp->entries.push_back(std::move(entry));
 	}
+
+	std::cout << "Done, i have done" << std::endl;
 }
 
 void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp) {
