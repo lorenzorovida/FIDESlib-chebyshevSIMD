@@ -209,7 +209,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		size_t noise = static_cast<size_t>(a.NoiseLevel);
 
-		auto pt = cc->MakeCKKSPackedPlaintext(masklow, noise, a.getLevel(), nullptr, a.slots);
+		auto pt = cc->MakeCKKSPackedPlaintext(masklow, noise, a.cc.L - a.getLevel(), nullptr, a.slots);
 
 		FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 		Plaintext maskP(cc_, raw);
