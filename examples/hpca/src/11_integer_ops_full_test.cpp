@@ -1,35 +1,24 @@
 // 11_integer_ops_full_test.cpp
 //
-// Suite di test per le funzioni definite in IntegerOperations.cuh/.cu:
-//   cleanAndReduce, clean, mod2Shallow, majorityBit, csa3, csa4, bintodec,
-//   rotateMask, evalIntegerAdd, multiplier4bits.
+// Suite di test per i wrapper API di aritmetica intera bit-packed esposti
+// su fideslib::CryptoContext:
+//   EvalAddInteger, EvalEqualInteger, CsaSum, CsaCarry, MajorityBit,
+//   BinToDec.
 //
-// evalIntegerEqual ed evalIntegerMult NON sono incluse: la prima richiede
-// `coeffsSinc`, un set di coefficienti Chebyshev specifico del progetto
-// originale che non è disponibile qui (e l'utente ha già confermato che
-// funziona); la seconda dipende da `coeffs` (coefficienti del multiplier a
-// 4 bit) con la stessa origine esterna, oltre a comporre multiplier4bits +
-// processArray + bintodec + csa3/csa4, già coperti singolarmente sotto.
-// Se/quando questi coefficienti sono disponibili, vale la pena aggiungerle.
-//
-// Le funzioni sotto test sono CORE (namespace FIDESlib::CKKS), non ancora
-// esposte via l'API fideslib::CryptoContext. Il test usa l'API alta
-// (fideslib::CryptoContext) per il boilerplate (setup, KeyGen, Encrypt,
-// Decrypt) e accede al core tramite cc->GetDeviceCiphertext(ct->gpu) e
-// cc->cpu (std::any contenente il lbcrypto::CryptoContext) -- entrambi
-// campi pubblici della classe, lo stesso meccanismo usato internamente da
-// ogni funzione già esposta in api/CryptoContext.cpp.
+// NON incluse:
+//   - EvalMultInteger / Multiplier4bits: richiedono `coeffsMultipler4bits`,
+//     gli 8 set di coefficienti Chebyshev del multiplier a 4 bit
+//     (p1..p8-norm-369.txt nel progetto originale), che non sono
+//     disponibili qui. Aggiungerli è immediato una volta forniti.
+//   - ProcessArray: esclusa su richiesta esplicita.
 //
 // Ogni test stampa una tabella di confronto e un PASS/FAIL con tolleranza.
 // Il programma esce con codice 0 solo se TUTTI i test passano.
 
 #include <fideslib.hpp>
 
-// Core headers: le funzioni sotto test sono dichiarate qui, non nell'API.
-#include "CKKS/Ciphertext.cuh"
-#include "CKKS/IntegerOperations.cuh"
-
 #include <cmath>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -53,9 +42,7 @@ std::vector<double> decrypt(CryptoContext<DCRTPoly>& cc, const KeyPair<DCRTPoly>
 	return pt->GetRealPackedValue();
 }
 
-/// Confronta `got` con `expected` per VALORE ASSOLUTO (tolerance in unità
-/// assolute). Usare per funzioni che devono restituire esattamente il
-/// valore booleano/decimale atteso.
+/// Confronta `got` con `expected` per valore assoluto.
 void report(const std::string& name, const std::vector<double>& got, const std::vector<double>& expected, const std::vector<std::string>& labels,
             double tolerance = 5e-2) {
 	g_testsRun++;
@@ -76,17 +63,15 @@ void report(const std::string& name, const std::vector<double>& got, const std::
 	std::cout << "Max abs error: " << maxErr << "  ->  " << (ok ? "PASS" : "FAIL") << std::endl;
 }
 
-/// Confronta `got` con `expected` a meno di un fattore di scala COSTANTE e
-/// SCONOSCIUTO (stimato dal primo elemento non nullo di `expected`). Usare
-/// per bintodec, che applica deliberatamente un rescale 1/sqrt(225/2) per
-/// il prossimo stadio Chebyshev, quindi non ritorna il valore decimale
-/// esatto -- solo un valore proporzionale ad esso.
+/// Confronta `got` con `expected` a meno di un fattore di scala costante,
+/// stimato dal primo elemento non nullo di `expected`. Usato per BinToDec,
+/// che applica deliberatamente un rescale 1/sqrt(225/2) per il prossimo
+/// stadio Chebyshev.
 void reportProportional(const std::string& name, const std::vector<double>& got, const std::vector<double>& expected,
                          const std::vector<std::string>& labels, double tolerance = 5e-2) {
 	g_testsRun++;
 	std::cout << std::endl << "==== " << name << " (checked up to a constant scale factor) ====" << std::endl;
 
-	// Stima il fattore di scala dal primo elemento con expected != 0.
 	double scale = 1.0;
 	for (size_t i = 0; i < expected.size(); ++i) {
 		if (std::abs(expected[i]) > 1e-9) {
@@ -170,63 +155,11 @@ Ciphertext<DCRTPoly> encryptVec(TestEnv& env, const std::vector<double>& v) {
 	return env.cc->Encrypt(env.keys.publicKey, env.cc->MakeCKKSPackedPlaintext(v));
 }
 
-/// Puntatore al FIDESlib::CKKS::Ciphertext GPU sottostante a un
-/// Ciphertext<DCRTPoly> a livello API.
-FIDESlib::CKKS::Ciphertext* gpu(TestEnv& env, const Ciphertext<DCRTPoly>& ct) {
-	return static_cast<FIDESlib::CKKS::Ciphertext*>(env.cc->GetDeviceCiphertext(ct->gpu).get());
-}
-
-/// Alloca un nuovo Ciphertext<DCRTPoly> (metadati clonati da `like`) il cui
-/// FIDESlib::CKKS::Ciphertext* GPU sottostante è restituito via `out_gpu`,
-/// pronto per essere scritto in place da una funzione core.
-Ciphertext<DCRTPoly> freshResult(TestEnv& env, const Ciphertext<DCRTPoly>& like, FIDESlib::CKKS::Ciphertext** out_gpu) {
-	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*like);
-	*out_gpu                    = static_cast<FIDESlib::CKKS::Ciphertext*>(env.cc->GetDeviceCiphertext(result->gpu).get());
-	return result;
-}
-
-/// Riferimento al lbcrypto::CryptoContext CPU sottostante, richiesto dalle
-/// funzioni core che costruiscono plaintext al volo (bintodec,
-/// multiplier4bits, evalIntegerMult, ...).
-lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& openfheCc(TestEnv& env) {
-	return std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(env.cc->cpu);
-}
-
 // ============================================================
 // Tests
 // ============================================================
 
-/// cleanAndReduce, clean, mod2Shallow: polinomi di "pulizia" unari.
-/// Su input ESATTI {0,1} devono essere (circa) l'identità -- è il loro
-/// scopo: correggere valori rumorosi vicini a 0/1, quindi su input già
-/// esatti devono ritornare lo stesso valore.
-void testCleaningPolynomials(TestEnv& env) {
-	std::vector<double> bits	  = { 0, 1, 0, 1, 0, 1, 0, 1 };
-	std::vector<std::string> lbl = { "0", "1", "0", "1", "0", "1", "0", "1" };
-
-	auto ctBits = encryptVec(env, bits);
-
-	{
-		FIDESlib::CKKS::Ciphertext* outGpu;
-		auto out = freshResult(env, ctBits, &outGpu);
-		FIDESlib::CKKS::cleanAndReduce(*outGpu, *gpu(env, ctBits));
-		report("cleanAndReduce(exact 0/1)", decrypt(env.cc, env.keys, out, env.batchSize), bits, lbl);
-	}
-	{
-		FIDESlib::CKKS::Ciphertext* outGpu;
-		auto out = freshResult(env, ctBits, &outGpu);
-		FIDESlib::CKKS::clean(*outGpu, *gpu(env, ctBits));
-		report("clean(exact 0/1)", decrypt(env.cc, env.keys, out, env.batchSize), bits, lbl);
-	}
-	{
-		FIDESlib::CKKS::Ciphertext* outGpu;
-		auto out = freshResult(env, ctBits, &outGpu);
-		FIDESlib::CKKS::mod2Shallow(*outGpu, *gpu(env, ctBits));
-		report("mod2Shallow(exact 0/1)", decrypt(env.cc, env.keys, out, env.batchSize), bits, lbl);
-	}
-}
-
-/// majorityBit + csa3 (sum, carry) su tutte le 8 combinazioni di {0,1}^3.
+/// CsaSum, CsaCarry, MajorityBit su tutte le 8 combinazioni di {0,1}^3.
 void testMajorityAndCsa3(TestEnv& env) {
 	std::vector<double> aVals = { 0, 0, 0, 0, 1, 1, 1, 1 };
 	std::vector<double> bVals = { 0, 0, 1, 1, 0, 0, 1, 1 };
@@ -245,60 +178,19 @@ void testMajorityAndCsa3(TestEnv& env) {
 	auto ctB = encryptVec(env, bVals);
 	auto ctC = encryptVec(env, cVals);
 
-	{
-		FIDESlib::CKKS::Ciphertext* outGpu;
-		auto out = freshResult(env, ctA, &outGpu);
-		FIDESlib::CKKS::majorityBit(*outGpu, *gpu(env, ctA), *gpu(env, ctB), *gpu(env, ctC));
-		report("majorityBit", decrypt(env.cc, env.keys, out, env.batchSize), expCarry, lbl);
-	}
-	{
-		FIDESlib::CKKS::Ciphertext* sGpu;
-		FIDESlib::CKKS::Ciphertext* cGpu;
-		auto S = freshResult(env, ctA, &sGpu);
-		auto C = freshResult(env, ctA, &cGpu);
-		FIDESlib::CKKS::csa3(*sGpu, *cGpu, *gpu(env, ctA), *gpu(env, ctB), *gpu(env, ctC));
-		report("csa3: sum", decrypt(env.cc, env.keys, S, env.batchSize), expSum, lbl);
-		report("csa3: carry", decrypt(env.cc, env.keys, C, env.batchSize), expCarry, lbl);
-	}
+	auto sumCt	 = env.cc->CsaSum(ctA, ctB, ctC);
+	auto carryCt = env.cc->CsaCarry(ctA, ctB, ctC);
+	auto majCt	 = env.cc->MajorityBit(ctA, ctB, ctC);
+
+	report("CsaSum", decrypt(env.cc, env.keys, sumCt, env.batchSize), expSum, lbl);
+	report("CsaCarry", decrypt(env.cc, env.keys, carryCt, env.batchSize), expCarry, lbl);
+	report("MajorityBit", decrypt(env.cc, env.keys, majCt, env.batchSize), expCarry, lbl);
 }
 
-/// csa4: carry-save-adder a 4 input, bits=1 (nessuna propagazione di carry
-/// multi-bit da testare qui -- solo la combinazione dei 4 bit + csa3 +
-/// evalIntegerAdd interni). Verifica il bit basso di (a+b+c+d) su tutte le
-/// 16 combinazioni di {0,1}^4.
-void testCsa4(TestEnv& baseEnv) {
-	std::vector<double> aVals, bVals, cVals, dVals, expOut;
-	std::vector<std::string> lbl;
-	for (int a = 0; a < 2; ++a)
-		for (int b = 0; b < 2; ++b)
-			for (int c = 0; c < 2; ++c)
-				for (int d = 0; d < 2; ++d) {
-					aVals.push_back(a);
-					bVals.push_back(b);
-					cVals.push_back(c);
-					dVals.push_back(d);
-					int s = a + b + c + d;
-					expOut.push_back(s % 2);
-					lbl.push_back("(" + std::to_string(a) + std::to_string(b) + std::to_string(c) + std::to_string(d) + ")");
-				}
-
-	TestEnv env16 = setup(16, baseEnv.depth);
-
-	auto ctA = encryptVec(env16, aVals);
-	auto ctB = encryptVec(env16, bVals);
-	auto ctC = encryptVec(env16, cVals);
-	auto ctD = encryptVec(env16, dVals);
-
-	FIDESlib::CKKS::Ciphertext* outGpu;
-	auto out = freshResult(env16, ctA, &outGpu);
-	FIDESlib::CKKS::csa4(*outGpu, *gpu(env16, ctA), *gpu(env16, ctB), *gpu(env16, ctC), *gpu(env16, ctD), /*bits=*/1);
-	report("csa4: low bit of (a+b+c+d)", decrypt(env16.cc, env16.keys, out, env16.batchSize), expOut, lbl);
-}
-
-/// bintodec: 2 gruppi di 8 slot; group0 bits=(1,0,1,1)->13, group1
-/// bits=(0,1,0,0)->2. Verificato per PROPORZIONALITÀ (vedi reportProportional):
-/// bintodec applica deliberatamente un rescale 1/sqrt(225/2) per il prossimo
-/// stadio Chebyshev, quindi il valore assoluto non è 13/2 ma 13/2 * scala.
+/// BinToDec: 2 gruppi di 8 slot; group0 bits=(1,0,1,1)->13, group1
+/// bits=(0,1,0,0)->2. Verificato per PROPORZIONALITÀ: BinToDec applica
+/// deliberatamente un rescale 1/sqrt(225/2) per il prossimo stadio
+/// Chebyshev, quindi il valore assoluto non è 13/2 ma 13/2 * scala.
 void testBinToDec(TestEnv& baseEnv) {
 	std::vector<double> bits(16, 0.0);
 	bits[0] = 1;
@@ -313,27 +205,23 @@ void testBinToDec(TestEnv& baseEnv) {
 	TestEnv env16 = setup(16, baseEnv.depth);
 	auto ctBits	  = encryptVec(env16, bits);
 
-	FIDESlib::CKKS::Ciphertext* outGpu;
-	auto out = freshResult(env16, ctBits, &outGpu);
-	auto& cc = openfheCc(env16);
-	FIDESlib::CKKS::bintodec(cc, *outGpu, *gpu(env16, ctBits), /*repetitions=*/2);
-
+	auto out = env16.cc->BinToDec(ctBits, /*repetitions=*/2);
 	auto got = decrypt(env16.cc, env16.keys, out, env16.batchSize);
 
-	// bintodec broadcasts the decoded value back across slots 0..3 (and
-	// 8..11) of each group; check only slot 0 of each group against the
-	// true decimal value, up to bintodec's known constant scale factor.
-	std::vector<double> gotSlot0	= { got[0], got[8] };
-	std::vector<double> expected	= { 13.0, 2.0 };
-	std::vector<std::string> lbl	= { "group0 (bits 1,0,1,1)", "group1 (bits 0,1,0,0)" };
+	// BinToDec broadcasts the decoded value back across slots 0..3 (and
+	// 8..11) of each group; check slot 0 of each group up to BinToDec's
+	// known constant scale factor.
+	std::vector<double> gotSlot0 = { got[0], got[8] };
+	std::vector<double> expected = { 13.0, 2.0 };
+	std::vector<std::string> lbl = { "group0 (bits 1,0,1,1)", "group1 (bits 0,1,0,0)" };
 
-	reportProportional("bintodec", gotSlot0, expected, lbl);
+	reportProportional("BinToDec", gotSlot0, expected, lbl);
 }
 
-/// evalIntegerAdd: regression check (l'utente ha già confermato che
+/// EvalAddInteger: regression check (l'utente ha già confermato che
 /// funziona). 5 (0101, LSB primo) + 3 (0011, LSB primo) = 8 (1000, LSB
 /// primo), aritmetica a 4 bit con wraparound.
-void testEvalIntegerAdd(TestEnv& baseEnv) {
+void testEvalAddInteger(TestEnv& baseEnv) {
 	std::vector<double> aVals	  = { 1, 0, 1, 0 }; // 5, LSB primo
 	std::vector<double> bVals	  = { 1, 1, 0, 0 }; // 3, LSB primo
 	std::vector<double> expected = { 0, 0, 0, 1 }; // 8, LSB primo
@@ -343,23 +231,56 @@ void testEvalIntegerAdd(TestEnv& baseEnv) {
 	auto ctA	 = encryptVec(env4, aVals);
 	auto ctB	 = encryptVec(env4, bVals);
 
-	FIDESlib::CKKS::evalIntegerAdd(*gpu(env4, ctA), *gpu(env4, ctB), /*bits=*/4);
-	report("evalIntegerAdd: 5 + 3 = 8 (4-bit)", decrypt(env4.cc, env4.keys, ctA, env4.batchSize), expected, lbl);
+	auto out = env4.cc->EvalAddInteger(ctA, ctB, /*bits=*/4);
+	report("EvalAddInteger: 5 + 3 = 8 (4-bit)", decrypt(env4.cc, env4.keys, out, env4.batchSize), expected, lbl);
+}
+
+/// EvalEqualInteger: confronta due interi a 4 bit, uguali e diversi.
+/// coeffsSinc generati con GetChebyshevCoefficients su
+/// sinc(x) = sin(pi*x)/(pi*x), che vale esattamente 1 in x=0 e ~0 su ogni
+/// altro intero -- comportamento coerente con equal(a,b) = sinc(a-b).
+void testEvalEqualInteger(TestEnv& baseEnv) {
+	int bits = 4;
+
+	// Due coppie: (5,5) uguali, (5,3) diverse. Impacchettate su 2 gruppi di
+	// 4 slot (LSB primo), stesso layout di EvalAddInteger.
+	std::vector<double> aVals = { 1, 0, 1, 0, /**/ 1, 0, 1, 0 }; // 5, 5
+	std::vector<double> bVals = { 1, 0, 1, 0, /**/ 1, 1, 0, 0 }; // 5, 3
+	std::vector<double> expected = { 1, 1, 1, 1, /**/ 0, 0, 0, 0 };
+	std::vector<std::string> lbl = { "5==5 bit0", "5==5 bit1", "5==5 bit2", "5==5 bit3",
+		                              "5==3 bit0", "5==3 bit1", "5==3 bit2", "5==3 bit3" };
+
+	TestEnv env8 = setup(8, baseEnv.depth);
+	auto ctA	 = encryptVec(env8, aVals);
+	auto ctB	 = encryptVec(env8, bVals);
+
+	int zslots			  = 1 << bits; // 16: range simmetrico per la differenza a-b
+	int chebyDegree		  = 59;
+	double lowerBound	  = -static_cast<double>(zslots);
+	double upperBound	  = static_cast<double>(zslots);
+	std::function<double(double)> sincFn = [](double x) {
+		if (std::abs(x) < 1e-9)
+			return 1.0;
+		return std::sin(M_PI * x) / (M_PI * x);
+	};
+	auto coeffsSinc = env8.cc->GetChebyshevCoefficients(sincFn, lowerBound, upperBound, chebyDegree);
+
+	auto out = env8.cc->EvalEqualInteger(ctA, ctB, bits, zslots, coeffsSinc, static_cast<int>(baseEnv.depth));
+	report("EvalEqualInteger: 5==5 (all 1) and 5==3 (all 0)", decrypt(env8.cc, env8.keys, out, env8.batchSize), expected, lbl, /*tolerance=*/1e-1);
 }
 
 int main() {
 	TestEnv env = setup(/*batchSize=*/8, /*depth=*/25);
 
-	testCleaningPolynomials(env);
 	testMajorityAndCsa3(env);
-	testCsa4(env);
 	testBinToDec(env);
-	testEvalIntegerAdd(env);
+	testEvalAddInteger(env);
+	testEvalEqualInteger(env);
 
 	std::cout << std::endl << "============================================" << std::endl;
 	std::cout << g_testsRun << " test(s) run, " << g_testsFailed << " failed." << std::endl;
-	std::cout << "NOTE: evalIntegerEqual and evalIntegerMult/multiplier4bits/processArray" << std::endl;
-	std::cout << "      are not covered here -- see the file header for why." << std::endl;
+	std::cout << "NOTE: EvalMultInteger/Multiplier4bits (needs external Chebyshev" << std::endl;
+	std::cout << "      coefficient files) and ProcessArray are not covered here." << std::endl;
 	std::cout << (g_testsFailed == 0 ? "ALL PASS" : "SOME FAILED") << std::endl;
 
 	return g_testsFailed == 0 ? 0 : 1;
