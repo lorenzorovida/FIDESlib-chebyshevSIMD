@@ -254,8 +254,6 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext a_processed(a.cc_);
 		a_processed.copy(a_low);
 
-		out.copy(a_processed);
-		return;
 
 		// --------------------------------------------------------
 		// process_array(...)
@@ -417,6 +415,7 @@ void evalIntegerMult(Ciphertext& out,
 			tmp.rotate(b_processed, -16384);
 			b_processed.add(tmp);
 		}
+		
 
 		// --------------------------------------------------------
 		// Convert binary to decimal
@@ -433,6 +432,9 @@ void evalIntegerMult(Ciphertext& out,
 		// --------------------------------------------------------
 
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, cc);
+
+		out.copy(result);
+		return;
 
 	} else {
 
