@@ -968,13 +968,13 @@ void majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, cons
 
 	// sq := total^2
 	Ciphertext sq(cc_);
-	sq.square(total, false);
+	sq.square(total, true);
 	if (sq.NoiseLevel == 2)
 		sq.rescale();
 
 	// t1 := total * (-1/3)
 	Ciphertext t1(cc_);
-	t1.multScalar(total, -1.0 / 3.0, false);
+	t1.multScalar(total, -1.0 / 3.0, true);
 	if (t1.NoiseLevel == 2)
 		t1.rescale();
 
@@ -984,11 +984,11 @@ void majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, cons
 
 	// termB := sq * 3/2
 	Ciphertext termB(cc_);
-	termB.multScalar(sq, 3.0 / 2.0, false);
+	termB.multScalar(sq, 3.0 / 2.0, true);
 
 	// termC := total * (-7/6)
 	Ciphertext termC(cc_);
-	termC.multScalar(total, -7.0 / 6.0, false);
+	termC.multScalar(total, -7.0 / 6.0, true);
 
 	// out := termA + termB + termC
 	Ciphertext ab(cc_);
@@ -1009,7 +1009,6 @@ void csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b
 	sPlusC.add(S, c);
 	mod2Shallow(S, sPlusC);
 
-	
 
 	majorityBit(C, a, b, c);
 }
@@ -1024,7 +1023,11 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 	Ciphertext s1(a.cc_);
 	Ciphertext c1(a.cc_);
 
+
 	csa3(s1, c1, a, b, c);
+
+	out.copy(c1);
+	return;
 
 	//s1 è giusto
 	//c1 è sbagliato
@@ -1050,8 +1053,7 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 
 	csa3(s2, c2, s1, c1_rot, d);
 
-	out.copy(s2);
-	return;
+	//s2 è sbagliato
 
 	// c2 = rot(c2, -1)
 	Ciphertext c2_rot(a.cc_);
