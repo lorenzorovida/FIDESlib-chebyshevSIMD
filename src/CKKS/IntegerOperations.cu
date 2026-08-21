@@ -821,7 +821,11 @@ void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecom
 	if (precomp.entries.size() == 0) {
 		std::cerr << "No precomputations found for multiplications! Call ProcessArrayPrecomputations" << std::endl;
 	}
+	std::cout << "Entering the loop" << std::endl;
+	std::cout << precomp.entries.size() << std::endl;
+
 	for (const auto& entry : precomp.entries) {
+		std::cout << entry.shift << std::endl;
 
 		// rolled_ctxt = rot(c, -shift)
 		Ciphertext rolled_ctxt(c.cc_);
