@@ -581,8 +581,8 @@ void evalIntegerMult(Ciphertext& out,
 	//out.copy(p3);
 	//return;
 
-
-	if (!overflow && bits == bits_original) {
+	//20:14 PROVO FALSE
+	if (false && !overflow && bits == bits_original) {
 
 		Ciphertext S(a.cc_);
 		Ciphertext C(a.cc_);
