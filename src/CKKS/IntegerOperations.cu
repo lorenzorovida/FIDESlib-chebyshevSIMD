@@ -210,6 +210,7 @@ void evalIntegerMult(Ciphertext& out,
 				  << masklow[6] << ", " << std::endl;
 
 		Ciphertext a_low(a.cc_);
+		a_low.copy(a);
 
 		size_t noise = static_cast<size_t>(a.NoiseLevel);
 
@@ -218,11 +219,10 @@ void evalIntegerMult(Ciphertext& out,
 		FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 		Plaintext maskP(cc_, raw);
 
-		a.multPt(maskP);
-		result.copy(a);
+		a_low.multPt(maskP);
+		result.copy(a_low);
 		return;
 
-		a_low.copy(a);
 
 		// --------------------------------------------------------
 		// maskhigh
