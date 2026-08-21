@@ -226,7 +226,7 @@ void evalIntegerMult(Ciphertext& out,
 		a_low.copy(a);
 
 		a_low.multPt(makePerSlotPlaintext(cc, cc_, masklow, a_low));
-		
+
 		result.copy(a_low);
 		return;
 
@@ -253,11 +253,11 @@ void evalIntegerMult(Ciphertext& out,
 
 		Ciphertext a_high(a.cc_);
 
-		noise = static_cast<size_t>(a_rot.NoiseLevel);
+		size_t noise = static_cast<size_t>(a_rot.NoiseLevel);
 
-		pt = cc->MakeCKKSPackedPlaintext(maskhigh_rot, noise, a_rot.getLevel(), nullptr, a_rot.slots);
+		auto pt = cc->MakeCKKSPackedPlaintext(maskhigh_rot, noise, a_rot.getLevel(), nullptr, a_rot.slots);
 
-		raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
+		auto raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 		Plaintext maskP2(cc_, raw);
 
 		a_high.multPt(a_rot, maskP2, true);
