@@ -558,6 +558,10 @@ void evalIntegerMult(Ciphertext& out,
 	// Final CSA + bootstrap
 	// ============================================================
 
+
+	out.copy(p1);
+	return;
+
 	if (!overflow && bits == bits_original) {
 
 		Ciphertext S(a.cc_);
