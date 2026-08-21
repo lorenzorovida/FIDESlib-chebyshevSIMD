@@ -218,17 +218,10 @@ void evalIntegerMult(Ciphertext& out,
 			masklow[3 + j * mask_size] = 1;
 		}
 
-		std::cout << "MAH" << std::endl
-				  << masklow[0] << ", " << masklow[1] << ", " << masklow[2] << ", " << masklow[3] << ", " << masklow[4] << ", " << masklow[5] << ", "
-				  << masklow[6] << ", " << std::endl;
-
 		Ciphertext a_low(a.cc_);
 		a_low.copy(a);
 
 		a_low.multPt(makePerSlotPlaintext(cc, cc_, masklow, a_low));
-
-		out.copy(a_low);
-		return;
 
 
 		// --------------------------------------------------------
@@ -253,19 +246,16 @@ void evalIntegerMult(Ciphertext& out,
 
 		Ciphertext a_high(a.cc_);
 
-		size_t noise = static_cast<size_t>(a_rot.NoiseLevel);
-
-		auto pt = cc->MakeCKKSPackedPlaintext(maskhigh_rot, noise, a_rot.getLevel(), nullptr, a_rot.slots);
-
-		auto raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
-		Plaintext maskP2(cc_, raw);
-
-		a_high.multPt(a_rot, maskP2, true);
+		a_high.copy(a_rot);
+		a_high.multPt(makePerSlotPlaintext(cc, cc_, maskhigh_rot, a_high));
 
 		a_low.add(a_high);
 
 		Ciphertext a_processed(a.cc_);
 		a_processed.copy(a_low);
+
+		out.copy(a_processed);
+		return;
 
 		// --------------------------------------------------------
 		// process_array(...)
