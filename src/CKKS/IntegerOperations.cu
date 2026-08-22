@@ -1091,7 +1091,9 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 	// result = add_integer(s2, c2_rot, bits, false)
 	// ------------------------------------------------------------
 
-	evalIntegerAdd(out, c2_rot, bits);
+	evalIntegerAdd(s2, c2_rot, bits);
+
+	out.copy(s2);
 }
 
 void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, const Ciphertext& c, int repetitions) {
