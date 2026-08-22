@@ -628,10 +628,11 @@ void evalIntegerMult(Ciphertext& out,
 
 		//Il problema è in CSA 4
 		std::cout << "p4" << std::endl;
-		out.copy(p4);
-		return;
-
+		
 		csa4(result, p1, p2, p3, p4, bits);
+
+		out.copy(result);
+		return;
 
 		
 	
