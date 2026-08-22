@@ -582,7 +582,7 @@ void evalIntegerMult(Ciphertext& out,
 	//return;
 
 	//20:14 PROVO FALSE
-	if (false && !overflow && bits == bits_original) {
+	if (!overflow && bits == bits_original && bits != 8) {
 
 		Ciphertext S(a.cc_);
 		Ciphertext C(a.cc_);
