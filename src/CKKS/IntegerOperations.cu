@@ -729,10 +729,10 @@ void preprocessProcessArray(int bits,
   FIDESlib::CKKS::Context& cc_,
   bool forB) {
 
-	int mask_size = bits * (bits / 2);
+	int mask_size = (bits - 1)* ((bits - 1)/ 2);
 
 	// Assuming full reps?
-	int rep = (slots * 2) / (bits * bits);
+	int rep = (slots * 2) / ((bits - 1) * (bits - 1));
 
 	if (mask_size <= 0) {
 		throw std::invalid_argument("preprocessProcessArray: mask_size must be > 0");
