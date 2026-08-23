@@ -259,11 +259,8 @@ void evalIntegerMult(Ciphertext& out,
 		// process_array(...)
 		// --------------------------------------------------------
 
-		out.copy(a_processed);
-		return;
-
 		if (bits_original > 8) {
-			//processArray(a_processed, a, precomp8);
+			processArray(a_processed, a, precomp8);
 		}
 
 		if (bits_original > 16) {
@@ -354,7 +351,7 @@ void evalIntegerMult(Ciphertext& out,
 		// --------------------------------------------------------
 
 		if (bits_original > 8) {
-			//processArray(b_processed, b, precomp8b);
+			processArray(b_processed, b, precomp8b);
 		}
 
 		if (bits_original > 16) {
