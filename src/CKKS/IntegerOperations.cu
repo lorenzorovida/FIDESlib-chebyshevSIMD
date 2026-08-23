@@ -254,38 +254,34 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext a_processed(a.cc_);
 		a_processed.copy(a_low);
 
-		Ciphertext res(a.cc_);
-
 
 		// --------------------------------------------------------
 		// process_array(...)
 		// --------------------------------------------------------
 
 		if (bits_original > 8) {
-			processArray(res, a_processed, precomp8);
+			processArray(a_processed, a, precomp8);
 		}
 
 		if (bits_original > 16) {
-			processArray(res, a_processed, precomp16);
+			processArray(a_processed, a, precomp16);
 		}
 
 		if (bits_original > 32) {
-			processArray(res, a_processed, precomp32);
+			processArray(a_processed, a, precomp32);
 		}
 
 		if (bits_original > 64) {
-			processArray(res, a_processed, precomp64);
+			processArray(a_processed, a, precomp64);
 		}
 
 		if (bits_original > 128) {
-			processArray(res, a_processed, precomp128);
+			processArray(a_processed, a, precomp128);
 		}
 
 		// --------------------------------------------------------
 		// Combine A
 		// --------------------------------------------------------
-
-		a_processed.copy(res);
 
 		if (bits_original > 4) {
 
@@ -350,37 +346,34 @@ void evalIntegerMult(Ciphertext& out,
 
 		b_processed.add(b_high);
 
-		Ciphertext res2(a.cc_);
 		// --------------------------------------------------------
 		// process B
 		// --------------------------------------------------------
 
 		if (bits_original > 8) {
-			processArray(res2, b_processed, precomp8b);
+			processArray(b_processed, b, precomp8b);
 		}
 
 		if (bits_original > 16) {
-			processArray(res2, b_processed, precomp16b);
+			processArray(b_processed, b, precomp16b);
 		}
 
 		if (bits_original > 32) {
-			processArray(res2, b_processed, precomp32b);
+			processArray(b_processed, b, precomp32b);
 		}
 
 		if (bits_original > 64) {
-			processArray(res2, b_processed, precomp64b);
+			processArray(b_processed, b, precomp64b);
 		}
 
 		if (bits_original > 128) {
-			processArray(res2, b_processed, precomp128b);
+			processArray(b_processed, b, precomp128b);
 		}
 
 		// --------------------------------------------------------
 		// Combine B
 		// --------------------------------------------------------
 
-		b_processed.copy(res2);
-		
 		if (bits_original > 4) {
 
 			Ciphertext tmp(a.cc_);
@@ -438,13 +431,41 @@ void evalIntegerMult(Ciphertext& out,
 		// 4-bit multiplier
 		// --------------------------------------------------------
 
+		//16:54, GUARDO I BINARI DI TUTTO... IL MULTIPLIER AVEVA INTERI GIUSTI MA IN MEZZO VALORI CANNATI ZIO
+		//A DECIMAL è TUTTO GIUSTO
+		//out.copy(b_decimal);
+		//return;
+
+		
+		
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, cc);
+
+		//17.30: Il risultato è perfettamente identico a questo punto, top!!
+		
+		// Qua è giusto
+		//Update: ricontrollo TUTTO IL VETTORE
 
 
 	} else {
 
+		// Recursive case:
+		//
+		// result =
+		// mul_integer(
+		//     a,
+		//     b,
+		//     bits / 2,
+		//     bits_original,
+		//     4 * repetitions,
+		//     repetitions_original,
+		//     overflow);
+
 		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, coeffs, cc);
 	}
+
+	// ============================================================
+	// Recombine multiplication result
+	// ============================================================
 
 	const int dunn = (bits * bits / base_mult) * 2;
 
@@ -905,65 +926,86 @@ void cleanAndReduce(Ciphertext& out, const Ciphertext& c) {
 void clean(Ciphertext& out, const Ciphertext& c) {
 	FIDESlib::CKKS::Context& cc_ = c.cc_;
 
+	// sq := c^2
 	Ciphertext sq(cc_);
 	sq.square(c, false);
 	if (sq.NoiseLevel == 2)
 		sq.rescale();
 
+	// t1 := c * (-2)
 	Ciphertext t1(cc_);
 	t1.multScalar(c, -2.0, false);
 	if (t1.NoiseLevel == 2)
 		t1.rescale();
 
+	// termA := sq * t1
 	Ciphertext termA(cc_);
 	termA.mult(sq, t1, false);
 
+	// termB := sq * 3
 	Ciphertext termB(cc_);
 	termB.multScalar(sq, 3.0, false);
 
+	// out := termA + termB
 	out.add(termA, termB);
 }
 
 void mod2Shallow(Ciphertext& out, const Ciphertext& c) {
 	FIDESlib::CKKS::Context& cc_ = c.cc_;
 
+	// doubled := c * 2
 	Ciphertext doubled(cc_);
 	doubled.multScalar(c, 2.0, false);
 
+	// sq := c^2
 	Ciphertext sq(cc_);
 	sq.square(c, false);
 	if (sq.NoiseLevel == 2)
 		sq.rescale();
 
+	// out := doubled - sq
 	out.sub(doubled, sq);
 }
 
 void majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c) {
 	FIDESlib::CKKS::Context& cc_ = a.cc_;
+
+	// total := a + b + c
+	// a is right
+	// b seems right
 	
+
 	Ciphertext total(cc_);
 	total.add(a, b);
 	total.add(c);	
 
+	//total is right
+
+	// sq := total^2
 	Ciphertext sq(cc_);
 	sq.square(total, true);
 	if (sq.NoiseLevel == 2)
 		sq.rescale();
 
+	// t1 := total * (-1/3)
 	Ciphertext t1(cc_);
 	t1.multScalar(total, -1.0 / 3.0, true);
 	if (t1.NoiseLevel == 2)
 		t1.rescale();
 
+	// termA := t1 * sq
 	Ciphertext termA(cc_);
 	termA.mult(t1, sq, false);
 
+	// termB := sq * 3/2
 	Ciphertext termB(cc_);
 	termB.multScalar(sq, 3.0 / 2.0, true);
 
+	// termC := total * (-7/6)
 	Ciphertext termC(cc_);
 	termC.multScalar(total, -7.0 / 6.0, true);
 
+	// out := termA + termB + termC
 	Ciphertext ab(cc_);
 	ab.add(termA, termB);
 	out.add(ab, termC);
@@ -972,10 +1014,12 @@ void majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, cons
 void csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c) {
 	FIDESlib::CKKS::Context& cc_ = a.cc_;
 
+	// S := mod2Shallow(a + b)
 	Ciphertext ab(cc_);
 	ab.add(a, b);
 	mod2Shallow(S, ab);
 
+	// S := mod2Shallow(S + c)
 	Ciphertext sPlusC(cc_);
 	sPlusC.add(S, c);
 	mod2Shallow(S, sPlusC);
@@ -985,21 +1029,60 @@ void csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b
 }
 
 void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c, const Ciphertext& d, int bits) {
+	// ------------------------------------------------------------
+	// First CSA:
+	//
+	// (s1, c1) = csa3(a, b, c)
+	// ------------------------------------------------------------
+
 	Ciphertext s1(a.cc_);
 	Ciphertext c1(a.cc_);
 
+
 	csa3(s1, c1, a, b, c);
 
+	
+
+	//s1 è giusto
+	//c1 è giusto
+
+
+
+	// c1 = rot(c1, -1)
 	Ciphertext c1_rot(a.cc_);
 	c1_rot.rotate(c1, -1);
+
+	//c1 rot is broken it seems
+
+	
+
+	// ------------------------------------------------------------
+	// Second CSA:
+	//
+	// (s2, c2) = csa3(s1, c1_rot, d)
+	// ------------------------------------------------------------
 
 	Ciphertext s2(a.cc_);
 	Ciphertext c2(a.cc_);
 
+	// all zeros????
+	//out.copy(d);
+	//return;
+
 	csa3(s2, c2, s1, c1_rot, d);
 
+	
+
+	//s2 è sbagliato
+
+	// c2 = rot(c2, -1)
 	Ciphertext c2_rot(a.cc_);
+
 	c2_rot.rotate(c2, -1);
+
+	// ------------------------------------------------------------
+	// result = add_integer(s2, c2_rot, bits, false)
+	// ------------------------------------------------------------
 
 	evalIntegerAdd(s2, c2_rot, bits);
 
@@ -1009,6 +1092,10 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, const Ciphertext& c, int repetitions) {
 	FIDESlib::CKKS::Context& cc_ = c.cc_;
 
+	// Build the {1,2,4,8,0,0,0,0}-repeated mask, encoded at c's level, and
+	// the second {sqrt(1/(225/2)), 0,0,0,0,0,0,0}-repeated rescaling mask,
+	// mirroring OpenFHE's bintodec exactly (including the folding rotation
+	// pattern +1,+2 then -1,-2,-4).
 	std::vector<double> mask1;
 	mask1.reserve(static_cast<size_t>(repetitions) * 8);
 	for (int i = 0; i < repetitions; i++) {
@@ -1022,6 +1109,10 @@ void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, 
 		mask2.insert(mask2.end(), { rescaleFactor, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
 	}
 
+	// Same level-convention caveat as ApproxModEvalBatch.cu's
+	// makePerSlotPlaintext: FIDESlib's core getLevel() counts DOWN from
+	// cc.L, while MakeCKKSPackedPlaintext's `level` counts UP from 0, and
+	// noiseScaleDeg must match the target ciphertext's real NoiseLevel.
 	auto makeMaskPt = [&](const std::vector<double>& values, const Ciphertext& like) -> Plaintext {
 		uint32_t openfheLevel			 = static_cast<uint32_t>(like.cc.L - like.getLevel());
 		size_t noiseScaleDeg			 = static_cast<size_t>(like.NoiseLevel);
@@ -1034,11 +1125,13 @@ void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, 
 		return Plaintext(cc_, raw);
 	};
 
-	
+	// res := c * mask1  (weights 1,2,4,8 at slots 0..3 of each group)
 	Ciphertext res(cc_);
 	Plaintext maskPt1 = makeMaskPt(mask1, c);
 	res.multPt(c, maskPt1, true);
 
+	// res := res + rot(res, 1) + rot(res, 2)  -- sums the 4 weighted bits
+	// into slot 0 of each group.
 	Ciphertext rot1(cc_);
 	rot1.rotate(res, 1);
 	res.add(rot1);
@@ -1046,9 +1139,12 @@ void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, 
 	rot2.rotate(res, 2);
 	res.add(rot2);
 
+	// res := res * mask2  (keeps only slot 0 of each group, rescaled)
 	Plaintext maskPt2 = makeMaskPt(mask2, res);
 	res.multPt(maskPt2, true);
 
+	// res := res + rot(res,-1) + rot(res,-2) + rot(res,-4)  -- broadcasts
+	// the decoded value back across the low 4 slots of each group.
 	Ciphertext rotm1(cc_);
 	rotm1.rotate(res, -1);
 	res.add(rotm1);
@@ -1071,8 +1167,10 @@ std::vector<double> rotateMask(const std::vector<double>& mask, int shift) {
 	std::vector<double> result = mask;
 
 	if (shift > 0) {
+		// Positive shift → left rotation
 		std::rotate(result.begin(), result.begin() + shift, result.end());
 	} else {
+		// Negative shift → right rotation
 		shift = -shift;
 		std::rotate(result.rbegin(), result.rbegin() + shift, result.rend());
 	}
