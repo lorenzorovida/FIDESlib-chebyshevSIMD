@@ -462,8 +462,6 @@ void evalIntegerMult(Ciphertext& out,
 
 		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, coeffs, cc);
 		
-		out.copy(result);
-		return;
 	
 	}
 
