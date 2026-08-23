@@ -259,6 +259,9 @@ void evalIntegerMult(Ciphertext& out,
 		// process_array(...)
 		// --------------------------------------------------------
 
+		out.copy(a_processed);
+		return;
+
 		if (bits_original > 8) {
 			//processArray(a_processed, a, precomp8);
 		}
@@ -819,7 +822,7 @@ void preprocessProcessArray(int bits,
 		// vector<int> rolled_mask = rot(mask, -shift);
 		// --------------------------------------------------------
 
-		std::vector<double> rolled_mask(total_size, 0.0);
+		std::vector<double> rolled_mask(mask);
 
 		rolled_mask = rotateMask(rolled_mask, -shift);
 
