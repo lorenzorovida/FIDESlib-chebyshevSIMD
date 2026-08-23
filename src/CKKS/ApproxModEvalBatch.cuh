@@ -108,6 +108,127 @@ void evalChebyshevSeriesPSBatchRepeated(lbcrypto::CryptoContext<lbcrypto::DCRTPo
                                          double lower_bound = -1.0,
                                          double upper_bound = 1.0);
 
+                                         /**
+ * @brief Precomputed per-slot plaintext weights for evalChebyshevSeriesPSBatch,
+ *        allowing the same batch of Chebyshev coefficients to be evaluated
+ *        against many ciphertexts without re-encoding the per-slot weight
+ *        plaintexts every time.
+ *
+ * evalChebyshevSeriesPSBatch CKKS-encodes a fresh per-slot plaintext vector
+ * at (essentially) every step of the Paterson-Stockmeyer recursion, because
+ * -- unlike scalar constants -- these can't be folded into the ciphertext
+ * arithmetic directly (see ApproxModEvalBatch.cuh's top-of-file note).
+ * Each such encode is a CPU-side CKKS encoding (IFFT + scaling) followed by
+ * a host-to-device upload -- expensive, and, critically, IDENTICAL every
+ * time the same batchOfCoefficients/lower_bound/upper_bound is evaluated on
+ * a ciphertext with the same level/rescale-technique-implied structure
+ * (the plaintext VALUES depend only on the coefficients, which are fixed;
+ * the levels they're encoded at depend only on k, m and rescaleTechnique,
+ * which are also fixed for a given batchOfCoefficients/degree).
+ *
+ * This struct is an opaque, ordered recording of every plaintext generated
+ * by one real run of evalChebyshevSeriesPSBatch (produced by
+ * evalChebyshevSeriesPSBatchPrecompute). evalChebyshevSeriesPSBatchApply
+ * replays that exact same sequence of plaintexts on a NEW ciphertext,
+ * skipping every MakeCKKSPackedPlaintext/GetRawPlainText call.
+ *
+ * IMPORTANT: a given PSBatchPrecompute is only valid for ciphertexts that
+ * are structurally identical to the one it was generated from: same
+ * cc.L / rescaleTechnique / initial level and NoiseLevel, same slots count.
+ * Reusing it on a ciphertext with a different starting level (e.g. because
+ * the caller consumed a different number of levels before calling) will
+ * silently replay plaintexts encoded at the wrong level -- exactly the
+ * level-mismatch bug class this codebase has already hit once (see
+ * makePerSlotPlaintext's doc comment in ApproxModEvalBatch.cu). Only reuse
+ * a PSBatchPrecompute across calls where every input ciphertext starts at
+ * the same level and NoiseLevel as the one used to build it.
+ */
+struct PSBatchPrecompute;
+
+/**
+ * @brief Runs the same recursion evalChebyshevSeriesPSBatch would, on a
+ *        (disposable) COPY of `ctxt`, recording every per-slot plaintext
+ *        weight it generates into the returned PSBatchPrecompute -- without
+ *        actually consuming or mutating `ctxt` itself.
+ *
+ * `ctxt` is used only as a template: to determine slots, starting level and
+ * NoiseLevel, and cc.L/rescaleTechnique. Its value/contents don't matter
+ * (a copy is made internally and discarded).
+ *
+ * @param cc   OpenFHE CPU CryptoContext matching `ctxt`.
+ * @param ctxt Template ciphertext (level/NoiseLevel/slots), not modified.
+ * @param batchOfCoefficients Same as evalChebyshevSeriesPSBatch.
+ * @param lower_bound Same as evalChebyshevSeriesPSBatch.
+ * @param upper_bound Same as evalChebyshevSeriesPSBatch.
+ * @return Opaque precomputed plaintext sequence, to be passed to
+ *         evalChebyshevSeriesPSBatchApply.
+ */
+std::shared_ptr<PSBatchPrecompute> evalChebyshevSeriesPSBatchPrecompute(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+                                                                         const Ciphertext& ctxt,
+                                                                         const std::vector<std::vector<double>>& batchOfCoefficients,
+                                                                         double lower_bound = -1.0,
+                                                                         double upper_bound = 1.0);
+
+/**
+ * @brief Same computation as evalChebyshevSeriesPSBatch, but reads every
+ *        per-slot plaintext weight from `precomp` (as produced by
+ *        evalChebyshevSeriesPSBatchPrecompute) instead of CKKS-encoding it
+ *        on the fly -- skipping all CPU-side MakeCKKSPackedPlaintext /
+ *        GetRawPlainText calls that otherwise dominate runtime.
+ *
+ * `precomp` must have been built from a ciphertext structurally identical
+ * to `ctxt` (see PSBatchPrecompute's doc comment) and with the SAME
+ * batchOfCoefficients/lower_bound/upper_bound used here -- this is not
+ * re-validated at runtime beyond a slot-count and plaintext-count check;
+ * passing a mismatched precompute silently produces wrong results.
+ *
+ * `precomp` is read-only and can be reused across multiple calls (e.g. to
+ * evaluate the same batch of functions on many different ciphertexts).
+ * NOT thread-safe: concurrent evalChebyshevSeriesPSBatchApply calls sharing
+ * the same PSBatchPrecompute will race on its internal read cursor. Use a
+ * separate PSBatchPrecompute per thread, or serialize calls.
+ *
+ * Takes `precomp` by shared_ptr (rather than by reference) deliberately:
+ * PSBatchPrecompute is an incomplete type at this header's scope (only
+ * forward-declared, defined in ApproxModEvalBatch.cu), so callers outside
+ * that translation unit (e.g. api/CryptoContext.cpp) can only pass the
+ * shared_ptr through opaquely -- they cannot dereference it themselves.
+ *
+ * @param cc      OpenFHE CPU CryptoContext matching `ctxt` (still required:
+ *                only the per-slot weight plaintexts are cached, not the
+ *                CryptoContext itself).
+ * @param ctxt    Ciphertext to transform in place.
+ * @param precomp Precomputed plaintexts from evalChebyshevSeriesPSBatchPrecompute.
+ * @param batchOfCoefficients Same batch used to build `precomp` (needed to
+ *                drive the Paterson-Stockmeyer control flow itself -- only
+ *                the coefficient VALUES are skipped via the cache, not the
+ *                long-division structure, which is cheap CPU-only work).
+ * @param lower_bound Same as used to build `precomp`.
+ * @param upper_bound Same as used to build `precomp`.
+ */
+void evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+                                      Ciphertext& ctxt,
+                                      const std::shared_ptr<PSBatchPrecompute>& precomp,
+                                      const std::vector<std::vector<double>>& batchOfCoefficients,
+                                      double lower_bound = -1.0,
+                                      double upper_bound = 1.0);
+
+/**
+ * @brief Type-erasing wrapper around evalChebyshevSeriesPSBatchApply, for
+ *        callers (e.g. api/CryptoContext.cpp) that only hold a
+ *        std::shared_ptr<void> (PSBatchPrecompute is an incomplete type at
+ *        their scope, so std::static_pointer_cast<PSBatchPrecompute> on it
+ *        is unsafe/non-portable there). Defined in ApproxModEvalBatch.cu,
+ *        where PSBatchPrecompute is complete, so the cast happens safely.
+ */
+void evalChebyshevSeriesPSBatchApplyOpaque(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+                                            Ciphertext& ctxt,
+                                            const std::shared_ptr<void>& precomp,
+                                            const std::vector<std::vector<double>>& batchOfCoefficients,
+                                            double lower_bound = -1.0,
+                                            double upper_bound = 1.0);
+
 } // namespace FIDESlib::CKKS
+
 
 #endif // GPUCKKS_APPROXMODEVALBATCH_CUH

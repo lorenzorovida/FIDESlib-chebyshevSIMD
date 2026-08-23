@@ -608,3 +608,70 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatchRepeated(lbcrypto::CryptoContext<
 
 	evalChebyshevSeriesPSBatch(cc, ctxt, batchOfCoefficients, lower_bound, upper_bound);
 }
+
+/**
+ * Opaque precomputed-plaintext container backing PSBatchPrecompute (see
+ * ApproxModEvalBatch.cuh). Wraps the internal PlaintextCache so the header
+ * only needs a forward declaration.
+ */
+struct FIDESlib::CKKS::PSBatchPrecompute {
+	PlaintextCache cache;
+};
+
+std::shared_ptr<FIDESlib::CKKS::PSBatchPrecompute>
+FIDESlib::CKKS::evalChebyshevSeriesPSBatchPrecompute(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+                                                      const Ciphertext& ctxt,
+                                                      const std::vector<std::vector<double>>& batchOfCoefficients,
+                                                      double lower_bound,
+                                                      double upper_bound) {
+	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
+
+	auto precomp			 = std::make_shared<PSBatchPrecompute>();
+	precomp->cache.recording = true;
+
+	// Run the real algorithm on a disposable COPY of ctxt: we need real
+	// Ciphertext arithmetic to happen (levels/NoiseLevel evolve exactly as
+	// they would for a real call) so that every makePerSlotPlaintext call
+	// sees the same `like` levels/NoiseLevel a real evalChebyshevSeriesPSBatch
+	// call would -- but the copy itself, and its final numeric result, are
+	// discarded; only the recorded plaintexts in precomp->cache matter.
+	Ciphertext templateCopy(ctxt.cc_);
+	templateCopy.copy(ctxt);
+
+	evalChebyshevSeriesPSBatchImpl(cc, templateCopy, batchOfCoefficients, lower_bound, upper_bound, &precomp->cache);
+
+	return precomp;
+}
+
+void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+                                                      Ciphertext& ctxt,
+                                                      const std::shared_ptr<PSBatchPrecompute>& precomp,
+                                                      const std::vector<std::vector<double>>& batchOfCoefficients,
+                                                      double lower_bound,
+                                                      double upper_bound) {
+	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
+
+	// PlaintextCache::next() advances a read cursor, which is logically
+	// read-only from the caller's perspective (precomp can be
+	// reused/replayed any number of times -- resetReadCursor() below always
+	// rewinds it back to the start before use) but requires a mutable
+	// reference internally.
+	PlaintextCache& cache = precomp->cache;
+	cache.recording        = false;
+	cache.resetReadCursor();
+
+	evalChebyshevSeriesPSBatchImpl(cc, ctxt, batchOfCoefficients, lower_bound, upper_bound, &cache);
+}
+
+void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApplyOpaque(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+                                                            Ciphertext& ctxt,
+                                                            const std::shared_ptr<void>& precomp,
+                                                            const std::vector<std::vector<double>>& batchOfCoefficients,
+                                                            double lower_bound,
+                                                            double upper_bound) {
+	// Safe here: PSBatchPrecompute is a complete type in this translation
+	// unit (defined above), so std::static_pointer_cast can properly share
+	// ownership/lifetime with the original std::shared_ptr<void>.
+	auto casted = std::static_pointer_cast<PSBatchPrecompute>(precomp);
+	evalChebyshevSeriesPSBatchApply(cc, ctxt, casted, batchOfCoefficients, lower_bound, upper_bound);
+}

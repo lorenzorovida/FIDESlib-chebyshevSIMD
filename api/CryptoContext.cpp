@@ -2130,6 +2130,65 @@ void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchRepeatedInPlace(Ciph
 	FIDESlib::CKKS::evalChebyshevSeriesPSBatchRepeated(context, *res_gpu, coefficientSets, a, b);
 }
 
+std::shared_ptr<void> CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchPrecompute(
+    const Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b) {
+	FIDESlib::CudaNvtxRange r("API");
+ 
+	if (this->devices.empty()) {
+		OPENFHE_THROW(
+		    "EvalChebyshevSeriesPSBatchPrecompute has no CPU fallback. "
+		    "Configure at least one GPU device.");
+	}
+ 
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
+ 
+	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	auto ct_gpu   = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
+ 
+	return FIDESlib::CKKS::evalChebyshevSeriesPSBatchPrecompute(context, *ct_gpu, batchOfCoeffs, a, b);
+}
+ 
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchApply(
+    const Ciphertext<DCRTPoly>& ct, const std::shared_ptr<void>& precomp, const std::vector<std::vector<double>>& batchOfCoeffs, double a,
+    double b) {
+	FIDESlib::CudaNvtxRange r("API");
+ 
+	if (this->devices.empty()) {
+		OPENFHE_THROW(
+		    "EvalChebyshevSeriesPSBatchApply has no CPU fallback. Configure "
+		    "at least one GPU device.");
+	}
+ 
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
+ 
+	auto& context                = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
+	auto res_gpu                 = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+ 
+	FIDESlib::CKKS::evalChebyshevSeriesPSBatchApplyOpaque(context, *res_gpu, precomp, batchOfCoeffs, a, b);
+ 
+	return result;
+}
+ 
+void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchApplyInPlace(
+    Ciphertext<DCRTPoly>& ct, const std::shared_ptr<void>& precomp, const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b) {
+	FIDESlib::CudaNvtxRange r("API");
+ 
+	if (this->devices.empty()) {
+		OPENFHE_THROW(
+		    "EvalChebyshevSeriesPSBatchApplyInPlace has no CPU fallback. "
+		    "Configure at least one GPU device.");
+	}
+ 
+	this->LoadCiphertext(ct);
+ 
+	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+	auto res_gpu  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
+ 
+	FIDESlib::CKKS::evalChebyshevSeriesPSBatchApplyOpaque(context, *res_gpu, precomp, batchOfCoeffs, a, b);
+}
+
+
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::Rescale(const Ciphertext<DCRTPoly>& ciphertext) {
 	FIDESlib::CudaNvtxRange r("API");
 
