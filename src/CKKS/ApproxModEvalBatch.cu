@@ -239,7 +239,7 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 		out.addMultPt(*alignedPtrs[i], *weightPts[i], false);
 	}
 
-	if (out.cc.rescaleTechnique == FIDESlib::CKKS::FIXEDMANUAL) {
+	if (out.cc.rescaleTechnique == FIXEDMANUAL) {
 		out.rescale();
 	}
 }
@@ -394,7 +394,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			freeTerm[b] = divcsVec[b]->q.front() / 2.0;
 		addPerSlotScalar(cu, cc, cc_, freeTerm, cache);
 
-		if (ccd.rescaleTechnique == FIDESlib::CKKS::FIXEDMANUAL) {
+		if (ccd.rescaleTechnique == FIXEDMANUAL) {
 			cu.rescale();
 		}
 
@@ -578,7 +578,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 		} else {
 			if (abs(lower_bound + upper_bound) > 1e-8)
 				ctxt.addScalar(-(upper_bound - lower_bound) / 2.0);
-			if (ctxt.cc.rescaleTechnique == CKKS::FIXEDMANUAL && ctxt.NoiseLevel == 2)
+			if (ctxt.cc.rescaleTechnique == FIXEDMANUAL && ctxt.NoiseLevel == 2)
 				ctxt.rescale();
 			ctxt.multScalar(2.0 / (upper_bound - lower_bound));
 		}
@@ -650,7 +650,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 		std::cout << "[BATCH] T[" << i << "] level=" << T[i]->getLevel() << " noise=" << T[i]->NoiseLevel << std::endl;
 #endif
 
-	if (ccd.rescaleTechnique == CKKS::FIXEDMANUAL) {
+	if (ccd.rescaleTechnique == FIXEDMANUAL) {
 		for (size_t i = 1; i < k; i++) {
 			T[i - 1]->dropToLevel(T[k - 1]->getLevel());
 		}
@@ -676,7 +676,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	// computes T_{k(2*m - 1)}(y)
 	Ciphertext T2km1(cc_);
 	T2km1.copy(*T2[0]);
-	if (ccd.rescaleTechnique == CKKS::FIXEDMANUAL) {
+	if (ccd.rescaleTechnique == FIXEDMANUAL) {
 		T2km1.dropToLevel(T2[1]->getLevel());
 	}
 
