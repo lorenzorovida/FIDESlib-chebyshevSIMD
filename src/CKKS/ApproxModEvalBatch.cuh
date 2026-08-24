@@ -83,15 +83,15 @@ class PSCache {
   public:
 	bool recording = true;
 
-	void recordQr(std::shared_ptr<lbcrypto::longDiv<double>>&& qr) {
+	void recordQr(std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>&& qr) {
 		entriesdivqrVec.push_back(std::move(qr));
 	}
 
-  void recordCs(std::shared_ptr<lbcrypto::longDiv<double>>&& cs) {
+  void recordCs(std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>&& cs) {
 		entriesdivcsVec.push_back(std::move(cs));
 	}
 
-  void recordS2(std::vector<double>&& s2) {
+  void recordS2(std::vector<std::vector<double>>&& s2) {
 		s2vec.push_back(std::move(s2));
 	}
 
@@ -125,9 +125,9 @@ class PSCache {
     readIdxS2 = 0;
 	}
 
-	std::vector<std::shared_ptr<lbcrypto::longDiv<double>>> entriesdivqrVec;
-  std::vector<std::shared_ptr<lbcrypto::longDiv<double>>> entriesdivcsVec;
-  std::vector<std::vector<double>> s2vec;
+	std::vector<std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>> entriesdivqrVec;
+  std::vector<std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>> entriesdivcsVec;
+  std::vector<std::vector<std::vector<double>>> s2vec;
 
   private:
 	size_t readIdxQr = 0;

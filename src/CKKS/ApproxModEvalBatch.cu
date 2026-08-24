@@ -346,7 +346,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			divcsVec[b] = divcs;
 			s2Vec[b]	= std::move(s2);
 		}
-		if (cachePtr != nullptr) {
+		if (cachePs != nullptr) {
 			cachePs->recordQr(divqrVec);
 			cachePs->recordCs(divcsVec);
 			cachePs->recordS2(s2Vec);
