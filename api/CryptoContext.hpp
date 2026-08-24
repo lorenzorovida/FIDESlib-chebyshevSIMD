@@ -198,6 +198,14 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	void EvalChebyshevSeriesPSBatchRepeatedInPlace(Ciphertext<DCRTPoly>& ct,
 	                                                const std::vector<std::vector<double>>& coefficientSets,
 	                                                double a, double b);
+	std::shared_ptr<void> EvalChebyshevSeriesPSBatchPrecompute(const Ciphertext<DCRTPoly>& ct,
+	                                                            const std::vector<std::vector<double>>& batchOfCoeffs,
+	                                                            double a, double b);
+	Ciphertext<DCRTPoly> EvalChebyshevSeriesPSBatchApply(const Ciphertext<DCRTPoly>& ct, const std::shared_ptr<void>& precomp,
+	                                                      const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b);
+	void EvalChebyshevSeriesPSBatchApplyInPlace(Ciphertext<DCRTPoly>& ct, const std::shared_ptr<void>& precomp,
+	                                             const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b);
+
  
 
 	// Integer operations
@@ -220,7 +228,7 @@ template <> class CryptoContextImpl<DCRTPoly> {
 
 	Ciphertext<DCRTPoly> EvalBootstrap(const Ciphertext<DCRTPoly>& ciphertext, uint32_t numIterations = 1, uint32_t precision = 0, bool prescaled = false);
 	void EvalBootstrapInPlace(Ciphertext<DCRTPoly>& ciphertext, uint32_t numIterations = 1, uint32_t precision = 0, bool prescaled = false);
-  Ciphertext<DCRTPoly> EvalBootstrapStCFirst(const Ciphertext<DCRTPoly>& ciphertext, uint32_t numIterations = 1, uint32_t precision = 0, bool prescaled = false);
+    Ciphertext<DCRTPoly> EvalBootstrapStCFirst(const Ciphertext<DCRTPoly>& ciphertext, uint32_t numIterations = 1, uint32_t precision = 0, bool prescaled = false);
 	void EvalBootstrapStCFirstInPlace(Ciphertext<DCRTPoly>& ciphertext, uint32_t numIterations = 1, uint32_t precision = 0, bool prescaled = false);
 	Ciphertext<DCRTPoly> EvalBootstrapStCFirstBits(const Ciphertext<DCRTPoly>& ciphertext, uint32_t numIterations = 1, uint32_t precision = 0, bool prescaled = false);
 	void EvalBootstrapStCFirstBitsInPlace(Ciphertext<DCRTPoly>& ciphertext, uint32_t numIterations = 1, uint32_t precision = 0, bool prescaled = false);
