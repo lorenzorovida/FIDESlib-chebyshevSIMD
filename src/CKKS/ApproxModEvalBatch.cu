@@ -120,8 +120,6 @@ const Plaintext* makePerSlotPlaintext(lbcrypto::CryptoContext<lbcrypto::DCRTPoly
 	if (cache != nullptr && !cache->recording) {
 		// Replay: zero-copy, return a pointer straight into the cache.
 		return &cache->next();
-	} else {
-		std::cout << "Non sto usando la cache! " << cache << std::endl;
 	}
 
 	uint32_t openfheLevel = static_cast<uint32_t>(like.cc.L - like.getLevel());
@@ -166,6 +164,9 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
                                    const std::vector<Ciphertext*>& ctxs,
                                    const std::vector<std::vector<double>>& weightsPerSlot,
                                    PlaintextCache* cache = nullptr) {
+								
+
+									
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
 	assert(ctxs.size() == weightsPerSlot.size());
 	uint32_t n = static_cast<uint32_t>(ctxs.size());
@@ -213,6 +214,7 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 	std::vector<const Plaintext*> weightPts(n);
 	for (uint32_t i = 0; i < n; ++i) {
 		weightPtsStorage.emplace_back(cc_);
+		
 		weightPts[i] = makePerSlotPlaintext(cc, cc_, weightsPerSlot[i], *alignedPtrs[i], weightPtsStorage.back(), cache);
 	}
 
