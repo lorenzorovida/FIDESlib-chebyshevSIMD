@@ -25,7 +25,6 @@
 #include "CKKS/ApproxModEvalBatch.cuh"
 #include "CKKS/Ciphertext.cuh"
 #include "CKKS/Context.cuh"
-#include "CKKS/Plaintext.cuh"
 #include "CudaUtils.cuh"
 #include <iostream>
 // Uncomment to trace level/NoiseLevel at key checkpoints, mirrored in
@@ -61,28 +60,7 @@ namespace {
  *   batchOfCoefficients/k/m/rescaleTechnique -- all fixed between the two
  *   runs -- never on ciphertext VALUES.
  */
-class PlaintextCache {
-  public:
-	bool recording = true;
 
-	void record(Plaintext&& pt) { entries.push_back(std::move(pt)); }
-
-	const Plaintext& next() {
-		assert(readIdx < entries.size() && "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
-		                                    "mismatch with the precompute, or ciphertext structurally different "
-		                                    "(level/NoiseLevel/slots) from the one used to build the precompute.");
-		return entries[readIdx++];
-	}
-
-	void resetReadCursor() { readIdx = 0; }
-
-	size_t size() const { return entries.size(); }
-
-	std::vector<Plaintext> entries;
-
-  private:
-	size_t readIdx = 0;
-};
 
 /**
  * Builds a CKKS plaintext that packs `values[j]` into slot `j`, encoded at
@@ -749,7 +727,7 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbc
 	// reused/replayed any number of times -- resetReadCursor() below always
 	// rewinds it back to the start before use) but requires a mutable
 	// reference internally.
-	PlaintextCache& cache = precomp->cache;
+	FIDESlib::CKKS::PlaintextCache& cache = precomp->cache;
 	cache.recording        = false;
 	cache.resetReadCursor();
 
