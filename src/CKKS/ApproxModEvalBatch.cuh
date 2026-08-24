@@ -174,7 +174,9 @@ void evalChebyshevSeriesPSBatchRepeated(lbcrypto::CryptoContext<lbcrypto::DCRTPo
  * a PSBatchPrecompute across calls where every input ciphertext starts at
  * the same level and NoiseLevel as the one used to build it.
  */
-struct PSBatchPrecompute;
+struct FIDESlib::CKKS::PSBatchPrecompute {
+	PlaintextCache cache;
+};
 
 /**
  * @brief Runs the same recursion evalChebyshevSeriesPSBatch would, on a
