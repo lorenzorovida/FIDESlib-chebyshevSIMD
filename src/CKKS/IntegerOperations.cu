@@ -818,7 +818,7 @@ void preprocessProcessArray(int bits,
 
 void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c) {
 	cacheChebyshev4BitsMultiplier = evalChebyshevSeriesPSBatchPrecompute(cc, c, coeffs, -1, 1);
-	cacheChebyshev4BitsMultiplier2 = evalChebyshevSeriesPSBatchPrecompute2(cc, c, coeffs, -1, 1, cacheChebyshev4BitsMultiplier);
+	cacheChebyshev4BitsMultiplier2 = evalChebyshevSeriesPSBatchPrecompute2(cc, c, coeffs, cacheChebyshev4BitsMultiplier, -1, 1);
 	coeffs4BitsMultiplier = coeffs;
 }
 
@@ -865,7 +865,7 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 	std::cout << "Result info: " << result.getLevel() << ", " << result.NoiseLevel << std::endl;
 
 	
-	evalChebyshevSeriesPSBatchApply(cc, result, cacheChebyshev4BitsMultiplier, coeffs4BitsMultiplier, -1, 1);
+	evalChebyshevSeriesPSBatchApply(cc, result, cacheChebyshev4BitsMultiplier, cacheChebyshev4BitsMultiplier2, coeffs4BitsMultiplier, -1, 1);
 
 	// evalChebyshevSeriesPSBatchApply(cc, result, precomp4bits, coeffs, -1, 1);
 	// evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
