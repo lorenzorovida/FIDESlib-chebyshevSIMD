@@ -812,7 +812,7 @@ void preprocessProcessArray(int bits,
 
 }
 
-void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext c) {
+void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, const Ciphertext<DCRTPoly>& c) {
 	cacheChebyshev4BitsMultiplier = evalChebyshevSeriesPSBatchPrecompute(cc, c, coeffs, -1, 1);
 	coeffs4BitsMultiplier = coeffs;
 }

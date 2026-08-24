@@ -773,11 +773,7 @@ CryptoContextImpl<DCRTPoly>::EvalEqualInteger(const Ciphertext<DCRTPoly>& ct1, c
 	return result;
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Ciphertext<DCRTPoly>& ct1,
-  const Ciphertext<DCRTPoly>& ct2,
-  int bits,
-  int zslots,
-  bool overflow) {
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, bool overflow) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	// Fall back to CPU.
@@ -1101,7 +1097,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	std::cout << "Done preprocessing with " << bits << " bits! " << std::endl;
 }
 
-void CryptoContextImpl<DCRTPoly>::ProcessMultiplications(std::vector<std::vector<double>> coeffs, FIDESlib::CKKS::Ciphertext c) {
+void CryptoContextImpl<DCRTPoly>::ProcessMultiplications(std::vector<std::vector<double>> coeffs, const Ciphertext<DCRTPoly>& c) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
 
@@ -1113,8 +1109,11 @@ void CryptoContextImpl<DCRTPoly>::ProcessMultiplications(std::vector<std::vector
 
 	auto& cc = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
-	FIDESlib::CKKS::preprocessChebyshevMultiplication(coeffs, cc, c);
-	
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+
+	FIDESlib::CKKS::preprocessChebyshevMultiplication(coeffs, cc, res_gpu);
 }
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTPoly>& ct, Plaintext& pt) {
