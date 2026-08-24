@@ -839,7 +839,7 @@ void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecom
 	}
 }
 
-void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs, std::shared_ptr<void> precomp4bits, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 	FIDESlib::CKKS::Context cc_ = ctxtA.cc_;
 
 	result.mult(ctxtA, ctxtB);
@@ -858,8 +858,8 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 	result.addPt(minusOnePt);
 
 
-	evalChebyshevSeriesPSBatchApply(cc, result, precomp4bits, coeffs, -1, 1);
-	// evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
+	// evalChebyshevSeriesPSBatchApply(cc, result, precomp4bits, coeffs, -1, 1);
+	evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
 	// evalChebyshevSeries(result, coeffs[0], -1, 1);
 
 	if (result.NoiseLevel == 2) {

@@ -59,7 +59,7 @@ void csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b
 void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphertext& c, const Ciphertext& d, int bits);
 
 void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, const Ciphertext& c, int repetitions);
-void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs, std::shared_ptr<void> precomp4bits, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
+void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 
 void preprocessProcessArray(int bits,
   const std::vector<std::pair<int, int>>& mask_roll_pairs,
