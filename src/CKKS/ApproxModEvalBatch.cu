@@ -881,7 +881,7 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbc
 	cache.recording		  = false;
 	cache.resetReadCursor();
 
-	PSCache& cache2 = precompPs->cache;
+	PSCache& cache2 = precompPs->cachePs;
 	cache2.recording		  = false;
 	cache2.resetReadCursor();
 
