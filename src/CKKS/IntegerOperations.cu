@@ -186,8 +186,6 @@ void evalIntegerMult(Ciphertext& out,
   int repetitions,
   int repetitions_original,
   bool overflow,
-  std::vector<std::vector<double>> coeffs,
-  std::shared_ptr<void> precomp4bitsMult,
   lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 	const int rep_size = bits * bits / 2;
 
@@ -428,42 +426,9 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext b_decimal(a.cc_);
 		bintodec(cc, b_decimal, b_processed, repetitions * 4);
 
-		// --------------------------------------------------------
-		// 4-bit multiplier
-		// --------------------------------------------------------
-
-		//16:54, GUARDO I BINARI DI TUTTO... IL MULTIPLIER AVEVA INTERI GIUSTI MA IN MEZZO VALORI CANNATI ZIO
-		//A DECIMAL è TUTTO GIUSTO
-		//out.copy(b_decimal);
-		//return;
-
-		
-		
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, precomp4bitsMult, cc);
-
-		//17.30: Il risultato è perfettamente identico a questo punto, top!!
-		
-		// Qua è giusto
-		//Update: ricontrollo TUTTO IL VETTORE
-
-
 	} else {
-
-		// Recursive case:
-		//
-		// result =
-		// mul_integer(
-		//     a,
-		//     b,
-		//     bits / 2,
-		//     bits_original,
-		//     4 * repetitions,
-		//     repetitions_original,
-		//     overflow);
-
-		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, coeffs, precomp4bitsMult, cc);
-		
-		
+		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, cc);
 	}
 
 	// ============================================================
@@ -845,6 +810,11 @@ void preprocessProcessArray(int bits,
 		precomp->entries.push_back(std::move(entry));
 	}
 
+}
+
+void preprocessChebyshevMultiplication(std::vector<double> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+	cacheChebyshev4BitsMultiplier = evalChebyshevSeriesPSBatchPrecompute(cc, c, coeffs, -1, 1);
+	coeffs4BitsMultiplier = coeffs;
 }
 
 void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp) {

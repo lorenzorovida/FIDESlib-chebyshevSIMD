@@ -777,9 +777,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Cipherte
   const Ciphertext<DCRTPoly>& ct2,
   int bits,
   int zslots,
-  bool overflow,
-  std::vector<std::vector<double>> coeffsMultipler4bits,
-  std::shared_ptr<void> precomp4bits) {
+  bool overflow) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	// Fall back to CPU.
@@ -1101,6 +1099,22 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	}
 
 	std::cout << "Done preprocessing with " << bits << " bits! " << std::endl;
+}
+
+void CryptoContextImpl<DCRTPoly>::ProcessMultiplications(std::vector<std::vector<double>> coeffs) {
+	FIDESlib::CudaNvtxRange r("API");
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW("ProcessArray has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
+	}
+
+	auto& cc = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
+	FIDESlib::CKKS::preprocessChebyshevMultiplication(coeffs, cc);
+	
 }
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTPoly>& ct, Plaintext& pt) {

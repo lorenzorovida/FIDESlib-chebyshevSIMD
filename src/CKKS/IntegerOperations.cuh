@@ -8,7 +8,6 @@
 #include "CKKS/Plaintext.cuh"
 #include "CKKS/forwardDefs.cuh"
 
-
 #include <utility>
 #include <vector>
 
@@ -35,7 +34,8 @@ extern ProcessArrayPrecomputation precomp32b;
 extern ProcessArrayPrecomputation precomp64b;
 extern ProcessArrayPrecomputation precomp128b;
 
-extern PlaintextCache cacheChebyshev4BitsMultiplier;
+extern PSBatchPrecompute cacheChebyshev4BitsMultiplier;
+std::vector<double> coeffs4BitsMultiplier;
 
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, int depth);
@@ -47,9 +47,9 @@ void evalIntegerMult(Ciphertext& out,
   int repetitions,
   int repetitions_original,
   bool overflow,
-  std::vector<std::vector<double>>& coeffsFor4Bits,
-  std::shared_ptr<void> precomp4bitsMult,
   lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
+
+
 
 void cleanAndReduce(Ciphertext& out, const Ciphertext& c);
 void clean(Ciphertext& out, const Ciphertext& c);
@@ -69,6 +69,8 @@ void preprocessProcessArray(int bits,
   lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   FIDESlib::CKKS::Context& cc_,
   bool forB = false);
+
+void preprocessChebyshevMultiplication(std::vector<double> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 
 void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp);
 
