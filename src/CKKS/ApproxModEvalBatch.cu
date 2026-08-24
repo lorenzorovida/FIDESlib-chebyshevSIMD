@@ -303,6 +303,12 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 	std::vector<std::shared_ptr<lbcrypto::longDiv<double>>> divcsVec(batchSize);
 	std::vector<std::vector<double>> s2Vec(batchSize);
 
+	cudaEvent_t start1, stop1;
+	cudaEventCreate(&start1);
+	cudaEventCreate(&stop1);
+
+	cudaEventRecord(start1);
+
 	for (size_t b = 0; b < batchSize; ++b) {
 		// Add T^{k(2^m - 1)}(y) to the polynomial that has to be evaluated
 		std::vector<double> f2 = batchOfCoefficients[b];
@@ -337,6 +343,17 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 		divcsVec[b] = divcs;
 		s2Vec[b]	= std::move(s2);
 	}
+
+	cudaEventRecord(stop1);
+	cudaEventSynchronize(stop1);
+
+	float ms1 = 0.0f;
+	cudaEventElapsedTime(&ms1, start1, stop1);
+
+	std::cout << "First loop: " << ms1 << " ms\n";
+
+	cudaEventDestroy(start1);
+	cudaEventDestroy(stop1);
 
 	// Degrees of divqr->q, divcs->q, s2 are structurally identical across the
 	// whole batch (same k, m and same input degree), so index 0 is used as
@@ -455,8 +472,6 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			cudaEventDestroy(start);
 			cudaEventDestroy(stop);
 
-			
-
 			std::vector<double> freeTerm(batchSize);
 			for (size_t b = 0; b < batchSize; ++b)
 				freeTerm[b] = divqrVec[b]->q.front() / 2.0;
@@ -538,8 +553,6 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 
 			cudaEventDestroy(start);
 			cudaEventDestroy(stop);
-
-			
 
 			std::vector<double> freeTerm(batchSize);
 			for (size_t b = 0; b < batchSize; ++b)
@@ -743,7 +756,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	std::cout << "Before reaching first call: " << ms << " ms\n";
 
 	cudaEventDestroy(start);
-	cudaEventDestroy(stop);	
+	cudaEventDestroy(stop);
 
 	// --- Batched Paterson-Stockmeyer evaluation ---
 	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache);
