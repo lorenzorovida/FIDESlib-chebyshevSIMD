@@ -231,6 +231,7 @@ void evalChebyshevSeriesPSBatchRepeated(lbcrypto::CryptoContext<lbcrypto::DCRTPo
  * the same level and NoiseLevel as the one used to build it.
  */
 struct PSBatchPrecompute;
+struct PSBatchPrecomputeInner;
 
 /**
  * @brief Runs the same recursion evalChebyshevSeriesPSBatch would, on a
@@ -260,7 +261,7 @@ std::shared_ptr<PSBatchPrecompute> evalChebyshevSeriesPSBatchPrecompute2(lbcrypt
   const Ciphertext& ctxt,
   const std::vector<std::vector<double>>& batchOfCoefficients,
   double lower_bound = -1.0,
-  double upper_bound = 1.0, PSBatchPrecompute precomp);
+  double upper_bound = 1.0, PSBatchPrecompute precomp = nullptr);
 
 /**
  * @brief Same computation as evalChebyshevSeriesPSBatch, but reads every
