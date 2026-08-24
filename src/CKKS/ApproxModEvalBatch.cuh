@@ -47,6 +47,35 @@
 #include <vector>
 
 namespace FIDESlib::CKKS {
+class PlaintextCache {
+  public:
+	bool recording = true;
+
+	void record(Plaintext&& pt) {
+		entries.push_back(std::move(pt));
+	}
+
+	const Plaintext& next() {
+		assert(readIdx < entries.size() &&
+		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
+		  "mismatch with the precompute, or ciphertext structurally different "
+		  "(level/NoiseLevel/slots) from the one used to build the precompute.");
+		return entries[readIdx++];
+	}
+
+	void resetReadCursor() {
+		readIdx = 0;
+	}
+
+	size_t size() const {
+		return entries.size();
+	}
+
+	std::vector<Plaintext> entries;
+
+  private:
+	size_t readIdx = 0;
+};
 
 /**
  * @brief Evaluates a batch of Chebyshev series, one polynomial per slot, using
@@ -73,10 +102,10 @@ namespace FIDESlib::CKKS {
  * @param upper_bound Upper bound `b` of the approximation interval.
  */
 void evalChebyshevSeriesPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-                                 Ciphertext& ctxt,
-                                 const std::vector<std::vector<double>>& batchOfCoefficients,
-                                 double lower_bound = -1.0,
-                                 double upper_bound = 1.0);
+  Ciphertext& ctxt,
+  const std::vector<std::vector<double>>& batchOfCoefficients,
+  double lower_bound = -1.0,
+  double upper_bound = 1.0);
 
 /**
  * @brief Like evalChebyshevSeriesPSBatch, but takes a SMALL set of `x`
@@ -103,12 +132,12 @@ void evalChebyshevSeriesPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
  * @param upper_bound Upper bound `b` of the approximation interval.
  */
 void evalChebyshevSeriesPSBatchRepeated(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-                                         Ciphertext& ctxt,
-                                         const std::vector<std::vector<double>>& coefficientSets,
-                                         double lower_bound = -1.0,
-                                         double upper_bound = 1.0);
+  Ciphertext& ctxt,
+  const std::vector<std::vector<double>>& coefficientSets,
+  double lower_bound = -1.0,
+  double upper_bound = 1.0);
 
-                                         /**
+/**
  * @brief Precomputed per-slot plaintext weights for evalChebyshevSeriesPSBatch,
  *        allowing the same batch of Chebyshev coefficients to be evaluated
  *        against many ciphertexts without re-encoding the per-slot weight
@@ -164,10 +193,10 @@ struct PSBatchPrecompute;
  *         evalChebyshevSeriesPSBatchApply.
  */
 std::shared_ptr<PSBatchPrecompute> evalChebyshevSeriesPSBatchPrecompute(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-                                                                         const Ciphertext& ctxt,
-                                                                         const std::vector<std::vector<double>>& batchOfCoefficients,
-                                                                         double lower_bound = -1.0,
-                                                                         double upper_bound = 1.0);
+  const Ciphertext& ctxt,
+  const std::vector<std::vector<double>>& batchOfCoefficients,
+  double lower_bound = -1.0,
+  double upper_bound = 1.0);
 
 /**
  * @brief Same computation as evalChebyshevSeriesPSBatch, but reads every
@@ -207,11 +236,11 @@ std::shared_ptr<PSBatchPrecompute> evalChebyshevSeriesPSBatchPrecompute(lbcrypto
  * @param upper_bound Same as used to build `precomp`.
  */
 void evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-                                      Ciphertext& ctxt,
-                                      const std::shared_ptr<PSBatchPrecompute>& precomp,
-                                      const std::vector<std::vector<double>>& batchOfCoefficients,
-                                      double lower_bound = -1.0,
-                                      double upper_bound = 1.0);
+  Ciphertext& ctxt,
+  const std::shared_ptr<PSBatchPrecompute>& precomp,
+  const std::vector<std::vector<double>>& batchOfCoefficients,
+  double lower_bound = -1.0,
+  double upper_bound = 1.0);
 
 /**
  * @brief Type-erasing wrapper around evalChebyshevSeriesPSBatchApply, for
@@ -222,13 +251,12 @@ void evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>
  *        where PSBatchPrecompute is complete, so the cast happens safely.
  */
 void evalChebyshevSeriesPSBatchApplyOpaque(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-                                            Ciphertext& ctxt,
-                                            const std::shared_ptr<void>& precomp,
-                                            const std::vector<std::vector<double>>& batchOfCoefficients,
-                                            double lower_bound = -1.0,
-                                            double upper_bound = 1.0);
+  Ciphertext& ctxt,
+  const std::shared_ptr<void>& precomp,
+  const std::vector<std::vector<double>>& batchOfCoefficients,
+  double lower_bound = -1.0,
+  double upper_bound = 1.0);
 
 } // namespace FIDESlib::CKKS
-
 
 #endif // GPUCKKS_APPROXMODEVALBATCH_CUH
