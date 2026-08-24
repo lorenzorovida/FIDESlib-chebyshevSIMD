@@ -35,6 +35,8 @@ extern ProcessArrayPrecomputation precomp32b;
 extern ProcessArrayPrecomputation precomp64b;
 extern ProcessArrayPrecomputation precomp128b;
 
+extern PlaintextCache cacheChebyshev4BitsMultiplier;
+
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, int depth);
 void evalIntegerMult(Ciphertext& out,

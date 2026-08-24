@@ -851,7 +851,6 @@ void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecom
 	if (precomp.entries.size() == 0) {
 		std::cerr << "No precomputations found for multiplications! Call ProcessArrayPrecomputations" << std::endl;
 	}
-	std::cout << "Entering the loop" << std::endl;
 
 	for (const auto& entry : precomp.entries) {
 
@@ -887,6 +886,8 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 	Plaintext minusOnePt(result.cc_, raw);
 
 	result.addPt(minusOnePt);
+
+	std::cout << result.getLevel() << ", " << result.NoiseLevel << std::endl;
 
 	evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
 	// evalChebyshevSeries(result, coeffs[0], -1, 1);
