@@ -212,6 +212,7 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 	std::vector<Plaintext> weightPtsStorage;
 	weightPtsStorage.reserve(n);
 	std::vector<const Plaintext*> weightPts(n);
+	
 	for (uint32_t i = 0; i < n; ++i) {
 		weightPtsStorage.emplace_back(cc_);
 		
