@@ -857,7 +857,7 @@ std::shared_ptr<FIDESlib::CKKS::PSBatchPrecomputeInner> FIDESlib::CKKS::evalCheb
 
 	precomp.cache.recording = false;
 	precomp.cache.resetReadCursor();
-	
+
 	evalChebyshevSeriesPSBatchImpl(cc, templateCopy, batchOfCoefficients, lower_bound, upper_bound, &precomp.cache, &precompInner->cachePs);
 
 	return precompInner;
@@ -899,7 +899,8 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApplyOpaque(lbcrypto::CryptoConte
 	// unit (defined above), so std::static_pointer_cast can properly share
 	// ownership/lifetime with the original std::shared_ptr<void>.
 	auto casted = std::static_pointer_cast<PSBatchPrecompute>(precomp);
-	evalChebyshevSeriesPSBatchApply(cc, ctxt, casted, batchOfCoefficients, lower_bound, upper_bound);
+	
+	evalChebyshevSeriesPSBatchApply(cc, ctxt, casted, nullptr, batchOfCoefficients, lower_bound, upper_bound);
 }
 
 void FIDESlib::CKKS::evalChebyshevSeriesPSBatchRepeated(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
