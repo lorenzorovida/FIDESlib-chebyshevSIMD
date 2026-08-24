@@ -818,8 +818,11 @@ void preprocessProcessArray(int bits,
 
 void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c) {
 	cacheChebyshev4BitsMultiplier = evalChebyshevSeriesPSBatchPrecompute(cc, c, coeffs, -1, 1);
-	cacheChebyshev4BitsMultiplier2 = evalChebyshevSeriesPSBatchPrecompute2(cc, c, coeffs, *cacheChebyshev4BitsMultiplier, -1, 1);
 	coeffs4BitsMultiplier = coeffs;
+}
+
+void preprocessChebyshevMultiplication2(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, PSBatchPrecompute precomp) {
+	cacheChebyshev4BitsMultiplier2 = evalChebyshevSeriesPSBatchPrecompute2(cc, c, coeffs, precomp, -1, 1);
 }
 
 void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp) {
