@@ -778,7 +778,8 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Cipherte
   int bits,
   int zslots,
   bool overflow,
-  std::vector<std::vector<double>> coeffsMultipler4bits) {
+  std::vector<std::vector<double>> coeffsMultipler4bits,
+  std::shared_ptr<void> precomp4bits) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	// Fall back to CPU.
@@ -804,7 +805,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Cipherte
 
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
-	FIDESlib::CKKS::evalIntegerMult(*res_gpu, *ct1_gpu, *ct2_gpu, bits, bits, zslots, zslots, overflow, coeffsMultipler4bits, context);
+	FIDESlib::CKKS::evalIntegerMult(*res_gpu, *ct1_gpu, *ct2_gpu, bits, bits, zslots, zslots, overflow, coeffsMultipler4bits, precomp4bits, context);
 
 	return result;
 }
@@ -912,7 +913,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::BinToDec(const Ciphertext<DCRT
 	return result;
 }
 
-void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int slots, int noise ) {
+void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int slots, int noise) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
 
@@ -935,15 +936,15 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	int level = 12;
 
 	if (bits > 8) {
-		preprocessProcessArray(8+1, { { 8, 64 }, { 12, 80 } }, slots, level, noise, cc, res_gpu->cc_);
+		preprocessProcessArray(8 + 1, { { 8, 64 }, { 12, 80 } }, slots, level, noise, cc, res_gpu->cc_);
 	}
 
 	if (bits > 16) {
-		preprocessProcessArray(16+1, { { 16, 256 }, { 20, 272 }, { 24, 320 }, { 28, 336 } }, slots, level, noise, cc, res_gpu->cc_);
+		preprocessProcessArray(16 + 1, { { 16, 256 }, { 20, 272 }, { 24, 320 }, { 28, 336 } }, slots, level, noise, cc, res_gpu->cc_);
 	}
 
 	if (bits > 32) {
-		preprocessProcessArray(32+1,
+		preprocessProcessArray(32 + 1,
 		  { { 32, 1024 }, { 36, 1040 }, { 40, 1088 }, { 44, 1104 }, { 48, 1280 }, { 52, 1296 }, { 56, 1344 }, { 60, 1360 } },
 		  slots,
 		  level,
@@ -953,7 +954,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	}
 
 	if (bits > 64) {
-		preprocessProcessArray(64+1,
+		preprocessProcessArray(64 + 1,
 		  { { 64, 4096 },
 			{ 68, 4112 },
 			{ 72, 4160 },
@@ -978,7 +979,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	}
 
 	if (bits > 128) {
-		preprocessProcessArray(128+1,
+		preprocessProcessArray(128 + 1,
 		  { { 128, 16384 },
 			{ 132, 16400 },
 			{ 136, 16448 },
@@ -1019,26 +1020,20 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	}
 
 	if (bits > 8) {
-		preprocessProcessArray(8+1, { { 8, 32 }, { 12, 40 } }, slots, level, noise, cc, res_gpu->cc_, true);
+		preprocessProcessArray(8 + 1, { { 8, 32 }, { 12, 40 } }, slots, level, noise, cc, res_gpu->cc_, true);
 	}
 
 	if (bits > 16) {
-		preprocessProcessArray(16+1, { { 16, 128 }, { 20, 136 }, { 24, 160 }, { 28, 168 } }, slots, level, noise, cc, res_gpu->cc_, true);
+		preprocessProcessArray(16 + 1, { { 16, 128 }, { 20, 136 }, { 24, 160 }, { 28, 168 } }, slots, level, noise, cc, res_gpu->cc_, true);
 	}
 
 	if (bits > 32) {
-		preprocessProcessArray(32+1,
-		  { { 32, 512 }, { 36, 520 }, { 40, 544 }, { 44, 552 }, { 48, 640 }, { 52, 648 }, { 56, 672 }, { 60, 680 } },
-		  slots,
-		  level,
-		  noise,
-		  cc,
-		  res_gpu->cc_,
-		  true);
+		preprocessProcessArray(
+		  32 + 1, { { 32, 512 }, { 36, 520 }, { 40, 544 }, { 44, 552 }, { 48, 640 }, { 52, 648 }, { 56, 672 }, { 60, 680 } }, slots, level, noise, cc, res_gpu->cc_, true);
 	}
 
 	if (bits > 64) {
-		preprocessProcessArray(64+1,
+		preprocessProcessArray(64 + 1,
 		  { { 64, 2048 },
 			{ 68, 2056 },
 			{ 72, 2080 },
@@ -1064,7 +1059,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	}
 
 	if (bits > 128) {
-		preprocessProcessArray(128+1,
+		preprocessProcessArray(128 + 1,
 		  { { 128, 8192 },
 			{ 132, 8200 },
 			{ 136, 8224 },
@@ -1107,7 +1102,6 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 
 	std::cout << "Done preprocessing with " << bits << " bits! " << std::endl;
 }
-
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTPoly>& ct, Plaintext& pt) {
 	FIDESlib::CudaNvtxRange r("API");
@@ -2130,64 +2124,65 @@ void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchRepeatedInPlace(Ciph
 	FIDESlib::CKKS::evalChebyshevSeriesPSBatchRepeated(context, *res_gpu, coefficientSets, a, b);
 }
 
-std::shared_ptr<void> CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchPrecompute(
-    const Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b) {
+std::shared_ptr<void>
+CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchPrecompute(const Ciphertext<DCRTPoly>& ct, const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b) {
 	FIDESlib::CudaNvtxRange r("API");
- 
+
 	if (this->devices.empty()) {
-		OPENFHE_THROW(
-		    "EvalChebyshevSeriesPSBatchPrecompute has no CPU fallback. "
-		    "Configure at least one GPU device.");
+		OPENFHE_THROW("EvalChebyshevSeriesPSBatchPrecompute has no CPU fallback. "
+					  "Configure at least one GPU device.");
 	}
- 
+
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
- 
+
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-	auto ct_gpu   = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
- 
+	auto ct_gpu	  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
+
 	return FIDESlib::CKKS::evalChebyshevSeriesPSBatchPrecompute(context, *ct_gpu, batchOfCoeffs, a, b);
 }
- 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchApply(
-    const Ciphertext<DCRTPoly>& ct, const std::shared_ptr<void>& precomp, const std::vector<std::vector<double>>& batchOfCoeffs, double a,
-    double b) {
+
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchApply(const Ciphertext<DCRTPoly>& ct,
+  const std::shared_ptr<void>& precomp,
+  const std::vector<std::vector<double>>& batchOfCoeffs,
+  double a,
+  double b) {
 	FIDESlib::CudaNvtxRange r("API");
- 
+
 	if (this->devices.empty()) {
-		OPENFHE_THROW(
-		    "EvalChebyshevSeriesPSBatchApply has no CPU fallback. Configure "
-		    "at least one GPU device.");
+		OPENFHE_THROW("EvalChebyshevSeriesPSBatchApply has no CPU fallback. Configure "
+					  "at least one GPU device.");
 	}
- 
+
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
- 
-	auto& context                = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
+	auto& context				= std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
-	auto res_gpu                 = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
- 
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+
 	FIDESlib::CKKS::evalChebyshevSeriesPSBatchApplyOpaque(context, *res_gpu, precomp, batchOfCoeffs, a, b);
- 
+
 	return result;
 }
- 
-void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchApplyInPlace(
-    Ciphertext<DCRTPoly>& ct, const std::shared_ptr<void>& precomp, const std::vector<std::vector<double>>& batchOfCoeffs, double a, double b) {
+
+void CryptoContextImpl<DCRTPoly>::EvalChebyshevSeriesPSBatchApplyInPlace(Ciphertext<DCRTPoly>& ct,
+  const std::shared_ptr<void>& precomp,
+  const std::vector<std::vector<double>>& batchOfCoeffs,
+  double a,
+  double b) {
 	FIDESlib::CudaNvtxRange r("API");
- 
+
 	if (this->devices.empty()) {
-		OPENFHE_THROW(
-		    "EvalChebyshevSeriesPSBatchApplyInPlace has no CPU fallback. "
-		    "Configure at least one GPU device.");
+		OPENFHE_THROW("EvalChebyshevSeriesPSBatchApplyInPlace has no CPU fallback. "
+					  "Configure at least one GPU device.");
 	}
- 
+
 	this->LoadCiphertext(ct);
- 
+
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 	auto res_gpu  = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
- 
+
 	FIDESlib::CKKS::evalChebyshevSeriesPSBatchApplyOpaque(context, *res_gpu, precomp, batchOfCoeffs, a, b);
 }
-
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::Rescale(const Ciphertext<DCRTPoly>& ciphertext) {
 	FIDESlib::CudaNvtxRange r("API");
