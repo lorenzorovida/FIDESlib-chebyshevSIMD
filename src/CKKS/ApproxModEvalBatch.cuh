@@ -83,15 +83,15 @@ class PSCache {
   public:
 	bool recording = true;
 
-	void recordQr(std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>&& qr) {
+	void recordQr(std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& qr) {
 		entriesdivqrVec.push_back(std::move(qr));
 	}
 
-  void recordCs(std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>&& cs) {
+  void recordCs(std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& cs) {
 		entriesdivcsVec.push_back(std::move(cs));
 	}
 
-  void recordS2(std::vector<std::vector<double>>&& s2) {
+  void recordS2(std::vector<std::vector<double>>& s2) {
 		s2vec.push_back(std::move(s2));
 	}
 
