@@ -186,7 +186,8 @@ void evalIntegerMult(Ciphertext& out,
   int repetitions,
   int repetitions_original,
   bool overflow,
-  std::vector<std::vector<double>>& coeffs,
+  std::vector<std::vector<double>> coeffs,
+  std::shared_ptr<void> precomp4bitsMult,
   lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 	const int rep_size = bits * bits / 2;
 
@@ -438,7 +439,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		
 		
-		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, cc);
+		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, precomp4bitsMult, cc);
 
 		//17.30: Il risultato è perfettamente identico a questo punto, top!!
 		
@@ -844,7 +845,6 @@ void preprocessProcessArray(int bits,
 		precomp->entries.push_back(std::move(entry));
 	}
 
-	std::cout << "Done, i have done" << std::endl;
 }
 
 void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp) {
@@ -869,7 +869,7 @@ void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecom
 	}
 }
 
-void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs, std::shared_ptr<void> precomp4bits, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 	FIDESlib::CKKS::Context cc_ = ctxtA.cc_;
 
 	result.mult(ctxtA, ctxtB);
@@ -887,9 +887,9 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 
 	result.addPt(minusOnePt);
 
-	std::cout << result.getLevel() << ", " << result.NoiseLevel << std::endl;
 
-	evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
+	evalChebyshevSeriesPSBatchApply(cc, result, precomp4bits, coeffs, -1, 1);
+	// evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
 	// evalChebyshevSeries(result, coeffs[0], -1, 1);
 
 	if (result.NoiseLevel == 2) {
