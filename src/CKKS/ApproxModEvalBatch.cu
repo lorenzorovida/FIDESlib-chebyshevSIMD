@@ -120,6 +120,8 @@ const Plaintext* makePerSlotPlaintext(lbcrypto::CryptoContext<lbcrypto::DCRTPoly
 	if (cache != nullptr && !cache->recording) {
 		// Replay: zero-copy, return a pointer straight into the cache.
 		return &cache->next();
+	} else {
+		std::cout << "Non sto usando la cache!" << std::endl;
 	}
 
 	uint32_t openfheLevel = static_cast<uint32_t>(like.cc.L - like.getLevel());
