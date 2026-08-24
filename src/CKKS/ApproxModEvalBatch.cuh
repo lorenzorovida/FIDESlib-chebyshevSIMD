@@ -41,12 +41,14 @@
 #ifndef GPUCKKS_APPROXMODEVALBATCH_CUH
 #define GPUCKKS_APPROXMODEVALBATCH_CUH
 
+#include "CKKS/Plaintext.cuh"
 #include "CKKS/forwardDefs.cuh"
 #include "openfhe-interface/RawCiphertext.cuh"
 #include <cinttypes>
 #include <vector>
 
 namespace FIDESlib::CKKS {
+
 class PlaintextCache {
   public:
 	bool recording = true;
