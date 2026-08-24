@@ -1101,7 +1101,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	std::cout << "Done preprocessing with " << bits << " bits! " << std::endl;
 }
 
-void CryptoContextImpl<DCRTPoly>::ProcessMultiplications(std::vector<std::vector<double>> coeffs, FIDESlib::CKKS::Ciphertext) {
+void CryptoContextImpl<DCRTPoly>::ProcessMultiplications(std::vector<std::vector<double>> coeffs, FIDESlib::CKKS::Ciphertext c) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
 
