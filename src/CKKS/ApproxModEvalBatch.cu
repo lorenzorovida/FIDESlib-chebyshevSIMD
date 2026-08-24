@@ -829,7 +829,7 @@ std::shared_ptr<FIDESlib::CKKS::PSBatchPrecompute> FIDESlib::CKKS::evalChebyshev
 	Ciphertext templateCopy(ctxt.cc_);
 	templateCopy.copy(ctxt);
 
-	evalChebyshevSeriesPSBatchImpl(cc, templateCopy, batchOfCoefficients, lower_bound, upper_bound, &precomp->cache);
+	evalChebyshevSeriesPSBatchImpl(cc, templateCopy, batchOfCoefficients, lower_bound, upper_bound, &precomp->cache, nullptr);
 
 	return precomp;
 }
