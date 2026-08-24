@@ -346,15 +346,15 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			divcsVec[b] = divcs;
 			s2Vec[b]	= std::move(s2);
 		}
-		if (cachePtr != null) {
-			cachePs.recordQr(divqrVec);
-			cachePs.recordCs(divcsVec);
-			cachePs.recordS2(s2Vec);
+		if (cachePtr != nullptr) {
+			cachePs->recordQr(divqrVec);
+			cachePs->recordCs(divcsVec);
+			cachePs->recordS2(s2Vec);
 		}
 	} else {
-		divqrVec = cachePs.nextQr();
-		divcsVec = cachePs.nextCs();
-		s2Vec	 = cachePs.nextS2();
+		divqrVec = cachePs->nextQr();
+		divcsVec = cachePs->nextCs();
+		s2Vec	 = cachePs->nextS2();
 	}
 
 	cudaEventRecord(stop1);
