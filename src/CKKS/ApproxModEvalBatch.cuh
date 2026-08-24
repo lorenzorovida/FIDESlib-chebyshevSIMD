@@ -95,7 +95,7 @@ class PSCache {
 		s2vec.push_back(std::move(s2));
 	}
 
-	const std::shared_ptr<lbcrypto::longDiv<double>>& nextQr() {
+	const std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& nextQr() {
 		assert(readIdxQr < entriesdivqrVec.size() &&
 		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
 		  "mismatch with the precompute, or ciphertext structurally different "
@@ -103,7 +103,7 @@ class PSCache {
 		return entriesdivqrVec[readIdxQr++];
 	}
 
-  const std::shared_ptr<lbcrypto::longDiv<double>>& nextCs() {
+  const std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& nextCs() {
 		assert(readIdxCs < entriesdivcsVec.size() &&
 		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
 		  "mismatch with the precompute, or ciphertext structurally different "
@@ -111,7 +111,7 @@ class PSCache {
 		return entriesdivcsVec[readIdxCs++];
 	}
 
-  const std::vector<double>& nextS2() {
+  const std::vector<std::vector<double>>& nextS2() {
 		assert(readIdxS2 < s2vec.size() &&
 		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
 		  "mismatch with the precompute, or ciphertext structurally different "
