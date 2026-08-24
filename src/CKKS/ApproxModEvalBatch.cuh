@@ -79,6 +79,46 @@ class PlaintextCache {
 	size_t readIdx = 0;
 };
 
+class PSCache {
+  public:
+	bool recording = true;
+
+	void recordQr(std::shared_ptr<lbcrypto::longDiv<double>>&& qr) {
+		entriesdivqrVec.push_back(std::move(qr));
+	}
+
+  void recordCs(std::shared_ptr<lbcrypto::longDiv<double>>&& cs) {
+		entriesdivcsVec.push_back(std::move(cs));
+	}
+
+  void recordS2(std::vector<double>&& s2) {
+		s2vec.push_back(std::move(s2));
+	}
+
+	const Plaintext& next() {
+		assert(readIdx < entries.size() &&
+		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
+		  "mismatch with the precompute, or ciphertext structurally different "
+		  "(level/NoiseLevel/slots) from the one used to build the precompute.");
+		return entries[readIdx++];
+	}
+
+	void resetReadCursor() {
+		readIdx = 0;
+	}
+
+	size_t size() const {
+		return entries.size();
+	}
+
+	std::vector<std::shared_ptr<lbcrypto::longDiv<double>>> entriesdivqrVec;
+  std::vector<std::shared_ptr<lbcrypto::longDiv<double>>> entriesdivcsVec;
+  std::vector<std::vector<double>> s2vec;
+
+  private:
+	size_t readIdx = 0;
+};
+
 /**
  * @brief Evaluates a batch of Chebyshev series, one polynomial per slot, using
  *        the Paterson-Stockmeyer algorithm.

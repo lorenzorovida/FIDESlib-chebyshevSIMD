@@ -310,6 +310,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 	cudaEventRecord(start1);
 
 	for (size_t b = 0; b < batchSize; ++b) {
+		//TODO this is very slow 
 		// Add T^{k(2^m - 1)}(y) to the polynomial that has to be evaluated
 		std::vector<double> f2 = batchOfCoefficients[b];
 		f2.resize(2 * k2m2k + k + 1, 0.0);
