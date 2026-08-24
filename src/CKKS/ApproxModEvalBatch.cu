@@ -844,7 +844,7 @@ std::shared_ptr<FIDESlib::CKKS::PSBatchPrecomputeInner> FIDESlib::CKKS::evalCheb
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
 	auto precompInner			 = std::make_shared<PSBatchPrecomputeInner>();
-	precompInner->cache.recording = true;
+	precompInner->cachePs.recording = true;
 
 	// Run the real algorithm on a disposable COPY of ctxt: we need real
 	// Ciphertext arithmetic to happen (levels/NoiseLevel evolve exactly as
