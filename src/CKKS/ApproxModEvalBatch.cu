@@ -709,7 +709,13 @@ FIDESlib::CKKS::evalChebyshevSeriesPSBatchPrecompute(lbcrypto::CryptoContext<lbc
 	Ciphertext templateCopy(ctxt.cc_);
 	templateCopy.copy(ctxt);
 
-	evalChebyshevSeriesPSBatchImpl(cc, templateCopy, batchOfCoefficients, lower_bound, upper_bound, &precomp->cache);
+	std::vector<std::vector<double>> batchOfCoefficientsExtended;
+	batchOfCoefficientsExtended.reserve(static_cast<size_t>(ctxt.slots));
+	for (int j = 0; j < ctxt.slots; ++j) {
+		batchOfCoefficientsExtended.push_back(batchOfCoefficients[static_cast<size_t>(j) % batchOfCoefficients.size()]);
+	}
+
+	evalChebyshevSeriesPSBatchImpl(cc, templateCopy, batchOfCoefficientsExtended, lower_bound, upper_bound, &precomp->cache);
 
 	return precomp;
 }
