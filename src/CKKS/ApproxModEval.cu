@@ -255,25 +255,8 @@ Ciphertext<DCRTPoly> AdvancedSHECKKSRNS::InnerEvalChebyshevPS(ConstCiphertext<DC
 				qu.dropToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
 				// qu.growToLevel(T[k - 1]->getLevel() + (T[k - 1]->NoiseLevel == 1 ? 1 : 0));
 
-				cudaEvent_t start, stop;
-				cudaEventCreate(&start);
-				cudaEventCreate(&stop);
-
-				cudaEventRecord(start);
-
-				qu.evalLinearWSumMutable(/*bcrypto::Degree(qcopy)*/ ctxs.size(), ctxs, weights);
-
-				cudaEventRecord(stop);
-				cudaEventSynchronize(stop);
-
-				float ms = 0.0f;
-				cudaEventElapsedTime(&ms, start, stop);
-
-				std::cout << "evalLinearWSumMutable: " << ms << " ms\n";
-
-				cudaEventDestroy(start);
-				cudaEventDestroy(stop);
 				
+				qu.evalLinearWSumMutable(/*bcrypto::Degree(qcopy)*/ ctxs.size(), ctxs, weights);
 				// the highest order coefficient will always be 2 after one division because of the Chebyshev division rule
 
 				qu.addScalar(divqr->q.front() / 2);
