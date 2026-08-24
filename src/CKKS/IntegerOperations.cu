@@ -821,7 +821,7 @@ void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, 
 	coeffs4BitsMultiplier = coeffs;
 }
 
-void preprocessChebyshevMultiplication2(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, PSBatchPrecompute precomp) {
+void preprocessChebyshevMultiplication2(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, PSBatchPrecompute precomp) {
 	cacheChebyshev4BitsMultiplier2 = evalChebyshevSeriesPSBatchPrecompute2(cc, c, coeffs, precomp, -1, 1);
 }
 
