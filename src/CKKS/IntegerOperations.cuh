@@ -70,7 +70,7 @@ void preprocessProcessArray(int bits,
   FIDESlib::CKKS::Context& cc_,
   bool forB = false);
 
-void preprocessChebyshevMultiplication(std::vector<double> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
+void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 
 void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp);
 
