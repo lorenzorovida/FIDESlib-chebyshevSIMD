@@ -35,7 +35,7 @@ extern ProcessArrayPrecomputation precomp64b;
 extern ProcessArrayPrecomputation precomp128b;
 
 extern PSBatchPrecompute cacheChebyshev4BitsMultiplier;
-std::vector<double> coeffs4BitsMultiplier;
+std::vector<std::vector<double>> coeffs4BitsMultiplier;
 
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, int depth);
@@ -70,8 +70,7 @@ void preprocessProcessArray(int bits,
   FIDESlib::CKKS::Context& cc_,
   bool forB = false);
 
-void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
-
+void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext c);
 void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp);
 
 std::vector<double> rotateMask(const std::vector<double>& mask, int shift);
