@@ -803,7 +803,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Cipherte
 
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
-	FIDESlib::CKKS::evalIntegerMult(*res_gpu, *ct1_gpu, *ct2_gpu, bits, bits, zslots, zslots, overflow, coeffsMultipler4bits, precomp4bits, context);
+	FIDESlib::CKKS::evalIntegerMult(*res_gpu, *ct1_gpu, *ct2_gpu, bits, bits, zslots, zslots, overflow, context);
 
 	return result;
 }
