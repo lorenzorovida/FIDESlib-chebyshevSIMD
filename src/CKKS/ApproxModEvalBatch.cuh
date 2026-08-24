@@ -260,8 +260,9 @@ std::shared_ptr<PSBatchPrecompute> evalChebyshevSeriesPSBatchPrecompute(lbcrypto
 std::shared_ptr<PSBatchPrecompute> evalChebyshevSeriesPSBatchPrecompute2(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   const Ciphertext& ctxt,
   const std::vector<std::vector<double>>& batchOfCoefficients,
+  PSBatchPrecompute precomp,
   double lower_bound = -1.0,
-  double upper_bound = 1.0, PSBatchPrecompute precomp = nullptr_t);
+  double upper_bound = 1.0);
 
 /**
  * @brief Same computation as evalChebyshevSeriesPSBatch, but reads every

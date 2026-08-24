@@ -837,9 +837,10 @@ std::shared_ptr<FIDESlib::CKKS::PSBatchPrecompute> FIDESlib::CKKS::evalChebyshev
 std::shared_ptr<FIDESlib::CKKS::PSBatchPrecomputeInner> FIDESlib::CKKS::evalChebyshevSeriesPSBatchPrecompute2(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   const Ciphertext& ctxt,
   const std::vector<std::vector<double>>& batchOfCoefficients,
+  PSBatchPrecompute precomp
   double lower_bound,
-  double upper_bound,
-  PSBatchPrecompute precomp) {
+  double upper_bound
+  ) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
 	auto precompInner			 = std::make_shared<PSBatchPrecomputeInner>();
