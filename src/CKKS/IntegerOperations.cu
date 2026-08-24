@@ -439,7 +439,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		
 		
-		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, precomp4bitsMult, cc);
+		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, precomp4bitsMult, cc);
 
 		//17.30: Il risultato è perfettamente identico a questo punto, top!!
 		
@@ -461,7 +461,7 @@ void evalIntegerMult(Ciphertext& out,
 		//     repetitions_original,
 		//     overflow);
 
-		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, coeffs, cc);
+		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, coeffs, precomp4bitsMult, cc);
 		
 		
 	}
