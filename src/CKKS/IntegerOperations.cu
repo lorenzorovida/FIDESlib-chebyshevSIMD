@@ -864,7 +864,7 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 
 	// evalChebyshevSeriesPSBatchApply(cc, result, precomp4bits, coeffs, -1, 1);
 	// evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
-	evalChebyshevSeries(result, coeffs[0], -1, 1);
+	evalChebyshevSeries(result, coeffs4BitsMultiplier[0], -1, 1);
 
 	if (result.NoiseLevel == 2) {
 		result.dropToLevel(5, false);
