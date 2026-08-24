@@ -18,6 +18,7 @@ ProcessArrayPrecomputation precomp64b;
 ProcessArrayPrecomputation precomp128b;
 
 std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
+std::vector<std::vector<double>> coeffs4BitsMultiplier;
 
 Plaintext makePerSlotPlaintext(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
                                 FIDESlib::CKKS::Context& cc_,

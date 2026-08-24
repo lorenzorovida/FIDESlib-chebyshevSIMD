@@ -35,7 +35,7 @@ extern ProcessArrayPrecomputation precomp64b;
 extern ProcessArrayPrecomputation precomp128b;
 
 extern std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
-std::vector<std::vector<double>> coeffs4BitsMultiplier;
+extern std::vector<std::vector<double>> coeffs4BitsMultiplier;
 
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, int depth);
