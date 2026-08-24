@@ -1110,7 +1110,7 @@ void CryptoContextImpl<DCRTPoly>::ProcessMultiplications(std::vector<std::vector
 	auto& cc = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
-	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*cc);
 	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
 
 	FIDESlib::CKKS::preprocessChebyshevMultiplication(coeffs, cc, res_gpu);
