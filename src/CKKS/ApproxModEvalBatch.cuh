@@ -48,9 +48,6 @@
 #include <vector>
 
 namespace FIDESlib::CKKS {
-struct FIDESlib::CKKS::PSBatchPrecompute {
-	PlaintextCache cache;
-};
 
 class PlaintextCache {
   public:
@@ -177,6 +174,7 @@ void evalChebyshevSeriesPSBatchRepeated(lbcrypto::CryptoContext<lbcrypto::DCRTPo
  * a PSBatchPrecompute across calls where every input ciphertext starts at
  * the same level and NoiseLevel as the one used to build it.
  */
+struct PSBatchPrecompute;
 
 /**
  * @brief Runs the same recursion evalChebyshevSeriesPSBatch would, on a

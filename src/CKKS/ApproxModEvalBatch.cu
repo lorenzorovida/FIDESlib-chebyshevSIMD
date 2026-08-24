@@ -685,7 +685,9 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatch(lbcrypto::CryptoContext<lbcrypto
  * ApproxModEvalBatch.cuh). Wraps the internal PlaintextCache so the header
  * only needs a forward declaration.
  */
-
+struct FIDESlib::CKKS::PSBatchPrecompute {
+	PlaintextCache cache;
+};
 
 std::shared_ptr<FIDESlib::CKKS::PSBatchPrecompute>
 FIDESlib::CKKS::evalChebyshevSeriesPSBatchPrecompute(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
