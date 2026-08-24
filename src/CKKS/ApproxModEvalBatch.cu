@@ -794,7 +794,7 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatch(lbcrypto::CryptoContext<lbcrypto
 	// Original entry point: no cache, always encode plaintexts fresh.
 	// Behavior is completely unchanged from before the precompute/apply
 	// split.
-	evalChebyshevSeriesPSBatchImpl(cc, ctxt, batchOfCoefficients, lower_bound, upper_bound, /*cache=*/nullptr);
+	evalChebyshevSeriesPSBatchImpl(cc, ctxt, batchOfCoefficients, lower_bound, upper_bound, /*cache=*/nullptr, nullptr);
 }
 
 /**
@@ -837,7 +837,7 @@ std::shared_ptr<FIDESlib::CKKS::PSBatchPrecompute> FIDESlib::CKKS::evalChebyshev
 std::shared_ptr<FIDESlib::CKKS::PSBatchPrecomputeInner> FIDESlib::CKKS::evalChebyshevSeriesPSBatchPrecompute2(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   const Ciphertext& ctxt,
   const std::vector<std::vector<double>>& batchOfCoefficients,
-  PSBatchPrecompute precomp
+  PSBatchPrecompute precomp,
   double lower_bound,
   double upper_bound
   ) {
