@@ -1109,6 +1109,8 @@ void CryptoContextImpl<DCRTPoly>::ProcessMultiplications(std::vector<std::vector
 
 	auto& cc = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
+	c->SetLevel(15);
+
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*c);
 	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
