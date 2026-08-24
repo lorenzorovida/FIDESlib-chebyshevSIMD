@@ -862,6 +862,7 @@ std::shared_ptr<FIDESlib::CKKS::PSBatchPrecomputeInner> FIDESlib::CKKS::evalCheb
 void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   Ciphertext& ctxt,
   const std::shared_ptr<PSBatchPrecompute>& precomp,
+  const std::shared_ptr<PSBatchPrecomputeInner>& precompPs,
   const std::vector<std::vector<double>>& batchOfCoefficients,
   double lower_bound,
   double upper_bound) {
@@ -876,7 +877,12 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbc
 	cache.recording		  = false;
 	cache.resetReadCursor();
 
-	evalChebyshevSeriesPSBatchImpl(cc, ctxt, batchOfCoefficients, lower_bound, upper_bound, &cache);
+	PSCache& cache2 = precompPs->cache;
+	cache2.recording		  = false;
+	cache2.resetReadCursor();
+
+
+	evalChebyshevSeriesPSBatchImpl(cc, ctxt, batchOfCoefficients, lower_bound, upper_bound, &cache, &cache2);
 }
 
 void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApplyOpaque(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
