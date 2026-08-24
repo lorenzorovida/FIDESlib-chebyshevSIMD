@@ -426,7 +426,7 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext b_decimal(a.cc_);
 		bintodec(cc, b_decimal, b_processed, repetitions * 4);
 
-		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, coeffs, precomp4bitsMult, cc);
+		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, cc);
 	} else {
 		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, cc);
 	}
