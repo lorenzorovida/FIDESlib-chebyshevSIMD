@@ -591,6 +591,12 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
   PlaintextCache* cache) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
+	cudaEventRecord(start);
+
 	if (batchOfCoefficients.empty())
 		OPENFHE_THROW("batchOfCoefficients must not be empty");
 
@@ -727,6 +733,17 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 #ifdef DEBUG_CHEBYSHEV_TRACE
 	std::cout << "[BATCH] T2km1 level=" << T2km1.getLevel() << " noise=" << T2km1.NoiseLevel << std::endl;
 #endif
+
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+
+	float ms = 0.0f;
+	cudaEventElapsedTime(&ms, start, stop);
+
+	std::cout << "Before reaching first call: " << ms << " ms\n";
+
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);	
 
 	// --- Batched Paterson-Stockmeyer evaluation ---
 	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache);
