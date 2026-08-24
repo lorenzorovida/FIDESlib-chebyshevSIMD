@@ -860,7 +860,11 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 
 	result.addPt(minusOnePt);
 
+	std::cout << "SONO PORCODDUE QUA " << std::endl;
+
 	evalChebyshevSeriesPSBatchApply(cc, result, cacheChebyshev4BitsMultiplier, coeffs4BitsMultiplier, -1, 1);
+
+	std::cout << "FINITO PORCODDUE QUA " << std::endl;
 
 	// evalChebyshevSeriesPSBatchApply(cc, result, precomp4bits, coeffs, -1, 1);
 	// evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
