@@ -865,7 +865,7 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 	std::cout << "Result info: " << result.getLevel() << ", " << result.NoiseLevel << std::endl;
 
 	
-	evalChebyshevSeriesPSBatchApply(cc, result, cacheChebyshev4BitsMultiplier, cacheChebyshev4BitsMultiplier2, coeffs4BitsMultiplier, -1, 1);
+	evalChebyshevSeriesPSBatchApply(cc, result, cacheChebyshev4BitsMultiplier, coeffs4BitsMultiplier, -1, 1);
 
 	// evalChebyshevSeriesPSBatchApply(cc, result, precomp4bits, coeffs, -1, 1);
 	// evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);

@@ -859,7 +859,7 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApplyOpaque(lbcrypto::CryptoConte
 	// ownership/lifetime with the original std::shared_ptr<void>.
 	auto casted = std::static_pointer_cast<PSBatchPrecompute>(precomp);
 	
-	evalChebyshevSeriesPSBatchApply(cc, ctxt, casted, nullptr, batchOfCoefficients, lower_bound, upper_bound);
+	evalChebyshevSeriesPSBatchApply(cc, ctxt, casted, batchOfCoefficients, lower_bound, upper_bound);
 }
 
 void FIDESlib::CKKS::evalChebyshevSeriesPSBatchRepeated(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
