@@ -71,15 +71,15 @@ class PlaintextCache {
 
 
 	void recordQr(std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& qr) {
-		entriesdivqrVec.push_back(std::move(qr));
+		entriesdivqrVec.push_back(qr);
 	}
 
 	void recordCs(std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& cs) {
-		entriesdivcsVec.push_back(std::move(cs));
+		entriesdivcsVec.push_back(cs);
 	}
 
 	void recordS2(std::vector<std::vector<double>>& s2) {
-		s2vec.push_back(std::move(s2));
+		s2vec.push_back(s2);
 	}
 
 	const std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& nextQr() {
