@@ -82,6 +82,10 @@ class PlaintextCache {
 		s2vec.push_back(s2);
 	}
 
+  void recordF2(std::vector<std::vector<double>>& f2) {
+		f2vec.push_back(f2);
+	}
+
 	const std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& nextQr() {
 		assert(readIdxQr < entriesdivqrVec.size() &&
 		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
@@ -106,17 +110,27 @@ class PlaintextCache {
 		return s2vec[readIdxS2++];
 	}
 
+  const std::vector<std::vector<double>>& nextF2() {
+		assert(readIdxF2 < F2vec.size() &&
+		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
+		  "mismatch with the precompute, or ciphertext structurally different "
+		  "(level/NoiseLevel/slots) from the one used to build the precompute.");
+		return f2vec[readIdxF2++];
+	}
+
 	void resetReadCursor() {
 		readIdxQr = 0;
 		readIdxCs = 0;
 		readIdxS2 = 0;
     readIdx = 0;
+    readIdxF2 = 0;
 	}
 
   std::vector<Plaintext> entries;
 	std::vector<std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>> entriesdivqrVec;
 	std::vector<std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>> entriesdivcsVec;
 	std::vector<std::vector<std::vector<double>>> s2vec;
+  std::vector<std::vector<std::vector<double>>> f2vec;
 
   private:
 	size_t readIdx	 = 0;

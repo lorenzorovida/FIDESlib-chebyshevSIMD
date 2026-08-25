@@ -660,9 +660,17 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	uint32_t m				   = degs[1];
 
 	std::vector<std::vector<double>> f2Batch(batchOfCoefficients.size());
-	for (size_t b = 0; b < batchOfCoefficients.size(); ++b) {
-		f2Batch[b] = batchOfCoefficients[b];
-		f2Batch[b].resize(n + 1);
+
+	if (cache == nullptr || (cache != nullptr && cache->recording == false)) {
+		for (size_t b = 0; b < batchOfCoefficients.size(); ++b) {
+			f2Batch[b] = batchOfCoefficients[b];
+			f2Batch[b].resize(n + 1);
+		}
+		if (cache != nullptr) {
+			cache.recordF2(f2Batch)
+		}
+	} else {
+		f2Batch = cache.nextF2();
 	}
 
 	ContextData& ccd = ctxt.cc;
@@ -861,7 +869,7 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApplyOpaque(lbcrypto::CryptoConte
 	// unit (defined above), so std::static_pointer_cast can properly share
 	// ownership/lifetime with the original std::shared_ptr<void>.
 	auto casted = std::static_pointer_cast<PSBatchPrecompute>(precomp);
-	
+
 	evalChebyshevSeriesPSBatchApply(cc, ctxt, casted, batchOfCoefficients, lower_bound, upper_bound);
 }
 
