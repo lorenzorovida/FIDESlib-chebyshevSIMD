@@ -69,7 +69,6 @@ class PlaintextCache {
 		return entries.size();
 	}
 
-
 	void recordQr(std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& qr) {
 		entriesdivqrVec.push_back(qr);
 	}
