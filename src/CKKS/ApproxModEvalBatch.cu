@@ -669,6 +669,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 		if (cache != nullptr) {
 			cache->recordF2(f2Batch)
 		}
+	}
 	} else {
 		f2Batch = cache->nextF2();
 	}
