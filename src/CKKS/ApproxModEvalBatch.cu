@@ -399,7 +399,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			cudaEventCreate(&start);
 			cudaEventCreate(&stop);
 
-			std::cout << "entro in 374 evalLinearWSumMutable: " << ms << " ms\n";
+			std::cout << "entro in 374 evalLinearWSumMutable: " << std::endl;
 
 			cudaEventRecord(start);
 
