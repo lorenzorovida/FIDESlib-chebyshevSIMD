@@ -75,23 +75,15 @@ class PlaintextCache {
 
 	std::vector<Plaintext> entries;
 
-  private:
-	size_t readIdx = 0;
-};
-
-class PSCache {
-  public:
-	bool recording = true;
-
 	void recordQr(std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& qr) {
 		entriesdivqrVec.push_back(std::move(qr));
 	}
 
-  void recordCs(std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& cs) {
+	void recordCs(std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& cs) {
 		entriesdivcsVec.push_back(std::move(cs));
 	}
 
-  void recordS2(std::vector<std::vector<double>>& s2) {
+	void recordS2(std::vector<std::vector<double>>& s2) {
 		s2vec.push_back(std::move(s2));
 	}
 
@@ -103,7 +95,7 @@ class PSCache {
 		return entriesdivqrVec[readIdxQr++];
 	}
 
-  const std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& nextCs() {
+	const std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& nextCs() {
 		assert(readIdxCs < entriesdivcsVec.size() &&
 		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
 		  "mismatch with the precompute, or ciphertext structurally different "
@@ -111,7 +103,7 @@ class PSCache {
 		return entriesdivcsVec[readIdxCs++];
 	}
 
-  const std::vector<std::vector<double>>& nextS2() {
+	const std::vector<std::vector<double>>& nextS2() {
 		assert(readIdxS2 < s2vec.size() &&
 		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
 		  "mismatch with the precompute, or ciphertext structurally different "
@@ -121,18 +113,19 @@ class PSCache {
 
 	void resetReadCursor() {
 		readIdxQr = 0;
-    readIdxCs = 0;
-    readIdxS2 = 0;
+		readIdxCs = 0;
+		readIdxS2 = 0;
 	}
 
 	std::vector<std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>> entriesdivqrVec;
-  std::vector<std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>> entriesdivcsVec;
-  std::vector<std::vector<std::vector<double>>> s2vec;
+	std::vector<std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>> entriesdivcsVec;
+	std::vector<std::vector<std::vector<double>>> s2vec;
 
   private:
+	size_t readIdx	 = 0;
 	size_t readIdxQr = 0;
-  size_t readIdxCs = 0;
-  size_t readIdxS2 = 0;
+	size_t readIdxCs = 0;
+	size_t readIdxS2 = 0;
 };
 
 /**
@@ -231,7 +224,6 @@ void evalChebyshevSeriesPSBatchRepeated(lbcrypto::CryptoContext<lbcrypto::DCRTPo
  * the same level and NoiseLevel as the one used to build it.
  */
 struct PSBatchPrecompute;
-struct PSBatchPrecomputeInner;
 
 /**
  * @brief Runs the same recursion evalChebyshevSeriesPSBatch would, on a
@@ -252,12 +244,6 @@ struct PSBatchPrecomputeInner;
  *         evalChebyshevSeriesPSBatchApply.
  */
 std::shared_ptr<PSBatchPrecompute> evalChebyshevSeriesPSBatchPrecompute(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-  const Ciphertext& ctxt,
-  const std::vector<std::vector<double>>& batchOfCoefficients,
-  double lower_bound = -1.0,
-  double upper_bound = 1.0);
-
-std::shared_ptr<PSBatchPrecomputeInner> evalChebyshevSeriesPSBatchPrecompute2(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   const Ciphertext& ctxt,
   const std::vector<std::vector<double>>& batchOfCoefficients,
   double lower_bound = -1.0,
@@ -303,7 +289,6 @@ std::shared_ptr<PSBatchPrecomputeInner> evalChebyshevSeriesPSBatchPrecompute2(lb
 void evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   Ciphertext& ctxt,
   const std::shared_ptr<PSBatchPrecompute>& precomp,
-  const std::shared_ptr<PSBatchPrecomputeInner>& precompInner,
   const std::vector<std::vector<double>>& batchOfCoefficients,
   double lower_bound = -1.0,
   double upper_bound = 1.0);

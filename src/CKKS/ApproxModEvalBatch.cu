@@ -290,8 +290,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   const std::vector<Ciphertext*>& T2,
   int level_offset		= 0,
   int max_m				= 1000,
-  PlaintextCache* cache = nullptr,
-  PSCache* cachePs		= nullptr) {
+  PlaintextCache* cache = nullptr) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
 	FIDESlib::CKKS::Context& cc_ = ctxt.cc_;
@@ -310,7 +309,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 
 	cudaEventRecord(start1);
 
-	if (cachePs == nullptr || (cachePs != nullptr && cachePs->recording)) {
+	if (cache == nullptr || (cache != nullptr && cache->recording)) {
 		for (size_t b = 0; b < batchSize; ++b) {
 			// TODO this is very slow
 			//  Add T^{k(2^m - 1)}(y) to the polynomial that has to be evaluated
@@ -346,15 +345,15 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			divcsVec[b] = divcs;
 			s2Vec[b]	= std::move(s2);
 		}
-		if (cachePs != nullptr) {
-			cachePs->recordQr(divqrVec);
-			cachePs->recordCs(divcsVec);
-			cachePs->recordS2(s2Vec);
+		if (cache != nullptr) {
+			cache->recordQr(divqrVec);
+			cache->recordCs(divcsVec);
+			cache->recordS2(s2Vec);
 		}
 	} else {
-		divqrVec = cachePs->nextQr();
-		divcsVec = cachePs->nextCs();
-		s2Vec	 = cachePs->nextS2();
+		divqrVec = cache->nextQr();
+		divcsVec = cache->nextCs();
+		s2Vec	 = cache->nextS2();
 	}
 
 	cudaEventRecord(stop1);
@@ -434,7 +433,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 		std::vector<std::vector<double>> qCoeffs(batchSize);
 		for (size_t b = 0; b < batchSize; ++b)
 			qCoeffs[b] = divqrVec[b]->q;
-		innerEvalChebyshevPSBatch(cc, ctxt, qu, qCoeffs, k, m - 1, T, T2, level_offset, max_m, cache, cachePs);
+		innerEvalChebyshevPSBatch(cc, ctxt, qu, qCoeffs, k, m - 1, T, T2, level_offset, max_m, cache);
 
 		if (qu.NoiseLevel == 2)
 			qu.rescale();
@@ -520,7 +519,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 	Ciphertext su(cc_);
 	if (lbcrypto::Degree(s2Vec[0]) > k) {
 		assert(m > 2);
-		innerEvalChebyshevPSBatch(cc, ctxt, su, s2Vec, k, m - 1, T, T2, level_offset + 1, max_m, cache, cachePs);
+		innerEvalChebyshevPSBatch(cc, ctxt, su, s2Vec, k, m - 1, T, T2, level_offset + 1, max_m, cache);
 	} else {
 		auto scopy0 = s2Vec[0];
 		scopy0.resize(k);
@@ -614,8 +613,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
   const std::vector<std::vector<double>>& batchOfCoefficients,
   double lower_bound,
   double upper_bound,
-  PlaintextCache* cache,
-  PSCache* cachePs) {
+  PlaintextCache* cache) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
 	cudaEvent_t start, stop;
@@ -773,7 +771,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	cudaEventDestroy(stop);
 
 	// --- Batched Paterson-Stockmeyer evaluation ---
-	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache, cachePs);
+	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache);
 #ifdef DEBUG_CHEBYSHEV_TRACE
 	std::cout << "[BATCH] after innerEvalChebyshevPSBatch (before final sub): level=" << ctxt.getLevel() << " noise=" << ctxt.NoiseLevel << std::endl;
 #endif
@@ -794,7 +792,7 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatch(lbcrypto::CryptoContext<lbcrypto
 	// Original entry point: no cache, always encode plaintexts fresh.
 	// Behavior is completely unchanged from before the precompute/apply
 	// split.
-	evalChebyshevSeriesPSBatchImpl(cc, ctxt, batchOfCoefficients, lower_bound, upper_bound, /*cache=*/nullptr, nullptr);
+	evalChebyshevSeriesPSBatchImpl(cc, ctxt, batchOfCoefficients, lower_bound, upper_bound, /*cache=*/nullptr);
 }
 
 /**
@@ -804,10 +802,6 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatch(lbcrypto::CryptoContext<lbcrypto
  */
 struct FIDESlib::CKKS::PSBatchPrecompute {
 	PlaintextCache cache;
-};
-
-struct FIDESlib::CKKS::PSBatchPrecomputeInner {
-	PSCache cachePs;
 };
 
 std::shared_ptr<FIDESlib::CKKS::PSBatchPrecompute> FIDESlib::CKKS::evalChebyshevSeriesPSBatchPrecompute(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
@@ -829,41 +823,14 @@ std::shared_ptr<FIDESlib::CKKS::PSBatchPrecompute> FIDESlib::CKKS::evalChebyshev
 	Ciphertext templateCopy(ctxt.cc_);
 	templateCopy.copy(ctxt);
 
-	evalChebyshevSeriesPSBatchImpl(cc, templateCopy, batchOfCoefficients, lower_bound, upper_bound, &precomp->cache, nullptr);
+	evalChebyshevSeriesPSBatchImpl(cc, templateCopy, batchOfCoefficients, lower_bound, upper_bound, &precomp->cache);
 
 	return precomp;
-}
-
-std::shared_ptr<FIDESlib::CKKS::PSBatchPrecomputeInner> FIDESlib::CKKS::evalChebyshevSeriesPSBatchPrecompute2(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-  const Ciphertext& ctxt,
-  const std::vector<std::vector<double>>& batchOfCoefficients,
-  double lower_bound,
-  double upper_bound
-  ) {
-	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
-
-	auto precompInner			 = std::make_shared<PSBatchPrecomputeInner>();
-	precompInner->cachePs.recording = true;
-
-	// Run the real algorithm on a disposable COPY of ctxt: we need real
-	// Ciphertext arithmetic to happen (levels/NoiseLevel evolve exactly as
-	// they would for a real call) so that every makePerSlotPlaintext call
-	// sees the same `like` levels/NoiseLevel a real evalChebyshevSeriesPSBatch
-	// call would -- but the copy itself, and its final numeric result, are
-	// discarded; only the recorded plaintexts in precomp->cache matter.
-	Ciphertext templateCopy(ctxt.cc_);
-	templateCopy.copy(ctxt);
-
-
-	evalChebyshevSeriesPSBatchImpl(cc, templateCopy, batchOfCoefficients, lower_bound, upper_bound, nullptr, &precompInner->cachePs);
-
-	return precompInner;
 }
 
 void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   Ciphertext& ctxt,
   const std::shared_ptr<PSBatchPrecompute>& precomp,
-  const std::shared_ptr<PSBatchPrecomputeInner>& precompPs,
   const std::vector<std::vector<double>>& batchOfCoefficients,
   double lower_bound,
   double upper_bound) {
@@ -878,12 +845,7 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbc
 	cache.recording		  = false;
 	cache.resetReadCursor();
 
-	PSCache& cache2 = precompPs->cachePs;
-	cache2.recording		  = false;
-	cache2.resetReadCursor();
-
-
-	evalChebyshevSeriesPSBatchImpl(cc, ctxt, batchOfCoefficients, lower_bound, upper_bound, &cache, &cache2);
+	evalChebyshevSeriesPSBatchImpl(cc, ctxt, batchOfCoefficients, lower_bound, upper_bound, &cache);
 }
 
 void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApplyOpaque(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
