@@ -345,7 +345,8 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			divcsVec[b] = divcs;
 			s2Vec[b]	= std::move(s2);
 		}
-		if (cache != nullptr) {
+		if (cache != nullptr && cache->recording) {
+			std::cout << "Adding records" << std::endl;
 			cache->recordQr(divqrVec);
 			cache->recordCs(divcsVec);
 			cache->recordS2(s2Vec);
@@ -397,6 +398,8 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			cudaEvent_t start, stop;
 			cudaEventCreate(&start);
 			cudaEventCreate(&stop);
+
+			std::cout << "entro in 374 evalLinearWSumMutable: " << ms << " ms\n";
 
 			cudaEventRecord(start);
 
