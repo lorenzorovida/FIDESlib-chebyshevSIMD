@@ -115,7 +115,7 @@ class PlaintextCache {
 		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
 		  "mismatch with the precompute, or ciphertext structurally different "
 		  "(level/NoiseLevel/slots) from the one used to build the precompute.");
-		return f2vec[readIdxF2++];
+		return f2vec[readIdxf2++];
 	}
 
 	void resetReadCursor() {
@@ -123,7 +123,7 @@ class PlaintextCache {
 		readIdxCs = 0;
 		readIdxS2 = 0;
     readIdx = 0;
-    readIdxF2 = 0;
+    readIdxf2 = 0;
 	}
 
   std::vector<Plaintext> entries;
@@ -137,6 +137,7 @@ class PlaintextCache {
 	size_t readIdxQr = 0;
 	size_t readIdxCs = 0;
 	size_t readIdxS2 = 0;
+  size_t readIdxf2 = 0;
 };
 
 /**
