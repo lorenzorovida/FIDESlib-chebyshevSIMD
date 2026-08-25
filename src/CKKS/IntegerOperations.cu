@@ -18,7 +18,6 @@ ProcessArrayPrecomputation precomp64b;
 ProcessArrayPrecomputation precomp128b;
 
 std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
-std::shared_ptr<PSBatchPrecomputeInner> cacheChebyshev4BitsMultiplier2;
 std::vector<std::vector<double>> coeffs4BitsMultiplier;
 
 Plaintext makePerSlotPlaintext(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
@@ -818,7 +817,7 @@ void preprocessProcessArray(int bits,
 
 void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c) {
 	cacheChebyshev4BitsMultiplier = evalChebyshevSeriesPSBatchPrecompute(cc, c, coeffs, -1, 1);
-	
+
 	coeffs4BitsMultiplier = coeffs;
 }
 

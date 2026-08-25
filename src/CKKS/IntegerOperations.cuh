@@ -35,7 +35,6 @@ extern ProcessArrayPrecomputation precomp64b;
 extern ProcessArrayPrecomputation precomp128b;
 
 extern std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
-extern std::shared_ptr<PSBatchPrecomputeInner> cacheChebyshev4BitsMultiplier2;
 extern std::vector<std::vector<double>> coeffs4BitsMultiplier;
 
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);

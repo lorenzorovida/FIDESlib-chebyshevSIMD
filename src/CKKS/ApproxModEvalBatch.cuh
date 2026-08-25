@@ -65,10 +65,6 @@ class PlaintextCache {
 		return entries[readIdx++];
 	}
 
-	void resetReadCursor() {
-		readIdx = 0;
-	}
-
 	size_t size() const {
 		return entries.size();
 	}
@@ -115,6 +111,7 @@ class PlaintextCache {
 		readIdxQr = 0;
 		readIdxCs = 0;
 		readIdxS2 = 0;
+    readIdx = 0;
 	}
 
 	std::vector<std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>> entriesdivqrVec;
