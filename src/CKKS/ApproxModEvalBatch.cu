@@ -667,7 +667,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 			f2Batch[b].resize(n + 1);
 		}
 		if (cache != nullptr) {
-			cache->recordF2(f2Batch)
+			cache->recordF2(f2Batch);
 		}
 	} else {
 		f2Batch = cache->nextF2();
