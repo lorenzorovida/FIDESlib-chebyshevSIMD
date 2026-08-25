@@ -663,7 +663,8 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 
 	std::cout << "Prima di" << std::endl;
 
-	if (cache == nullptr || (cache != nullptr && cache->recording == false)) {
+	if (cache == nullptr || cache->recording == false) {
+		std::cout << "Entro nel loop" << std::endl;
 		for (size_t b = 0; b < batchOfCoefficients.size(); ++b) {
 			f2Batch[b] = batchOfCoefficients[b];
 			f2Batch[b].resize(n + 1);
