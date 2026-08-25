@@ -111,7 +111,7 @@ class PlaintextCache {
 	}
 
   const std::vector<std::vector<double>>& nextF2() {
-		assert(readIdxF2 < f2vec.size() &&
+		assert(readIdxf2 < f2vec.size() &&
 		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
 		  "mismatch with the precompute, or ciphertext structurally different "
 		  "(level/NoiseLevel/slots) from the one used to build the precompute.");
