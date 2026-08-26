@@ -436,11 +436,6 @@ const std::vector<double>& coefficients, double a, double b) const {
 		T2_.emplace_back(cc);
 	}
 */
-	cudaEvent_t startSame, stopSame;
-	cudaEventCreate(&startSame);
-	cudaEventCreate(&stopSame);
-
-	cudaEventRecord(startSame);
 
 	std::vector<Ciphertext> aux;
 	for (size_t i = aux.size(); i < k + m; i++) {
@@ -676,17 +671,6 @@ const std::vector<double>& coefficients, double a, double b) const {
 		if constexpr (sync)
 			cudaDeviceSynchronize();
 	}
-
-	cudaEventRecord(stopSame);
-	cudaEventSynchronize(stopSame);
-
-	float milliseconds = 0;
-	cudaEventElapsedTime(&milliseconds, startSame, stopSame);
-
-	printf("Same call: %f ms\n", milliseconds);
-
-	cudaEventDestroy(startSame);
-	cudaEventDestroy(stopSame);
 
 	if constexpr (PRINT) {
 		std::cout << "T2kmi cheby " << T2km1.getLevel() << " " << T2km1.NoiseLevel << std::endl;

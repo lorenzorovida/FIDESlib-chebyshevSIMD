@@ -125,6 +125,7 @@ struct AlignedCiphertextCache {
 	}
 };
 
+AlignedCiphertextCache cacheTest;
 /**
  * Builds a CKKS plaintext that packs `values[j]` into slot `j`, encoded at
  * the same level/scale/slot-count as `like`, and loads it onto the GPU.
@@ -480,7 +481,6 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 
 		std::vector<double> freeTerm;
 		if (needCompute) {
-			std::cout << "421 Ha needed compute" << std::endl;
 			freeTerm.resize(batchSize);
 			for (size_t b = 0; b < batchSize; ++b)
 				freeTerm[b] = divcsVec[b]->q.front() / 2.0;
@@ -631,8 +631,6 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			std::vector<std::vector<double>> weights;
 
 			if (needCompute) {
-				std::cout << "572 Ha needato compute!" << std::endl;
-
 				std::vector<uint32_t> selectedIdx;
 				for (uint32_t i = 0; i < s2Vec[0].size() - 1; ++i) {
 					bool anyNonZero = false;
@@ -671,7 +669,6 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 
 			std::vector<double> freeTerm;
 			if (needCompute) {
-				std::cout << "613 Ha needed compute" << std::endl;
 				freeTerm.resize(batchSize);
 				for (size_t b = 0; b < batchSize; ++b)
 					freeTerm[b] = s2Vec[b].front() / 2.0;
@@ -692,7 +689,6 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			bool needCompute = (cache == nullptr) || cache->recording;
 			std::vector<double> freeTerm;
 			if (needCompute) {
-				std::cout << "634 Ha needed compute" << std::endl;
 				freeTerm.resize(batchSize);
 				for (size_t b = 0; b < batchSize; ++b)
 					freeTerm[b] = s2Vec[b].front() / 2.0;
