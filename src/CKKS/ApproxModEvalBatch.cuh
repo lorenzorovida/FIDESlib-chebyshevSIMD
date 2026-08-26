@@ -69,7 +69,7 @@ class PlaintextCache {
 		std::cout << "Costruisco da cache" << std::endl;
 
 		Ciphertext a	   = Ciphertext(cc_);
-		a.copy(**src);
+		a.copy(*src);
 		if (a.NoiseLevel == 2)
 			a.rescale();
 		a.growToLevel(targetLevel);
