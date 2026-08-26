@@ -190,18 +190,22 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 	std::vector<Ciphertext> alignedStorage;
 	alignedStorage.reserve(n);
 	std::vector<Ciphertext*> alignedPtrs(n);
-	for (uint32_t i = 0; i < n; ++i) {
-		if (ctxs[i]->getLevel() == targetLevel && ctxs[i]->NoiseLevel == 1) {
-			alignedPtrs[i] = ctxs[i];
-		} else {
-			alignedStorage.emplace_back(cc_);
-			Ciphertext& a = alignedStorage.back();
-			a.copy(*ctxs[i]);
-			if (a.NoiseLevel == 2)
-				a.rescale();
-			a.growToLevel(targetLevel);
-			a.dropToLevel(targetLevel);
-			alignedPtrs[i] = &a;
+
+	// AGGIUNTO UN IF ... CHE SKIPPA
+	if (!cache->recording) {
+		for (uint32_t i = 0; i < n; ++i) {
+			if (ctxs[i]->getLevel() == targetLevel && ctxs[i]->NoiseLevel == 1) {
+				alignedPtrs[i] = ctxs[i];
+			} else {
+				alignedStorage.emplace_back(cc_);
+				Ciphertext& a = alignedStorage.back();
+				a.copy(*ctxs[i]);
+				if (a.NoiseLevel == 2)
+					a.rescale();
+				a.growToLevel(targetLevel);
+				a.dropToLevel(targetLevel);
+				alignedPtrs[i] = &a;
+			}
 		}
 	}
 
