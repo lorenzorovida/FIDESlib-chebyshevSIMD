@@ -57,6 +57,10 @@ class PlaintextCache {
 
 	std::map<std::pair<const Ciphertext*, int32_t>, Ciphertext> storage;
 	
+	void recordCtxtWsum(Ciphertext&& ctxt) {
+		ctxtsWsum.push_back(std::move(ctxt));
+	}
+
 	Ciphertext* getAligned(Ciphertext* src, int32_t targetLevel, FIDESlib::CKKS::Context& cc_) {
 		if (recording) {
 			std::cout << "Recupero da cache" << std::endl;
@@ -79,14 +83,12 @@ class PlaintextCache {
 		Ciphertext copy(cc_);
 		copy.copy(a);     
 
-		recordCtxtWsum(copy);
+		recordCtxtWsum(std::move(copy));
 
 		return &a;
 	}
 
-	void recordCtxtWsum(Ciphertext ctxt) {
-		ctxtsWsum.push_back(std::move(ctxt));
-	}
+	
 
 	void record(Plaintext&& pt) {
 		entries.push_back(std::move(pt));
