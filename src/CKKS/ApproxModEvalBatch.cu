@@ -192,7 +192,7 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 	std::vector<Ciphertext*> alignedPtrs(n);
 
 	// AGGIUNTO UN IF ... CHE SKIPPA
-	if (!cache->recording) {
+	if (cache->recording) {
 		for (uint32_t i = 0; i < n; ++i) {
 			if (ctxs[i]->getLevel() == targetLevel && ctxs[i]->NoiseLevel == 1) {
 				alignedPtrs[i] = ctxs[i];
