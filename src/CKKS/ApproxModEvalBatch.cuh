@@ -60,7 +60,7 @@ class PlaintextCache {
 	Ciphertext* getAligned(Ciphertext* src, int32_t targetLevel, FIDESlib::CKKS::Context& cc_) {
 		if (recording) {
 			std::cout << "Recupero da cache" << std::endl;
-			return Ciphertext(nextCtxtWsum());
+			return &nextCtxtWsum();
 		}
 		std::cout << "Costruisco da cache" << std::endl;
 		auto key = std::make_pair(static_cast<const Ciphertext*>(src), targetLevel);
