@@ -759,6 +759,12 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 
 	ContextData& ccd = ctxt.cc;
 
+	cudaEvent_t startSame, stopSame;
+	cudaEventCreate(&startSame);
+	cudaEventCreate(&stopSame);
+
+	cudaEventRecord(startSame);
+
 	// --- Compute Chebyshev powers T[1..k], T2[1..m], T2km1 ---
 	// Identical to evalChebyshevSeries: these depend only on ctxt, not on the
 	// (batched) coefficients.
@@ -853,6 +859,17 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 #ifdef DEBUG_CHEBYSHEV_TRACE
 	std::cout << "[BATCH] T2km1 level=" << T2km1.getLevel() << " noise=" << T2km1.NoiseLevel << std::endl;
 #endif
+
+	cudaEventRecord(stopSame);
+	cudaEventSynchronize(stopSame);
+
+	float millisecondsSame = 0;
+	cudaEventElapsedTime(&millisecondsSame, startSame, stopSame);
+
+	printf("Same call: %f ms\n", millisecondsSame);
+
+	cudaEventDestroy(startSame);
+	cudaEventDestroy(stopSame);
 
 	cudaEventRecord(stop);
 	cudaEventSynchronize(stop);

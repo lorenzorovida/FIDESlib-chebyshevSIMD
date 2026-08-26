@@ -32,7 +32,7 @@ void FIDESlib::CKKS::approxModReduction(Ciphertext& ctxtEnc, Ciphertext& ctxtEnc
 		std::cout << "Approx mod red start " << ctxtEnc.getLevel() << " " << ctxtEnc.NoiseLevel << std::endl;
 
 	bool constexpr COMPLEX = true;
-	ContextData& cc        = ctxtEnc.cc;
+	ContextData& cc		   = ctxtEnc.cc;
 
 	if constexpr (COMPLEX)
 		evalChebyshevSeries(ctxtEncI, cc.GetCoeffsChebyshev(), -1.0, 1.0);
@@ -139,14 +139,14 @@ void FIDESlib::CKKS::multIntScalar(Ciphertext& ctxt, uint64_t op) {
 }
 
 void innerEvalChebyshevPS(const Ciphertext& ctxt,
-                          Ciphertext& out,
-                          const std::vector<double>& coefficients,
-                          const uint32_t k,
-                          uint32_t m,
-                          const std::vector<Ciphertext*>& T,
-                          const std::vector<Ciphertext*>& T2,
-                          int level_offset = 0,
-                          int max_m        = 1000) {
+  Ciphertext& out,
+  const std::vector<double>& coefficients,
+  const uint32_t k,
+  uint32_t m,
+  const std::vector<Ciphertext*>& T,
+  const std::vector<Ciphertext*>& T2,
+  int level_offset = 0,
+  int max_m		   = 1000) {
 	FIDESlib::CudaNvtxRange r(std::string{ sc::current().function_name() });
 	/*
 Ciphertext<DCRTPoly> AdvancedSHECKKSRNS::InnerEvalChebyshevPS(ConstCiphertext<DCRTPoly> x,
@@ -155,7 +155,7 @@ Ciphertext<DCRTPoly> AdvancedSHECKKSRNS::InnerEvalChebyshevPS(ConstCiphertext<DC
 															  std::vector<Ciphertext<DCRTPoly>>& T2) const {
 */
 	FIDESlib::CKKS::Context& cc_ = ctxt.cc_;
-	ContextData& cc              = ctxt.cc;
+	ContextData& cc				 = ctxt.cc;
 
 	/// Left AS IS ///
 	// Compute k*2^{m-1}-k because we use it a lot
@@ -193,8 +193,8 @@ Ciphertext<DCRTPoly> AdvancedSHECKKSRNS::InnerEvalChebyshevPS(ConstCiphertext<DC
 	if constexpr (true) {
 		// Evaluate c at u
 		Ciphertext& cu = out;
-		uint32_t dc    = lbcrypto::Degree(divcs->q);
-		bool flag_c    = false;
+		uint32_t dc	   = lbcrypto::Degree(divcs->q);
+		bool flag_c	   = false;
 		if (dc >= 1) {
 			if (dc == 1) {
 				if (divcs->q[1] != 1) {
@@ -255,7 +255,6 @@ Ciphertext<DCRTPoly> AdvancedSHECKKSRNS::InnerEvalChebyshevPS(ConstCiphertext<DC
 				qu.dropToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
 				// qu.growToLevel(T[k - 1]->getLevel() + (T[k - 1]->NoiseLevel == 1 ? 1 : 0));
 
-				
 				qu.evalLinearWSumMutable(/*bcrypto::Degree(qcopy)*/ ctxs.size(), ctxs, weights);
 				// the highest order coefficient will always be 2 after one division because of the Chebyshev division rule
 
@@ -353,8 +352,7 @@ Ciphertext<DCRTPoly> AdvancedSHECKKSRNS::InnerEvalChebyshevPS(ConstCiphertext<DC
 
 		if (flag_c) {
 			if (max_m - m <= 1)
-				T2[m - 1]->adjustForAddOrSub(
-					cu);
+				T2[m - 1]->adjustForAddOrSub(cu);
 			// For m > 3, the required levels for the recursive cu component are not strictly decreasing, caching is needed, for which the benefit is uncertain
 			if (T2[m - 1]->NoiseLevel == 1 && cu.NoiseLevel == 2)
 				cu.rescale();
@@ -393,7 +391,7 @@ const std::vector<double>& coefficients, double a, double b) const {
 
 	constexpr bool sync = false;
 
-	uint32_t n             = lbcrypto::Degree(coefficients);
+	uint32_t n			   = lbcrypto::Degree(coefficients);
 	std::vector<double> f2 = coefficients;
 	f2.resize(n + 1);
 	/*
@@ -405,8 +403,8 @@ const std::vector<double>& coefficients, double a, double b) const {
 	*/
 
 	std::vector<uint32_t> degs = lbcrypto::ComputeDegreesPS(n);
-	uint32_t k                 = degs[0];
-	uint32_t m                 = degs[1];
+	uint32_t k				   = degs[0];
+	uint32_t m				   = degs[1];
 	if (false) {
 		if (n <= 36) {
 			k = 12;
@@ -426,7 +424,7 @@ const std::vector<double>& coefficients, double a, double b) const {
 	//        (std::round(lower_bound) == -1) && (std::round(upper_bound) == 1));
 
 	FIDESlib::CKKS::Context& cc_ = ctxt.cc_;
-	ContextData& cc              = ctxt.cc;
+	ContextData& cc				 = ctxt.cc;
 	/*
 	std::vector<Ciphertext> T_;
 	T_.emplace_back(cc);
@@ -438,6 +436,12 @@ const std::vector<double>& coefficients, double a, double b) const {
 		T2_.emplace_back(cc);
 	}
 */
+	cudaEvent_t startSame, stopSame;
+	cudaEventCreate(&startSame);
+	cudaEventCreate(&stopSame);
+
+	cudaEventRecord(startSame);
+
 	std::vector<Ciphertext> aux;
 	for (size_t i = aux.size(); i < k + m; i++) {
 		aux.emplace_back(cc_);
@@ -445,10 +449,10 @@ const std::vector<double>& coefficients, double a, double b) const {
 
 	std::vector<Ciphertext*> T(k);
 	for (uint32_t i = 0; i < k; ++i)
-		T[i]        = &aux[i];
+		T[i] = &aux[i];
 	std::vector<Ciphertext*> T2(m);
 	for (uint32_t i = 0; i < m; i++)
-		T2[i]       = &aux[i + k];
+		T2[i] = &aux[i + k];
 	/*
 	std::vector<Ciphertext*> T(k);
 	for (uint32_t i = 0; i < k; ++i)
@@ -673,6 +677,17 @@ const std::vector<double>& coefficients, double a, double b) const {
 			cudaDeviceSynchronize();
 	}
 
+	cudaEventRecord(stopSame);
+	cudaEventSynchronize(stopSame);
+
+	float milliseconds = 0;
+	cudaEventElapsedTime(&milliseconds, startSame, stopSame);
+
+	printf("Same call: %f ms\n", milliseconds);
+
+	cudaEventDestroy(startSame);
+	cudaEventDestroy(stopSame);
+
 	if constexpr (PRINT) {
 		std::cout << "T2kmi cheby " << T2km1.getLevel() << " " << T2km1.NoiseLevel << std::endl;
 		for (auto& i : T2km1.c0.GPU.at(0).limb) {
@@ -729,7 +744,7 @@ const std::vector<double>& coefficients, double a, double b) const {
 void applyDoubleAngleIterations(Ciphertext& ctxt, int its, const KeySwitchingKey& kskEval) {
 	FIDESlib::CudaNvtxRange r_(std::string{ sc::current().function_name() });
 	ContextData& cc = ctxt.cc;
-	int32_t r       = its;
+	int32_t r		= its;
 	// std::cout << "Its: " << its << std::endl;
 	for (int32_t j = 1; j < r + 1; j++) {
 		if (cc.rescaleTechnique == FIDESlib::CKKS::FIXEDMANUAL)
