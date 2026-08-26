@@ -171,65 +171,31 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 	cudaEventRecord(start);
 
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
-	assert(ctxs.size() == weightsPerSlot.size());
-	uint32_t n = static_cast<uint32_t>(ctxs.size());
-	assert(n > 0);
-
-	// Target level: whatever the caller already set on `out` via
-	// dropToLevel/growToLevel. If `out` has never been initialized (fresh
-	// Ciphertext, getLevel() == -1), fall back to ctxs[0]'s level, mirroring
-	// evalLinearWSumMutable's own fallback.
+	uint32_t n			= ctxs.size();
 	int32_t targetLevel = out.getLevel();
-	if (targetLevel < 0) {
+	if (targetLevel < 0)
 		targetLevel = ctxs[0]->getLevel();
-	}
-
-	// Avoid a needless Ciphertext allocation + full-limb copy +
-	// growToLevel/dropToLevel round trip when ctxs[i] is ALREADY at the
-	// target level and NoiseLevel==1 (the common case: all T[] powers are
-	// dropped to a shared minimum level right after being computed, see
-	// evalChebyshevSeriesPSBatchImpl's T[] loop). This copy was happening
-	// unconditionally on every call to this function -- including every
-	// call inside evalChebyshevSeriesPSBatchApply, where it dominates
-	// runtime far more than the plaintext CPU-encoding the precompute/apply
-	// split was built to eliminate, since it is real CUDA allocation +
-	// memcpy work on full ciphertexts, not small per-slot plaintexts.
-	std::vector<Ciphertext> alignedStorage;
-	alignedStorage.reserve(n);
-	std::vector<Ciphertext*> alignedPtrs(n);
-	for (uint32_t i = 0; i < n; ++i) {
-		if (ctxs[i]->getLevel() == targetLevel && ctxs[i]->NoiseLevel == 1) {
-			alignedPtrs[i] = ctxs[i];
-		} else {
-			alignedStorage.emplace_back(cc_);
-			Ciphertext& a = alignedStorage.back();
-			a.copy(*ctxs[i]);
-			if (a.NoiseLevel == 2)
-				a.rescale();
-			a.growToLevel(targetLevel);
-			a.dropToLevel(targetLevel);
-			alignedPtrs[i] = &a;
-		}
-	}
 
 	std::vector<Plaintext> weightPtsStorage;
 	weightPtsStorage.reserve(n);
-	std::vector<const Plaintext*> weightPts(n);
 
-	for (uint32_t i = 0; i < n; ++i) {
-		weightPtsStorage.emplace_back(cc_);
+	// primo termine
+	Plaintext p0(cc_);
+	const Plaintext* pt0 = makePerSlotPlaintext(cc, cc_, weightsPerSlot[0], *ctxs[0], p0, cache);
+	out.multPt(*ctxs[0], *pt0, false); // usa ctxs[0] al SUO livello nativo, niente copia
+	out.dropToLevel(targetLevel);	   // un solo drop, sull'accumulatore
 
-		weightPts[i] = makePerSlotPlaintext(cc, cc_, weightsPerSlot[i], *alignedPtrs[i], weightPtsStorage.back(), cache);
-	}
-
-	out.multPt(*alignedPtrs[0], *weightPts[0], false);
 	for (uint32_t i = 1; i < n; ++i) {
-		out.addMultPt(*alignedPtrs[i], *weightPts[i], false);
+		Plaintext pi(cc_);
+		const Plaintext* pti = makePerSlotPlaintext(cc, cc_, weightsPerSlot[i], *ctxs[i], pi, cache);
+		Ciphertext term(cc_);
+		term.multPt(*ctxs[i], *pti, false); // ctxs[i] intatto, niente copia
+		term.dropToLevel(targetLevel);		// drop del solo `term`, piccolo overhead ma non evitabile se i livelli differiscono
+		out.add(term);
 	}
 
-	if (out.cc.rescaleTechnique == FIXEDMANUAL) {
+	if (out.cc.rescaleTechnique == FIXEDMANUAL)
 		out.rescale();
-	}
 
 	cudaEventRecord(stop);
 	cudaEventSynchronize(stop);
