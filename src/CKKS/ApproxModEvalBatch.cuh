@@ -62,7 +62,7 @@ class PlaintextCache {
 	}
 
 	Ciphertext* getAligned(Ciphertext* src, int32_t targetLevel, FIDESlib::CKKS::Context& cc_) {
-		if (recording) {
+		if (!this->recording) {
 			std::cout << "Recupero da cache" << std::endl;
 			return &nextCtxtWsum();
 		}
