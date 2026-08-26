@@ -164,11 +164,6 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
   const std::vector<Ciphertext*>& ctxs,
   const std::vector<std::vector<double>>& weightsPerSlot,
   PlaintextCache* cache = nullptr) {
-	cudaEvent_t start, stop;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-
-	cudaEventRecord(start);
 
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
 	assert(ctxs.size() == weightsPerSlot.size());
@@ -231,16 +226,6 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 		out.rescale();
 	}
 
-	cudaEventRecord(stop);
-	cudaEventSynchronize(stop);
-
-	float milliseconds = 0;
-	cudaEventElapsedTime(&milliseconds, start, stop);
-
-	printf("Tempo evalLinearWSumMutablePtBatch: %f ms\n", milliseconds);
-
-	cudaEventDestroy(start);
-	cudaEventDestroy(stop);
 }
 
 /**
@@ -694,12 +679,6 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	if (static_cast<int>(batchOfCoefficients.size()) != ctxt.slots)
 		OPENFHE_THROW("The set of coefficients must be as large as the number of slots of the input ciphertext");
 
-	cudaEvent_t start, stop;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-
-	cudaEventRecord(start);
-
 	size_t coeffSize = batchOfCoefficients[0].size();
 	for (const auto& v : batchOfCoefficients) {
 		if (v.size() != coeffSize)
@@ -731,22 +710,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	std::vector<std::vector<double>> f2Batch(batchOfCoefficients.size());
 
 	if (cache != nullptr && !cache->recording) {
-		cudaEvent_t start2, stop2;
-		cudaEventCreate(&start2);
-		cudaEventCreate(&stop2);
-
-		cudaEventRecord(start2);
 		f2Batch = cache->nextF2();
-		cudaEventRecord(stop2);
-		cudaEventSynchronize(stop2);
-
-		float milliseconds2 = 0;
-		cudaEventElapsedTime(&milliseconds2, start2, stop2);
-
-		printf("Loading from cache: %f ms\n", milliseconds2);
-
-		cudaEventDestroy(start2);
-		cudaEventDestroy(stop2);
 	} else {
 		for (size_t b = 0; b < batchOfCoefficients.size(); ++b) {
 			f2Batch[b] = batchOfCoefficients[b];
@@ -758,12 +722,6 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	}
 
 	ContextData& ccd = ctxt.cc;
-
-	cudaEvent_t startSame, stopSame;
-	cudaEventCreate(&startSame);
-	cudaEventCreate(&stopSame);
-
-	cudaEventRecord(startSame);
 
 	// --- Compute Chebyshev powers T[1..k], T2[1..m], T2km1 ---
 	// Identical to evalChebyshevSeries: these depend only on ctxt, not on the
@@ -860,27 +818,6 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	std::cout << "[BATCH] T2km1 level=" << T2km1.getLevel() << " noise=" << T2km1.NoiseLevel << std::endl;
 #endif
 
-	cudaEventRecord(stopSame);
-	cudaEventSynchronize(stopSame);
-
-	float millisecondsSame = 0;
-	cudaEventElapsedTime(&millisecondsSame, startSame, stopSame);
-
-	printf("Same call: %f ms\n", millisecondsSame);
-
-	cudaEventDestroy(startSame);
-	cudaEventDestroy(stopSame);
-
-	cudaEventRecord(stop);
-	cudaEventSynchronize(stop);
-
-	float milliseconds = 0;
-	cudaEventElapsedTime(&milliseconds, start, stop);
-
-	printf("First call: %f ms\n", milliseconds);
-
-	cudaEventDestroy(start);
-	cudaEventDestroy(stop);
 
 	// --- Batched Paterson-Stockmeyer evaluation ---
 	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache);
