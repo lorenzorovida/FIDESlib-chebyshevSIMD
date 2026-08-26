@@ -476,7 +476,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			cu.dropToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
 			cu.growToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
 
-			evalLinearWSumMutablePtBatch(cu, cc, cc_, ctxs, weights, cache, cacheTest);
+			evalLinearWSumMutablePtBatch(cu, cc, cc_, ctxs, weights, cache, alignedCache);
 		}
 
 		std::vector<double> freeTerm;
@@ -517,7 +517,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 		} else {
 			qCoeffs = cache->nextVec2();
 		}
-		innerEvalChebyshevPSBatch(cc, ctxt, qu, qCoeffs, k, m - 1, T, T2, level_offset, max_m, cache, cacheTest);
+		innerEvalChebyshevPSBatch(cc, ctxt, qu, qCoeffs, k, m - 1, T, T2, level_offset, max_m, cache, alignedCache);
 
 		if (qu.NoiseLevel == 2)
 			qu.rescale();
@@ -565,7 +565,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			qu.growToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
 			qu.dropToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
 
-			evalLinearWSumMutablePtBatch(qu, cc, cc_, ctxs, weights, cache, cacheTest);
+			evalLinearWSumMutablePtBatch(qu, cc, cc_, ctxs, weights, cache, alignedCache);
 
 			std::vector<double> freeTerm;
 			if (needCompute) {
@@ -665,7 +665,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			su.growToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - 1 - level_offset);
 			su.dropToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - 1 - level_offset);
 
-			evalLinearWSumMutablePtBatch(su, cc, cc_, ctxs, weights, cache, cacheTest);
+			evalLinearWSumMutablePtBatch(su, cc, cc_, ctxs, weights, cache, alignedCache);
 
 			std::vector<double> freeTerm;
 			if (needCompute) {
