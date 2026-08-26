@@ -164,6 +164,11 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
   const std::vector<Ciphertext*>& ctxs,
   const std::vector<std::vector<double>>& weightsPerSlot,
   PlaintextCache* cache = nullptr) {
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
+	cudaEventRecord(start);
 
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
 	assert(ctxs.size() == weightsPerSlot.size());
@@ -225,6 +230,17 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 	if (out.cc.rescaleTechnique == FIXEDMANUAL) {
 		out.rescale();
 	}
+
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+
+	float milliseconds = 0;
+	cudaEventElapsedTime(&milliseconds, start, stop);
+
+	printf("Tempo evalLinearWSumMutablePtBatch: %f ms\n", milliseconds);
+
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
 }
 
 /**
