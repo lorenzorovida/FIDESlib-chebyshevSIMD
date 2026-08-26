@@ -23,8 +23,6 @@
 
 #include "CKKS/ApproxModEval.cuh" // for multIntScalar
 #include "CKKS/ApproxModEvalBatch.cuh"
-#include "CKKS/Ciphertext.cuh"
-#include "CKKS/Context.cuh"
 #include "CKKS/Plaintext.cuh"
 #include "CudaUtils.cuh"
 #include <iostream>
@@ -228,7 +226,7 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 	std::vector<Ciphertext> alignedStorageFallback;
 	if (cache != nullptr) {
 		for (uint32_t i = 0; i < n; ++i) {
-			alignedPtrs[i] = cache->getAligned(ctxs[i], targetLevel);
+			alignedPtrs[i] = cache->getAligned(ctxs[i], targetLevel, cc_);
 		}
 	} else {
 		alignedStorageFallback.reserve(n);
@@ -705,8 +703,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
   const std::vector<std::vector<double>>& batchOfCoefficients,
   double lower_bound,
   double upper_bound,
-  PlaintextCache* cache,
-  AlignedCiphertextCache* cacheCt) {
+  PlaintextCache* cache) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
 	if (batchOfCoefficients.empty())
@@ -857,7 +854,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 
 	// --- Batched Paterson-Stockmeyer evaluation ---
 
-	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache, cacheCt);
+	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache);
 #ifdef DEBUG_CHEBYSHEV_TRACE
 	std::cout << "[BATCH] after innerEvalChebyshevPSBatch (before final sub): level=" << ctxt.getLevel() << " noise=" << ctxt.NoiseLevel << std::endl;
 #endif
