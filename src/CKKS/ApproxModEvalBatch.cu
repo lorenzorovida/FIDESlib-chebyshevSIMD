@@ -731,7 +731,22 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	std::vector<std::vector<double>> f2Batch(batchOfCoefficients.size());
 
 	if (cache != nullptr && !cache->recording) {
+		cudaEvent_t start2, stop2;
+		cudaEventCreate(&start2);
+		cudaEventCreate(&stop2);
+
+		cudaEventRecord(start2);
 		f2Batch = cache->nextF2();
+		cudaEventRecord(stop);
+		cudaEventSynchronize(stop);
+
+		float milliseconds = 0;
+		cudaEventElapsedTime(&milliseconds, start, stop);
+
+		printf("Loading from cache: %f ms\n", milliseconds);
+
+		cudaEventDestroy(start);
+		cudaEventDestroy(stop);
 	} else {
 		for (size_t b = 0; b < batchOfCoefficients.size(); ++b) {
 			f2Batch[b] = batchOfCoefficients[b];
