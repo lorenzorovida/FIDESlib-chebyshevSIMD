@@ -76,9 +76,11 @@ class PlaintextCache {
 		a.growToLevel(targetLevel);
 		a.dropToLevel(targetLevel);
 
-		Ciphertext copy(a);                 
+		Ciphertext copy(cc_);
+		copy.copy(a);     
+		            
 		recordCtxtWsum(copy);
-		
+
 		return &a;
 	}
 
