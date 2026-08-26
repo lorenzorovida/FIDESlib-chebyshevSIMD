@@ -42,6 +42,8 @@
 #define GPUCKKS_APPROXMODEVALBATCH_CUH
 
 #include "CKKS/Plaintext.cuh"
+#include "CKKS/Ciphertext.cuh"
+#include "CKKS/Context.cuh"
 #include "CKKS/forwardDefs.cuh"
 #include "openfhe-interface/RawCiphertext.cuh"
 #include <cinttypes>
@@ -54,13 +56,8 @@ class PlaintextCache {
 	bool recording = true;
 
 	std::map<std::pair<const Ciphertext*, int32_t>, Ciphertext> storage;
-
-	FIDESlib::CKKS::Context& cc_;
 	
 	Ciphertext* getAligned(Ciphertext* src, int32_t targetLevel, FIDESlib::CKKS::Context& cc_) {
-		if (this.cc_ == nullptr) {
-			this.cc_ = cc_;
-		}
 		if (src->getLevel() == targetLevel && src->NoiseLevel == 1) {
 			std::cout << "Recupero da cache" << std::endl;
 			return src;
