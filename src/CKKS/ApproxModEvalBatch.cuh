@@ -123,6 +123,65 @@ class PlaintextCache {
 		readIdxS2 = 0;
     readIdx = 0;
     readIdxf2 = 0;
+    readIdxVec1 = 0;
+    readIdxVec2 = 0;
+    readIdxCtxsSel = 0;
+	}
+
+	// --- Generic caching for the per-slot weight-extraction vectors ---
+	//
+	// Beyond divqrVec/divcsVec/s2Vec/f2Batch themselves (which only avoid
+	// re-running LongDivisionChebyshev), every place that turns those into
+	// the actual O(batchSize) vectors passed to
+	// evalLinearWSumMutablePtBatch/addPerSlotScalar/multPerSlotScalar
+	// (coeffs, freeTerm, weights) was STILL re-running its extraction loop
+	// on every Apply call: with batchSize in the tens of thousands, and
+	// several such extractions per recursion level, this dominates runtime
+	// even with the plaintext/long-division caches in place. These generic
+	// record/replay slots cache those already-extracted vectors directly,
+	// so Apply just reads them back with no per-slot loop at all.
+	//
+	// recordVec1/nextVec1 is for a single std::vector<double> (coeffs,
+	// freeTerm). recordVec2/nextVec2 is for a std::vector<std::vector<double>>
+	// (weights). recordCtxsSelection/nextCtxsSelection caches which T[i]
+	// indices were selected (the anyNonZero filter in the q/s2 branches),
+	// which is itself an O(batchSize * k) scan otherwise repeated on every
+	// Apply call.
+
+	void recordVec1(std::vector<double>&& v) {
+		vec1.push_back(std::move(v));
+	}
+
+	const std::vector<double>& nextVec1() {
+		assert(readIdxVec1 < vec1.size() &&
+		  "PSBatchPrecompute exhausted (vec1): batchOfCoefficients/lower_bound/upper_bound "
+		  "mismatch with the precompute, or ciphertext structurally different "
+		  "(level/NoiseLevel/slots) from the one used to build the precompute.");
+		return vec1[readIdxVec1++];
+	}
+
+	void recordVec2(std::vector<std::vector<double>>&& v) {
+		vec2.push_back(std::move(v));
+	}
+
+	const std::vector<std::vector<double>>& nextVec2() {
+		assert(readIdxVec2 < vec2.size() &&
+		  "PSBatchPrecompute exhausted (vec2): batchOfCoefficients/lower_bound/upper_bound "
+		  "mismatch with the precompute, or ciphertext structurally different "
+		  "(level/NoiseLevel/slots) from the one used to build the precompute.");
+		return vec2[readIdxVec2++];
+	}
+
+	void recordCtxsSelection(std::vector<uint32_t>&& indices) {
+		ctxsSelections.push_back(std::move(indices));
+	}
+
+	const std::vector<uint32_t>& nextCtxsSelection() {
+		assert(readIdxCtxsSel < ctxsSelections.size() &&
+		  "PSBatchPrecompute exhausted (ctxsSelection): batchOfCoefficients/lower_bound/upper_bound "
+		  "mismatch with the precompute, or ciphertext structurally different "
+		  "(level/NoiseLevel/slots) from the one used to build the precompute.");
+		return ctxsSelections[readIdxCtxsSel++];
 	}
 
   std::vector<Plaintext> entries;
@@ -130,6 +189,9 @@ class PlaintextCache {
 	std::vector<std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>> entriesdivcsVec;
 	std::vector<std::vector<std::vector<double>>> s2vec;
   std::vector<std::vector<std::vector<double>>> f2vec;
+  std::vector<std::vector<double>> vec1;
+  std::vector<std::vector<std::vector<double>>> vec2;
+  std::vector<std::vector<uint32_t>> ctxsSelections;
 
   private:
 	size_t readIdx	 = 0;
@@ -137,6 +199,9 @@ class PlaintextCache {
 	size_t readIdxCs = 0;
 	size_t readIdxS2 = 0;
   size_t readIdxf2 = 0;
+  size_t readIdxVec1 = 0;
+  size_t readIdxVec2 = 0;
+  size_t readIdxCtxsSel = 0;
 };
 
 /**
