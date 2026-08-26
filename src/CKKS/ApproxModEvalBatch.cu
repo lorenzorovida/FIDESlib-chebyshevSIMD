@@ -418,6 +418,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 
 		std::vector<double> freeTerm;
 		if (needCompute) {
+			std::cout << "421 Ha needed compute" << std::endl;
 			freeTerm.resize(batchSize);
 			for (size_t b = 0; b < batchSize; ++b)
 				freeTerm[b] = divcsVec[b]->q.front() / 2.0;
@@ -568,6 +569,8 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			std::vector<std::vector<double>> weights;
 
 			if (needCompute) {
+				std::cout << "572 Ha needato compute!" << std::endl;
+
 				std::vector<uint32_t> selectedIdx;
 				for (uint32_t i = 0; i < s2Vec[0].size() - 1; ++i) {
 					bool anyNonZero = false;
@@ -606,6 +609,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 
 			std::vector<double> freeTerm;
 			if (needCompute) {
+				std::cout << "613 Ha needed compute" << std::endl;
 				freeTerm.resize(batchSize);
 				for (size_t b = 0; b < batchSize; ++b)
 					freeTerm[b] = s2Vec[b].front() / 2.0;
@@ -626,6 +630,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			bool needCompute = (cache == nullptr) || cache->recording;
 			std::vector<double> freeTerm;
 			if (needCompute) {
+				std::cout << "634 Ha needed compute" << std::endl;
 				freeTerm.resize(batchSize);
 				for (size_t b = 0; b < batchSize; ++b)
 					freeTerm[b] = s2Vec[b].front() / 2.0;
@@ -688,6 +693,12 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 
 	if (static_cast<int>(batchOfCoefficients.size()) != ctxt.slots)
 		OPENFHE_THROW("The set of coefficients must be as large as the number of slots of the input ciphertext");
+
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
+	cudaEventRecord(start);
 
 	size_t coeffSize = batchOfCoefficients[0].size();
 	for (const auto& v : batchOfCoefficients) {
@@ -827,6 +838,17 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 #ifdef DEBUG_CHEBYSHEV_TRACE
 	std::cout << "[BATCH] T2km1 level=" << T2km1.getLevel() << " noise=" << T2km1.NoiseLevel << std::endl;
 #endif
+
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+
+	float milliseconds = 0;
+	cudaEventElapsedTime(&milliseconds, start, stop);
+
+	printf("First call: %f ms\n", milliseconds);
+
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
 
 	// --- Batched Paterson-Stockmeyer evaluation ---
 	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache);
