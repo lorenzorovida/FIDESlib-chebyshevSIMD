@@ -67,13 +67,8 @@ class PlaintextCache {
 			return &nextCtxtWsum();
 		}
 		std::cout << "Costruisco da cache" << std::endl;
-		auto key = std::make_pair(static_cast<const Ciphertext*>(src), targetLevel);
-		auto it	 = storage.find(key);
-		if (it != storage.end()) {
-			return &it->second;
-		}
-		auto [inserted, _] = storage.emplace(key, Ciphertext(cc_));
-		Ciphertext& a	   = inserted->second;
+
+		Ciphertext& a	   = Ciphertext(cc_);
 		a.copy(*src);
 		if (a.NoiseLevel == 2)
 			a.rescale();
