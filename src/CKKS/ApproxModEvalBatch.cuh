@@ -78,7 +78,7 @@ class PlaintextCache {
 
 		Ciphertext copy(cc_);
 		copy.copy(a);     
-		            
+
 		recordCtxtWsum(copy);
 
 		return &a;
@@ -100,7 +100,7 @@ class PlaintextCache {
 		return entries[readIdx++];
 	}
 
-	const Ciphertext& nextCtxtWsum() {
+	Ciphertext* nextCtxtWsum() {
 		assert(readIdxCtxtWsum < ctxtsWsum.size() &&
 		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
 		  "mismatch with the precompute, or ciphertext structurally different "
