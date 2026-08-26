@@ -90,43 +90,6 @@ namespace {
  * O(recursion-steps) redundant copies of the same T[i] into at most one per
  * (T[i], distinct level actually visited).
  */
-struct AlignedCiphertextCache {
-	FIDESlib::CKKS::Context& cc_;
-	// Backing storage for aligned copies; std::map so references handed out
-	// via getAligned() remain stable even as more entries are inserted
-	// (unlike std::vector, which may reallocate and invalidate them).
-	std::map<std::pair<const Ciphertext*, int32_t>, Ciphertext> storage;
-
-	explicit AlignedCiphertextCache(FIDESlib::CKKS::Context& cc_) : cc_(cc_) {
-	}
-
-	// Returns a pointer to `src` aligned to (targetLevel, NoiseLevel==1).
-	// If `src` is already exactly at that level/NoiseLevel, returns `src`
-	// itself (no copy at all, matching the original fast path). Otherwise,
-	// builds the aligned copy once and reuses it on every subsequent call
-	// with the same (src, targetLevel) pair.
-	Ciphertext* getAligned(Ciphertext* src, int32_t targetLevel) {
-		if (src->getLevel() == targetLevel && src->NoiseLevel == 1) {
-			std::cout << "Recupero da cache" << std::endl;
-			return src;
-		}
-		std::cout << "Costruisco da cache" << std::endl;
-		auto key = std::make_pair(static_cast<const Ciphertext*>(src), targetLevel);
-		auto it	 = storage.find(key);
-		if (it != storage.end()) {
-			return &it->second;
-		}
-		auto [inserted, _] = storage.emplace(key, Ciphertext(cc_));
-		Ciphertext& a		= inserted->second;
-		a.copy(*src);
-		if (a.NoiseLevel == 2)
-			a.rescale();
-		a.growToLevel(targetLevel);
-		a.dropToLevel(targetLevel);
-		return &a;
-	}
-};
-
 
 /**
  * Builds a CKKS plaintext that packs `values[j]` into slot `j`, encoded at
@@ -229,8 +192,7 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
   FIDESlib::CKKS::Context& cc_,
   const std::vector<Ciphertext*>& ctxs,
   const std::vector<std::vector<double>>& weightsPerSlot,
-  PlaintextCache* cache				  = nullptr,
-  AlignedCiphertextCache* alignedCache = nullptr) {
+  PlaintextCache* cache				   = nullptr) {
 
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
 	assert(ctxs.size() == weightsPerSlot.size());
@@ -264,9 +226,9 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 	// this function correct/self-contained for any other caller), in which
 	// case we're back to the original per-call behavior.
 	std::vector<Ciphertext> alignedStorageFallback;
-	if (alignedCache != nullptr) {
+	if (cache != nullptr) {
 		for (uint32_t i = 0; i < n; ++i) {
-			alignedPtrs[i] = alignedCache->getAligned(ctxs[i], targetLevel);
+			alignedPtrs[i] = cache->getAligned(ctxs[i], targetLevel);
 		}
 	} else {
 		alignedStorageFallback.reserve(n);
@@ -304,7 +266,6 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 	if (out.cc.rescaleTechnique == FIXEDMANUAL) {
 		out.rescale();
 	}
-
 }
 
 /**
@@ -368,10 +329,9 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   uint32_t m,
   const std::vector<Ciphertext*>& T,
   const std::vector<Ciphertext*>& T2,
-  int level_offset					  = 0,
-  int max_m							  = 1000,
-  PlaintextCache* cache				  = nullptr,
-  AlignedCiphertextCache* alignedCache = nullptr) {
+  int level_offset					   = 0,
+  int max_m							   = 1000,
+  PlaintextCache* cache				   = nullptr) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
 	FIDESlib::CKKS::Context& cc_ = ctxt.cc_;
@@ -478,7 +438,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			cu.dropToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
 			cu.growToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
 
-			evalLinearWSumMutablePtBatch(cu, cc, cc_, ctxs, weights, cache, alignedCache);
+			evalLinearWSumMutablePtBatch(cu, cc, cc_, ctxs, weights, cache);
 		}
 
 		std::vector<double> freeTerm;
@@ -519,7 +479,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 		} else {
 			qCoeffs = cache->nextVec2();
 		}
-		innerEvalChebyshevPSBatch(cc, ctxt, qu, qCoeffs, k, m - 1, T, T2, level_offset, max_m, cache, alignedCache);
+		innerEvalChebyshevPSBatch(cc, ctxt, qu, qCoeffs, k, m - 1, T, T2, level_offset, max_m, cache);
 
 		if (qu.NoiseLevel == 2)
 			qu.rescale();
@@ -567,7 +527,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			qu.growToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
 			qu.dropToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
 
-			evalLinearWSumMutablePtBatch(qu, cc, cc_, ctxs, weights, cache, alignedCache);
+			evalLinearWSumMutablePtBatch(qu, cc, cc_, ctxs, weights, cache);
 
 			std::vector<double> freeTerm;
 			if (needCompute) {
@@ -623,7 +583,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 	Ciphertext su(cc_);
 	if (lbcrypto::Degree(s2Vec[0]) > k) {
 		assert(m > 2);
-		innerEvalChebyshevPSBatch(cc, ctxt, su, s2Vec, k, m - 1, T, T2, level_offset + 1, max_m, cache, alignedCache);
+		innerEvalChebyshevPSBatch(cc, ctxt, su, s2Vec, k, m - 1, T, T2, level_offset + 1, max_m, cache);
 	} else {
 		auto scopy0 = s2Vec[0];
 		scopy0.resize(k);
@@ -667,7 +627,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			su.growToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - 1 - level_offset);
 			su.dropToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - 1 - level_offset);
 
-			evalLinearWSumMutablePtBatch(su, cc, cc_, ctxs, weights, cache, alignedCache);
+			evalLinearWSumMutablePtBatch(su, cc, cc_, ctxs, weights, cache);
 
 			std::vector<double> freeTerm;
 			if (needCompute) {
@@ -745,7 +705,8 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
   const std::vector<std::vector<double>>& batchOfCoefficients,
   double lower_bound,
   double upper_bound,
-  PlaintextCache* cache) {
+  PlaintextCache* cache,
+  AlignedCiphertextCache* cacheCt) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
 	if (batchOfCoefficients.empty())
@@ -896,9 +857,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 
 	// --- Batched Paterson-Stockmeyer evaluation ---
 
-	AlignedCiphertextCache cacheTest(cc_);
-
-	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache, &cacheTest);
+	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache, cacheCt);
 #ifdef DEBUG_CHEBYSHEV_TRACE
 	std::cout << "[BATCH] after innerEvalChebyshevPSBatch (before final sub): level=" << ctxt.getLevel() << " noise=" << ctxt.NoiseLevel << std::endl;
 #endif

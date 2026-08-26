@@ -53,6 +53,35 @@ class PlaintextCache {
   public:
 	bool recording = true;
 
+	std::map<std::pair<const Ciphertext*, int32_t>, Ciphertext> storage;
+
+	FIDESlib::CKKS::Context& cc_;
+	
+	Ciphertext* getAligned(Ciphertext* src, int32_t targetLevel, FIDESlib::CKKS::Context& cc_) {
+		if (this.cc_ == nullptr) {
+			this.cc_ = cc_;
+		}
+		if (src->getLevel() == targetLevel && src->NoiseLevel == 1) {
+			std::cout << "Recupero da cache" << std::endl;
+			return src;
+		}
+		std::cout << "Costruisco da cache" << std::endl;
+		auto key = std::make_pair(static_cast<const Ciphertext*>(src), targetLevel);
+		auto it	 = storage.find(key);
+		if (it != storage.end()) {
+			return &it->second;
+		}
+		auto [inserted, _] = storage.emplace(key, Ciphertext(cc_));
+		Ciphertext& a	   = inserted->second;
+		a.copy(*src);
+		if (a.NoiseLevel == 2)
+			a.rescale();
+		a.growToLevel(targetLevel);
+		a.dropToLevel(targetLevel);
+		return &a;
+	}
+
+
 	void record(Plaintext&& pt) {
 		entries.push_back(std::move(pt));
 	}
