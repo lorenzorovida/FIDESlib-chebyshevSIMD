@@ -621,7 +621,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 	Ciphertext su(cc_);
 	if (lbcrypto::Degree(s2Vec[0]) > k) {
 		assert(m > 2);
-		innerEvalChebyshevPSBatch(cc, ctxt, su, s2Vec, k, m - 1, T, T2, level_offset + 1, max_m, cache, cacheTest);
+		innerEvalChebyshevPSBatch(cc, ctxt, su, s2Vec, k, m - 1, T, T2, level_offset + 1, max_m, cache, alignedCache);
 	} else {
 		auto scopy0 = s2Vec[0];
 		scopy0.resize(k);
@@ -896,7 +896,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 
 	AlignedCiphertextCache cacheTest(cc_);
 
-	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache, cacheTest);
+	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache, alignedCache);
 #ifdef DEBUG_CHEBYSHEV_TRACE
 	std::cout << "[BATCH] after innerEvalChebyshevPSBatch (before final sub): level=" << ctxt.getLevel() << " noise=" << ctxt.NoiseLevel << std::endl;
 #endif
