@@ -81,7 +81,7 @@ class PlaintextCache {
 		s2vec.push_back(s2);
 	}
 
-  void recordF2(std::vector<std::vector<double>>& f2) {
+	void recordF2(std::vector<std::vector<double>>& f2) {
 		f2vec.push_back(f2);
 	}
 
@@ -109,7 +109,7 @@ class PlaintextCache {
 		return s2vec[readIdxS2++];
 	}
 
-  const std::vector<std::vector<double>>& nextF2() {
+	const std::vector<std::vector<double>>& nextF2() {
 		assert(readIdxf2 < f2vec.size() &&
 		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
 		  "mismatch with the precompute, or ciphertext structurally different "
@@ -118,14 +118,14 @@ class PlaintextCache {
 	}
 
 	void resetReadCursor() {
-		readIdxQr = 0;
-		readIdxCs = 0;
-		readIdxS2 = 0;
-    readIdx = 0;
-    readIdxf2 = 0;
-    readIdxVec1 = 0;
-    readIdxVec2 = 0;
-    readIdxCtxsSel = 0;
+		readIdxQr	   = 0;
+		readIdxCs	   = 0;
+		readIdxS2	   = 0;
+		readIdx		   = 0;
+		readIdxf2	   = 0;
+		readIdxVec1	   = 0;
+		readIdxVec2	   = 0;
+		readIdxCtxsSel = 0;
 	}
 
 	// --- Generic caching for the per-slot weight-extraction vectors ---
@@ -184,24 +184,24 @@ class PlaintextCache {
 		return ctxsSelections[readIdxCtxsSel++];
 	}
 
-  std::vector<Plaintext> entries;
+	std::vector<Plaintext> entries;
 	std::vector<std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>> entriesdivqrVec;
 	std::vector<std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>> entriesdivcsVec;
 	std::vector<std::vector<std::vector<double>>> s2vec;
-  std::vector<std::vector<std::vector<double>>> f2vec;
-  std::vector<std::vector<double>> vec1;
-  std::vector<std::vector<std::vector<double>>> vec2;
-  std::vector<std::vector<uint32_t>> ctxsSelections;
+	std::vector<std::vector<std::vector<double>>> f2vec;
+	std::vector<std::vector<double>> vec1;
+	std::vector<std::vector<std::vector<double>>> vec2;
+	std::vector<std::vector<uint32_t>> ctxsSelections;
 
   private:
-	size_t readIdx	 = 0;
-	size_t readIdxQr = 0;
-	size_t readIdxCs = 0;
-	size_t readIdxS2 = 0;
-  size_t readIdxf2 = 0;
-  size_t readIdxVec1 = 0;
-  size_t readIdxVec2 = 0;
-  size_t readIdxCtxsSel = 0;
+	size_t readIdx		  = 0;
+	size_t readIdxQr	  = 0;
+	size_t readIdxCs	  = 0;
+	size_t readIdxS2	  = 0;
+	size_t readIdxf2	  = 0;
+	size_t readIdxVec1	  = 0;
+	size_t readIdxVec2	  = 0;
+	size_t readIdxCtxsSel = 0;
 };
 
 /**
