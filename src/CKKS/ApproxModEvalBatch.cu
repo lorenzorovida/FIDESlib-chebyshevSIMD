@@ -63,6 +63,69 @@ namespace {
  */
 
 /**
+ * Per-call memoization of "T[i] aligned to level L, NoiseLevel==1" copies,
+ * scoped to a single evalChebyshevSeriesPSBatchImpl invocation (constructed
+ * fresh at the top of that function, passed down through the recursion, and
+ * destroyed when it returns).
+ *
+ * WHY THIS EXISTS: evalLinearWSumMutablePtBatch is called many times during
+ * one Paterson-Stockmeyer recursion (once per q/c/s branch at every
+ * recursion level), and the targetLevel it computes always has the shape
+ * `T2[m-1]->getLevel() + (NoiseLevel==1 ? 1 : 0) - offset`, with `offset`
+ * only ever level_offset or level_offset+1. So the *same* T[i] is very
+ * often re-aligned to the *same* targetLevel across multiple, unrelated
+ * evalLinearWSumMutablePtBatch calls -- each one previously redid its own
+ * independent copy+growToLevel+dropToLevel for it (see the note at the top
+ * of evalLinearWSumMutablePtBatch). Since T[i] never changes value once
+ * computed, and the set of (T[i], targetLevel) pairs visited is completely
+ * determined by k/m/rescaleTechnique (never by ciphertext values -- same
+ * determinism property the PlaintextCache already relies on), the aligned
+ * copy can simply be memoized by (pointer identity of T[i], targetLevel)
+ * for the lifetime of one top-level call.
+ *
+ * This does NOT persist across separate evalChebyshevSeriesPSBatchApply
+ * calls (unlike PlaintextCache) because the underlying Ciphertext GPU
+ * buffers of T[]/T2[] are reallocated fresh every call -- pointer identity
+ * only makes sense within one call. It still collapses what could be
+ * O(recursion-steps) redundant copies of the same T[i] into at most one per
+ * (T[i], distinct level actually visited).
+ */
+struct AlignedCiphertextCache {
+	FIDESlib::CKKS::Context& cc_;
+	// Backing storage for aligned copies; std::map so references handed out
+	// via getAligned() remain stable even as more entries are inserted
+	// (unlike std::vector, which may reallocate and invalidate them).
+	std::map<std::pair<const Ciphertext*, int32_t>, Ciphertext> storage;
+
+	explicit AlignedCiphertextCache(FIDESlib::CKKS::Context& cc_) : cc_(cc_) {
+	}
+
+	// Returns a pointer to `src` aligned to (targetLevel, NoiseLevel==1).
+	// If `src` is already exactly at that level/NoiseLevel, returns `src`
+	// itself (no copy at all, matching the original fast path). Otherwise,
+	// builds the aligned copy once and reuses it on every subsequent call
+	// with the same (src, targetLevel) pair.
+	Ciphertext* getAligned(Ciphertext* src, int32_t targetLevel) {
+		if (src->getLevel() == targetLevel && src->NoiseLevel == 1) {
+			return src;
+		}
+		auto key = std::make_pair(static_cast<const Ciphertext*>(src), targetLevel);
+		auto it	 = storage.find(key);
+		if (it != storage.end()) {
+			return &it->second;
+		}
+		auto [inserted, _] = storage.emplace(key, Ciphertext(cc_));
+		Ciphertext& a		= inserted->second;
+		a.copy(*src);
+		if (a.NoiseLevel == 2)
+			a.rescale();
+		a.growToLevel(targetLevel);
+		a.dropToLevel(targetLevel);
+		return &a;
+	}
+};
+
+/**
  * Builds a CKKS plaintext that packs `values[j]` into slot `j`, encoded at
  * the same level/scale/slot-count as `like`, and loads it onto the GPU.
  *
@@ -163,7 +226,13 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
   FIDESlib::CKKS::Context& cc_,
   const std::vector<Ciphertext*>& ctxs,
   const std::vector<std::vector<double>>& weightsPerSlot,
-  PlaintextCache* cache = nullptr) {
+  PlaintextCache* cache				  = nullptr,
+  AlignedCiphertextCache* alignedCache = nullptr) {
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
+	cudaEventRecord(start);
 
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
 	assert(ctxs.size() == weightsPerSlot.size());
@@ -179,31 +248,43 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 		targetLevel = ctxs[0]->getLevel();
 	}
 
-	// Avoid a needless Ciphertext allocation + full-limb copy +
-	// growToLevel/dropToLevel round trip when ctxs[i] is ALREADY at the
-	// target level and NoiseLevel==1 (the common case: all T[] powers are
-	// dropped to a shared minimum level right after being computed, see
-	// evalChebyshevSeriesPSBatchImpl's T[] loop). This copy was happening
-	// unconditionally on every call to this function -- including every
-	// call inside evalChebyshevSeriesPSBatchApply, where it dominates
-	// runtime far more than the plaintext CPU-encoding the precompute/apply
-	// split was built to eliminate, since it is real CUDA allocation +
-	// memcpy work on full ciphertexts, not small per-slot plaintexts.
-	std::vector<Ciphertext> alignedStorage;
-	alignedStorage.reserve(n);
+	// Align each ctxs[i] to (targetLevel, NoiseLevel==1). When alignedCache
+	// is provided (the normal case -- see evalChebyshevSeriesPSBatchImpl,
+	// which owns one AlignedCiphertextCache per top-level call and threads
+	// it through the whole recursion), a given (ctxs[i], targetLevel) pair
+	// is only ever copied+aligned ONCE per call to
+	// evalChebyshevSeriesPSBatch/...Apply, no matter how many times this
+	// function is invoked with that same pair during the recursion (very
+	// common: T[i] gets re-aligned to the same handful of target levels
+	// across many q/c/s branches). Previously this copy was redone from
+	// scratch, unconditionally, on every single call -- real CUDA
+	// allocation + full-limb memcpy work that dominated runtime far more
+	// than the plaintext CPU-encoding the precompute/apply split was built
+	// to eliminate.
 	std::vector<Ciphertext*> alignedPtrs(n);
-	for (uint32_t i = 0; i < n; ++i) {
-		if (ctxs[i]->getLevel() == targetLevel && ctxs[i]->NoiseLevel == 1) {
-			alignedPtrs[i] = ctxs[i];
-		} else {
-			alignedStorage.emplace_back(cc_);
-			Ciphertext& a = alignedStorage.back();
-			a.copy(*ctxs[i]);
-			if (a.NoiseLevel == 2)
-				a.rescale();
-			a.growToLevel(targetLevel);
-			a.dropToLevel(targetLevel);
-			alignedPtrs[i] = &a;
+	// Fallback storage only used when no alignedCache is passed in (keeps
+	// this function correct/self-contained for any other caller), in which
+	// case we're back to the original per-call behavior.
+	std::vector<Ciphertext> alignedStorageFallback;
+	if (alignedCache != nullptr) {
+		for (uint32_t i = 0; i < n; ++i) {
+			alignedPtrs[i] = alignedCache->getAligned(ctxs[i], targetLevel);
+		}
+	} else {
+		alignedStorageFallback.reserve(n);
+		for (uint32_t i = 0; i < n; ++i) {
+			if (ctxs[i]->getLevel() == targetLevel && ctxs[i]->NoiseLevel == 1) {
+				alignedPtrs[i] = ctxs[i];
+			} else {
+				alignedStorageFallback.emplace_back(cc_);
+				Ciphertext& a = alignedStorageFallback.back();
+				a.copy(*ctxs[i]);
+				if (a.NoiseLevel == 2)
+					a.rescale();
+				a.growToLevel(targetLevel);
+				a.dropToLevel(targetLevel);
+				alignedPtrs[i] = &a;
+			}
 		}
 	}
 
@@ -226,6 +307,16 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 		out.rescale();
 	}
 
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+
+	float milliseconds = 0;
+	cudaEventElapsedTime(&milliseconds, start, stop);
+
+	printf("Tempo evalLinearWSumMutablePtBatch: %f ms\n", milliseconds);
+
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
 }
 
 /**
@@ -289,9 +380,10 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   uint32_t m,
   const std::vector<Ciphertext*>& T,
   const std::vector<Ciphertext*>& T2,
-  int level_offset		= 0,
-  int max_m				= 1000,
-  PlaintextCache* cache = nullptr) {
+  int level_offset					  = 0,
+  int max_m							  = 1000,
+  PlaintextCache* cache				  = nullptr,
+  AlignedCiphertextCache* alignedCache = nullptr) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
 	FIDESlib::CKKS::Context& cc_ = ctxt.cc_;
@@ -679,6 +771,12 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	if (static_cast<int>(batchOfCoefficients.size()) != ctxt.slots)
 		OPENFHE_THROW("The set of coefficients must be as large as the number of slots of the input ciphertext");
 
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
+	cudaEventRecord(start);
+
 	size_t coeffSize = batchOfCoefficients[0].size();
 	for (const auto& v : batchOfCoefficients) {
 		if (v.size() != coeffSize)
@@ -710,7 +808,22 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	std::vector<std::vector<double>> f2Batch(batchOfCoefficients.size());
 
 	if (cache != nullptr && !cache->recording) {
+		cudaEvent_t start2, stop2;
+		cudaEventCreate(&start2);
+		cudaEventCreate(&stop2);
+
+		cudaEventRecord(start2);
 		f2Batch = cache->nextF2();
+		cudaEventRecord(stop2);
+		cudaEventSynchronize(stop2);
+
+		float milliseconds2 = 0;
+		cudaEventElapsedTime(&milliseconds2, start2, stop2);
+
+		printf("Loading from cache: %f ms\n", milliseconds2);
+
+		cudaEventDestroy(start2);
+		cudaEventDestroy(stop2);
 	} else {
 		for (size_t b = 0; b < batchOfCoefficients.size(); ++b) {
 			f2Batch[b] = batchOfCoefficients[b];
@@ -722,6 +835,12 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	}
 
 	ContextData& ccd = ctxt.cc;
+
+	cudaEvent_t startSame, stopSame;
+	cudaEventCreate(&startSame);
+	cudaEventCreate(&stopSame);
+
+	cudaEventRecord(startSame);
 
 	// --- Compute Chebyshev powers T[1..k], T2[1..m], T2km1 ---
 	// Identical to evalChebyshevSeries: these depend only on ctxt, not on the
@@ -818,6 +937,27 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	std::cout << "[BATCH] T2km1 level=" << T2km1.getLevel() << " noise=" << T2km1.NoiseLevel << std::endl;
 #endif
 
+	cudaEventRecord(stopSame);
+	cudaEventSynchronize(stopSame);
+
+	float millisecondsSame = 0;
+	cudaEventElapsedTime(&millisecondsSame, startSame, stopSame);
+
+	printf("Same call: %f ms\n", millisecondsSame);
+
+	cudaEventDestroy(startSame);
+	cudaEventDestroy(stopSame);
+
+	cudaEventRecord(stop);
+	cudaEventSynchronize(stop);
+
+	float milliseconds = 0;
+	cudaEventElapsedTime(&milliseconds, start, stop);
+
+	printf("First call: %f ms\n", milliseconds);
+
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
 
 	// --- Batched Paterson-Stockmeyer evaluation ---
 	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache);
