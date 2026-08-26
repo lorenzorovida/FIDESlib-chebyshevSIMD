@@ -107,8 +107,10 @@ struct AlignedCiphertextCache {
 	// with the same (src, targetLevel) pair.
 	Ciphertext* getAligned(Ciphertext* src, int32_t targetLevel) {
 		if (src->getLevel() == targetLevel && src->NoiseLevel == 1) {
+			std::cout << "Recupero da cache" << std::endl;
 			return src;
 		}
+		std::cout << "Costruisco da cache" << std::endl;
 		auto key = std::make_pair(static_cast<const Ciphertext*>(src), targetLevel);
 		auto it	 = storage.find(key);
 		if (it != storage.end()) {
@@ -263,12 +265,10 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 	// case we're back to the original per-call behavior.
 	std::vector<Ciphertext> alignedStorageFallback;
 	if (alignedCache != nullptr) {
-		std::cout << "Recupero da cache" << std::endl;
 		for (uint32_t i = 0; i < n; ++i) {
 			alignedPtrs[i] = alignedCache->getAligned(ctxs[i], targetLevel);
 		}
 	} else {
-		std::cout << "Costruisco per cache" << std::endl;
 		alignedStorageFallback.reserve(n);
 		for (uint32_t i = 0; i < n; ++i) {
 			if (ctxs[i]->getLevel() == targetLevel && ctxs[i]->NoiseLevel == 1) {
