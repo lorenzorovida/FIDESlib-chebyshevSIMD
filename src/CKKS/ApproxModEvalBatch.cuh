@@ -80,7 +80,7 @@ class PlaintextCache {
 
 		recordCtxtWsum(std::move(copy));
 
-		return &a;
+		return std::shared_ptr<Ciphertext>(a);
 	}
 
 	
