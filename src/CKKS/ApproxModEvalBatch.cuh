@@ -84,7 +84,7 @@ class PlaintextCache {
 		return &a;
 	}
 
-	void recordCtxtWsum(Ciphertext&& ctxt) {
+	void recordCtxtWsum(Ciphertext ctxt) {
 		ctxtsWsum.push_back(std::move(ctxt));
 	}
 
