@@ -41,9 +41,9 @@
 #ifndef GPUCKKS_APPROXMODEVALBATCH_CUH
 #define GPUCKKS_APPROXMODEVALBATCH_CUH
 
-#include "CKKS/Plaintext.cuh"
 #include "CKKS/Ciphertext.cuh"
 #include "CKKS/Context.cuh"
+#include "CKKS/Plaintext.cuh"
 #include "CKKS/forwardDefs.cuh"
 #include "openfhe-interface/RawCiphertext.cuh"
 #include <cinttypes>
@@ -56,7 +56,7 @@ class PlaintextCache {
 	bool recording = true;
 
 	std::map<std::pair<const Ciphertext*, int32_t>, Ciphertext> storage;
-	
+
 	void recordCtxtWsum(Ciphertext&& ctxt) {
 		ctxtsWsum.push_back(std::move(ctxt));
 	}
@@ -68,22 +68,22 @@ class PlaintextCache {
 		}
 		std::cout << "Costruisco da cache" << std::endl;
 
-		Ciphertext a	   = Ciphertext(cc_);
-		a.copy(*src);
-		if (a.NoiseLevel == 2)
-			a.rescale();
-		a.growToLevel(targetLevel);
-		a.dropToLevel(targetLevel);
+		Ciphertext* a = new Ciphertext(cc_);
+		a->copy(*src);
+
+		if (a->NoiseLevel == 2)
+			a->rescale();
+
+		a->growToLevel(targetLevel);
+		a->dropToLevel(targetLevel);
 
 		Ciphertext copy(cc_);
-		copy.copy(a);     
+		copy.copy(*a);
 
 		recordCtxtWsum(std::move(copy));
 
-		return std::shared_ptr<Ciphertext>(a);
+		return a;
 	}
-
-	
 
 	void record(Plaintext&& pt) {
 		entries.push_back(std::move(pt));
@@ -158,14 +158,14 @@ class PlaintextCache {
 	}
 
 	void resetReadCursor() {
-		readIdxQr	   = 0;
-		readIdxCs	   = 0;
-		readIdxS2	   = 0;
-		readIdx		   = 0;
-		readIdxf2	   = 0;
-		readIdxVec1	   = 0;
-		readIdxVec2	   = 0;
-		readIdxCtxsSel = 0;
+		readIdxQr		= 0;
+		readIdxCs		= 0;
+		readIdxS2		= 0;
+		readIdx			= 0;
+		readIdxf2		= 0;
+		readIdxVec1		= 0;
+		readIdxVec2		= 0;
+		readIdxCtxsSel	= 0;
 		readIdxCtxtWsum = 0;
 	}
 
@@ -234,15 +234,16 @@ class PlaintextCache {
 	std::vector<std::vector<std::vector<double>>> vec2;
 	std::vector<std::vector<uint32_t>> ctxsSelections;
 	std::vector<Ciphertext> ctxtsWsum;
+
   private:
-	size_t readIdx		  = 0;
-	size_t readIdxQr	  = 0;
-	size_t readIdxCs	  = 0;
-	size_t readIdxS2	  = 0;
-	size_t readIdxf2	  = 0;
-	size_t readIdxVec1	  = 0;
-	size_t readIdxVec2	  = 0;
-	size_t readIdxCtxsSel = 0;
+	size_t readIdx		   = 0;
+	size_t readIdxQr	   = 0;
+	size_t readIdxCs	   = 0;
+	size_t readIdxS2	   = 0;
+	size_t readIdxf2	   = 0;
+	size_t readIdxVec1	   = 0;
+	size_t readIdxVec2	   = 0;
+	size_t readIdxCtxsSel  = 0;
 	size_t readIdxCtxtWsum = 0;
 };
 
