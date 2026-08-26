@@ -61,35 +61,6 @@ namespace {
  */
 
 /**
- * Per-call memoization of "T[i] aligned to level L, NoiseLevel==1" copies,
- * scoped to a single evalChebyshevSeriesPSBatchImpl invocation (constructed
- * fresh at the top of that function, passed down through the recursion, and
- * destroyed when it returns).
- *
- * WHY THIS EXISTS: evalLinearWSumMutablePtBatch is called many times during
- * one Paterson-Stockmeyer recursion (once per q/c/s branch at every
- * recursion level), and the targetLevel it computes always has the shape
- * `T2[m-1]->getLevel() + (NoiseLevel==1 ? 1 : 0) - offset`, with `offset`
- * only ever level_offset or level_offset+1. So the *same* T[i] is very
- * often re-aligned to the *same* targetLevel across multiple, unrelated
- * evalLinearWSumMutablePtBatch calls -- each one previously redid its own
- * independent copy+growToLevel+dropToLevel for it (see the note at the top
- * of evalLinearWSumMutablePtBatch). Since T[i] never changes value once
- * computed, and the set of (T[i], targetLevel) pairs visited is completely
- * determined by k/m/rescaleTechnique (never by ciphertext values -- same
- * determinism property the PlaintextCache already relies on), the aligned
- * copy can simply be memoized by (pointer identity of T[i], targetLevel)
- * for the lifetime of one top-level call.
- *
- * This does NOT persist across separate evalChebyshevSeriesPSBatchApply
- * calls (unlike PlaintextCache) because the underlying Ciphertext GPU
- * buffers of T[]/T2[] are reallocated fresh every call -- pointer identity
- * only makes sense within one call. It still collapses what could be
- * O(recursion-steps) redundant copies of the same T[i] into at most one per
- * (T[i], distinct level actually visited).
- */
-
-/**
  * Builds a CKKS plaintext that packs `values[j]` into slot `j`, encoded at
  * the same level/scale/slot-count as `like`, and loads it onto the GPU.
  *
@@ -190,7 +161,7 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
   FIDESlib::CKKS::Context& cc_,
   const std::vector<Ciphertext*>& ctxs,
   const std::vector<std::vector<double>>& weightsPerSlot,
-  PlaintextCache* cache				   = nullptr) {
+  PlaintextCache* cache = nullptr) {
 
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
 	assert(ctxs.size() == weightsPerSlot.size());
@@ -206,43 +177,31 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 		targetLevel = ctxs[0]->getLevel();
 	}
 
-	// Align each ctxs[i] to (targetLevel, NoiseLevel==1). When alignedCache
-	// is provided (the normal case -- see evalChebyshevSeriesPSBatchImpl,
-	// which owns one AlignedCiphertextCache per top-level call and threads
-	// it through the whole recursion), a given (ctxs[i], targetLevel) pair
-	// is only ever copied+aligned ONCE per call to
-	// evalChebyshevSeriesPSBatch/...Apply, no matter how many times this
-	// function is invoked with that same pair during the recursion (very
-	// common: T[i] gets re-aligned to the same handful of target levels
-	// across many q/c/s branches). Previously this copy was redone from
-	// scratch, unconditionally, on every single call -- real CUDA
-	// allocation + full-limb memcpy work that dominated runtime far more
-	// than the plaintext CPU-encoding the precompute/apply split was built
-	// to eliminate.
+	// Avoid a needless Ciphertext allocation + full-limb copy +
+	// growToLevel/dropToLevel round trip when ctxs[i] is ALREADY at the
+	// target level and NoiseLevel==1 (the common case: all T[] powers are
+	// dropped to a shared minimum level right after being computed, see
+	// evalChebyshevSeriesPSBatchImpl's T[] loop). This copy was happening
+	// unconditionally on every call to this function -- including every
+	// call inside evalChebyshevSeriesPSBatchApply, where it dominates
+	// runtime far more than the plaintext CPU-encoding the precompute/apply
+	// split was built to eliminate, since it is real CUDA allocation +
+	// memcpy work on full ciphertexts, not small per-slot plaintexts.
+	std::vector<Ciphertext> alignedStorage;
+	alignedStorage.reserve(n);
 	std::vector<Ciphertext*> alignedPtrs(n);
-	// Fallback storage only used when no alignedCache is passed in (keeps
-	// this function correct/self-contained for any other caller), in which
-	// case we're back to the original per-call behavior.
-	std::vector<Ciphertext> alignedStorageFallback;
-	if (cache != nullptr) {
-		for (uint32_t i = 0; i < n; ++i) {
-			alignedPtrs[i] = cache->getAligned(ctxs[i], targetLevel, cc_);
-		}
-	} else {
-		alignedStorageFallback.reserve(n);
-		for (uint32_t i = 0; i < n; ++i) {
-			if (ctxs[i]->getLevel() == targetLevel && ctxs[i]->NoiseLevel == 1) {
-				alignedPtrs[i] = ctxs[i];
-			} else {
-				alignedStorageFallback.emplace_back(cc_);
-				Ciphertext& a = alignedStorageFallback.back();
-				a.copy(*ctxs[i]);
-				if (a.NoiseLevel == 2)
-					a.rescale();
-				a.growToLevel(targetLevel);
-				a.dropToLevel(targetLevel);
-				alignedPtrs[i] = &a;
-			}
+	for (uint32_t i = 0; i < n; ++i) {
+		if (ctxs[i]->getLevel() == targetLevel && ctxs[i]->NoiseLevel == 1) {
+			alignedPtrs[i] = ctxs[i];
+		} else {
+			alignedStorage.emplace_back(cc_);
+			Ciphertext& a = alignedStorage.back();
+			a.copy(*ctxs[i]);
+			if (a.NoiseLevel == 2)
+				a.rescale();
+			a.growToLevel(targetLevel);
+			a.dropToLevel(targetLevel);
+			alignedPtrs[i] = &a;
 		}
 	}
 
@@ -327,9 +286,9 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   uint32_t m,
   const std::vector<Ciphertext*>& T,
   const std::vector<Ciphertext*>& T2,
-  int level_offset					   = 0,
-  int max_m							   = 1000,
-  PlaintextCache* cache				   = nullptr) {
+  int level_offset		= 0,
+  int max_m				= 1000,
+  PlaintextCache* cache = nullptr) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
 	FIDESlib::CKKS::Context& cc_ = ctxt.cc_;
@@ -744,7 +703,6 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 
 	if (cache != nullptr && !cache->recording) {
 		f2Batch = cache->nextF2();
-
 	} else {
 		for (size_t b = 0; b < batchOfCoefficients.size(); ++b) {
 			f2Batch[b] = batchOfCoefficients[b];
