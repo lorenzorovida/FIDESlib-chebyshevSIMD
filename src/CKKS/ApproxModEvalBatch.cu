@@ -125,7 +125,7 @@ struct AlignedCiphertextCache {
 	}
 };
 
-AlignedCiphertextCache cacheTest;
+
 /**
  * Builds a CKKS plaintext that packs `values[j]` into slot `j`, encoded at
  * the same level/scale/slot-count as `like`, and loads it onto the GPU.
@@ -893,7 +893,10 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 #endif
 
 	// --- Batched Paterson-Stockmeyer evaluation ---
-	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache);
+
+	AlignedCiphertextCache cacheTest(cc_);
+
+	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache, cacheTest);
 #ifdef DEBUG_CHEBYSHEV_TRACE
 	std::cout << "[BATCH] after innerEvalChebyshevPSBatch (before final sub): level=" << ctxt.getLevel() << " noise=" << ctxt.NoiseLevel << std::endl;
 #endif
