@@ -982,7 +982,6 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbc
   double lower_bound,
   double upper_bound) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
-	nvtx3::scoped_range range{ "PSBatchApply" };
 
 	// PlaintextCache::next() advances a read cursor, which is logically
 	// read-only from the caller's perspective (precomp can be
