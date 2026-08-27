@@ -730,7 +730,7 @@ void evalIntegerMult(Ciphertext& out,
 
 	std::vector<double> mask1(a.slots, 0.0);
 
-	for (int j = 0; j < repetitions_original; ++j) {
+	for (int j = 0; j < repetitions; ++j) {
 
 		for (int i = 0; i < bits; ++i) {
 
@@ -742,7 +742,7 @@ void evalIntegerMult(Ciphertext& out,
 
 	std::vector<double> mask2(a.slots, 0.0);
 
-	for (int j = 0; j < repetitions_original; ++j) {
+	for (int j = 0; j < repetitions; ++j) {
 
 		for (int i = 0; i < bits; ++i) {
 
@@ -840,39 +840,18 @@ void evalIntegerMult(Ciphertext& out,
 	//out.copy(p3);
 	//return;
 
-	//20:14 PROVO FALSE
-	if (!overflow && bits == bits_original && bits != 8) {
+	if (false && !overflow && bits == bits_original && bits != 8) {
 
 		Ciphertext S(a.cc_);
 		Ciphertext C(a.cc_);
 
 		csa3(S, C, p1, p2, p3);
 
-		//LAST TODO OK: verificando slot per slot questa S
-		//LAST TODO: VERIFICHIAMO LA la C
-		//out.copy(C);
-		//return;
-
-		//C correct
-		//out.copy(C);
-		//return;
-
 		Ciphertext rotatedC(a.cc_);
 
 		rotatedC.rotate(C, -1);
 
-		// add_integer(S, rot(C, -1), bits)
 		evalIntegerAdd(S, rotatedC, bits);
-
-		//Correct
-		//out.copy(S);
-		//return;
-
-		// binboot(...)
-		//
-		// Replace with your FIDESlib binboot implementation.
-		//
-		// result = binboot(S);
 
 		if (S.NoiseLevel == 2) {
 			S.dropToLevel(5, false);
@@ -1177,7 +1156,7 @@ void divInteger(Ciphertext& out,
 		{
 			Ciphertext one(num.cc_);
 			// TODO: replace with FIDESlib's actual trivial-encryption call.
-			//one.trivialEncrypt(makePerSlotPlaintext(cc, cc_, mask, term));
+			// one.trivialEncrypt(makePerSlotPlaintext(cc, cc_, mask, term));
 
 			evalIntegerAdd(term, one, bits * 2);
 			binboot(term, term);
