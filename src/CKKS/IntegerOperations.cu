@@ -1456,7 +1456,6 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 	FIDESlib::CKKS::Context cc_ = ctxtA.cc_;
 
 	result.mult(ctxtA, ctxtB, true);
-	return;
 
 	// result = result - 1
 	std::vector<double> minusOne(result.slots, -1.0);
