@@ -1506,6 +1506,8 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 	Plaintext minusOnePt(result.cc_, raw);
 
 	result.addPt(minusOnePt);
+
+	return;
 	
 	evalChebyshevSeriesPSBatch(cc, result, coeffs4BitsMultiplier, -1, 1);
 
