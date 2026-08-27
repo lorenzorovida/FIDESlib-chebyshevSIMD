@@ -544,6 +544,10 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext a_processed(a.cc_);
 		a_processed.copy(a_low);
 
+		//SI RICOMINCIA: a_processed
+		out.copy(a_processed);
+		return;
+
 
 		// --------------------------------------------------------
 		// process_array(...)
@@ -719,8 +723,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, cc);
 
-		out.copy(result);
-		return;
+		
 	} else {
 		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, cc);
 		out.copy(result);
