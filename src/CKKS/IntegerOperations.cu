@@ -619,7 +619,7 @@ void evalIntegerMult(Ciphertext& out,
 		
 		//out.copy(a_processed);
 		//return;
-		//A_PROCESSED SEMBRA GIUSTO
+		//A_PROCESSED SEMBRA GIUSTO (INT)
 
 		// ========================================================
 		// B
@@ -723,14 +723,14 @@ void evalIntegerMult(Ciphertext& out,
 
 		Ciphertext a_decimal(a.cc_);
 		bintodec(cc, a_decimal, a_processed, repetitions * 4);
-		out.copy(a_decimal);
-		return;
 
 		Ciphertext b_decimal(a.cc_);
 		bintodec(cc, b_decimal, b_processed, repetitions * 4);
 
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, cc);
 
+		out.copy(a_decimal);
+		return;
 		
 	} else {
 		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, cc);
