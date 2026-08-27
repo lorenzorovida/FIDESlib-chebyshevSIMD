@@ -116,7 +116,7 @@ struct AlignedCiphertextCache {
 			return &it->second;
 		}
 		auto [inserted, _] = storage.emplace(key, Ciphertext(cc_));
-		Ciphertext& a		= inserted->second;
+		Ciphertext& a	   = inserted->second;
 		a.copy(*src);
 		if (a.NoiseLevel == 2)
 			a.rescale();
@@ -227,8 +227,10 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
   FIDESlib::CKKS::Context& cc_,
   const std::vector<Ciphertext*>& ctxs,
   const std::vector<std::vector<double>>& weightsPerSlot,
-  PlaintextCache* cache				  = nullptr,
+  PlaintextCache* cache				   = nullptr,
   AlignedCiphertextCache* alignedCache = nullptr) {
+	//out.copy(*ctxt[0]);
+	//return;
 
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
 	assert(ctxs.size() == weightsPerSlot.size());
@@ -323,6 +325,16 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
  * rescale a `ctxt` that had already been silently rescaled here).
  */
 void addPerSlotScalar(Ciphertext& ctxt, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_, const std::vector<double>& values, PlaintextCache* cache = nullptr) {
+	if (cache != nullptr && !cache->recording) {
+		// Apply/replay mode: makePerSlotPlaintext's fast path never touches
+		// its `storage` out-param, it just returns a pointer straight into
+		// the cache (&cache->next()). Constructing a local Plaintext here
+		// just to discard it unused was allocating real GPU memory on every
+		// single call for nothing -- this was the dominant cost, not
+		// multPt/addMultPt itself.
+		ctxt.addPt(cache->next());
+		return;
+	}
 	Plaintext storage(cc_);
 	const Plaintext* pt = makePerSlotPlaintext(cc, cc_, values, ctxt, storage, cache);
 	ctxt.addPt(*pt);
@@ -343,6 +355,12 @@ void multPerSlotScalar(Ciphertext& ctxt,
   const std::vector<double>& values,
   bool rescale,
   PlaintextCache* cache = nullptr) {
+	if (cache != nullptr && !cache->recording) {
+		// See addPerSlotScalar: avoid an unused Plaintext allocation on the
+		// hot Apply path.
+		ctxt.multPt(src, cache->next(), rescale);
+		return;
+	}
 	Plaintext storage(cc_);
 	const Plaintext* pt = makePerSlotPlaintext(cc, cc_, values, src, storage, cache);
 	ctxt.multPt(src, *pt, rescale);
@@ -365,9 +383,9 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   uint32_t m,
   const std::vector<Ciphertext*>& T,
   const std::vector<Ciphertext*>& T2,
-  int level_offset					  = 0,
-  int max_m							  = 1000,
-  PlaintextCache* cache				  = nullptr,
+  int level_offset					   = 0,
+  int max_m							   = 1000,
+  PlaintextCache* cache				   = nullptr,
   AlignedCiphertextCache* alignedCache = nullptr) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
