@@ -117,7 +117,7 @@ struct AlignedCiphertextCache {
 			return &it->second;
 		}
 		auto [inserted, _] = storage.emplace(key, Ciphertext(cc_));
-		Ciphertext& a		= inserted->second;
+		Ciphertext& a	   = inserted->second;
 		a.copy(*src);
 		if (a.NoiseLevel == 2)
 			a.rescale();
@@ -228,7 +228,7 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
   FIDESlib::CKKS::Context& cc_,
   const std::vector<Ciphertext*>& ctxs,
   const std::vector<std::vector<double>>& weightsPerSlot,
-  PlaintextCache* cache				  = nullptr,
+  PlaintextCache* cache				   = nullptr,
   AlignedCiphertextCache* alignedCache = nullptr) {
 	out.copy(*ctxs[0]);
 	return;
@@ -368,9 +368,9 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   uint32_t m,
   const std::vector<Ciphertext*>& T,
   const std::vector<Ciphertext*>& T2,
-  int level_offset					  = 0,
-  int max_m							  = 1000,
-  PlaintextCache* cache				  = nullptr,
+  int level_offset					   = 0,
+  int max_m							   = 1000,
+  PlaintextCache* cache				   = nullptr,
   AlignedCiphertextCache* alignedCache = nullptr) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
@@ -893,7 +893,6 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	std::cout << "[BATCH] T2km1 level=" << T2km1.getLevel() << " noise=" << T2km1.NoiseLevel << std::endl;
 #endif
 
-
 	// --- Batched Paterson-Stockmeyer evaluation ---
 	// Scoped to this single top-level call: memoizes T[i]/T2[i] alignment
 	// copies by (pointer, targetLevel) across the whole recursion below, so
@@ -964,7 +963,9 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbc
   const std::vector<std::vector<double>>& batchOfCoefficients,
   double lower_bound,
   double upper_bound) {
+
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
+	nvtx3::scoped_range range{ "PSBatchApply" };
 
 	// PlaintextCache::next() advances a read cursor, which is logically
 	// read-only from the caller's perspective (precomp can be
