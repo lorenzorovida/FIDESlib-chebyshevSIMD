@@ -721,8 +721,10 @@ void evalIntegerMult(Ciphertext& out,
 		// Convert binary to decimal
 		// --------------------------------------------------------
 
+		
 		Ciphertext a_decimal(a.cc_);
 		bintodec(cc, a_decimal, a_processed, repetitions * 4);
+		//a_decimal seems right (INT)
 
 		Ciphertext b_decimal(a.cc_);
 		bintodec(cc, b_decimal, b_processed, repetitions * 4);
