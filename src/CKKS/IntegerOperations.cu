@@ -544,9 +544,7 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext a_processed(a.cc_);
 		a_processed.copy(a_low);
 
-		out.copy(a_processed);
-		return;
-
+		
 
 		// --------------------------------------------------------
 		// process_array(...)
@@ -571,6 +569,10 @@ void evalIntegerMult(Ciphertext& out,
 		if (bits_original > 128) {
 			processArray(a_processed, a, precomp128);
 		}
+
+		out.copy(a_processed);
+		return;
+
 
 		// --------------------------------------------------------
 		// Combine A
