@@ -551,8 +551,6 @@ void evalIntegerMult(Ciphertext& out,
 			processArray(a_processed, a, precomp128);
 		}
 
-		out.copy(a_processed);
-		return;
 
 		// --------------------------------------------------------
 		// Combine A
@@ -713,14 +711,10 @@ void evalIntegerMult(Ciphertext& out,
 
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, cc);
 
-		// SBAGLIATO!!
-		out.copy(result);
-		return;
 
 	} else {
 		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, cc);
-		out.copy(result);
-		return;
+
 	}
 
 	// ============================================================
