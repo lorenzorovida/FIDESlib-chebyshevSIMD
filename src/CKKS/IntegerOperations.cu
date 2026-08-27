@@ -831,7 +831,7 @@ void evalIntegerMult(Ciphertext& out,
 	// out.copy(p3);
 	// return;
 
-	if (false && !overflow && bits == bits_original && bits != 8) {
+	if (!overflow && bits == bits_original && bits != 8) {
 
 		Ciphertext S(a.cc_);
 		Ciphertext C(a.cc_);
@@ -1439,8 +1439,6 @@ void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecom
 		Ciphertext rolled_ctxt(c.cc_);
 
 		rolled_ctxt.rotate(c, -entry.shift);
-
-		std::cout << "Rotate " << entry.shift << std::endl;
 
 		// masked = rolled_ctxt * precomputed_mask
 		Ciphertext masked(c.cc_);
