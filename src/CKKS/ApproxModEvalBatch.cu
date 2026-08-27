@@ -344,16 +344,6 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
  * rescale a `ctxt` that had already been silently rescaled here).
  */
 void addPerSlotScalar(Ciphertext& ctxt, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_, const std::vector<double>& values, PlaintextCache* cache = nullptr) {
-	if (cache != nullptr && !cache->recording) {
-		// Apply/replay mode: makePerSlotPlaintext's fast path never touches
-		// its `storage` out-param, it just returns a pointer straight into
-		// the cache (&cache->next()). Constructing a local Plaintext here
-		// just to discard it unused was allocating real GPU memory on every
-		// single call for nothing -- this was the dominant cost, not
-		// multPt/addMultPt itself.
-		ctxt.addPt(cache->next());
-		return;
-	}
 	Plaintext storage(cc_);
 	const Plaintext* pt = makePerSlotPlaintext(cc, cc_, values, ctxt, storage, cache);
 	ctxt.addPt(*pt);
@@ -374,12 +364,6 @@ void multPerSlotScalar(Ciphertext& ctxt,
   const std::vector<double>& values,
   bool rescale,
   PlaintextCache* cache = nullptr) {
-	if (cache != nullptr && !cache->recording) {
-		// See addPerSlotScalar: avoid an unused Plaintext allocation on the
-		// hot Apply path.
-		ctxt.multPt(src, cache->next(), rescale);
-		return;
-	}
 	Plaintext storage(cc_);
 	const Plaintext* pt = makePerSlotPlaintext(cc, cc_, values, src, storage, cache);
 	ctxt.multPt(src, *pt, rescale);
@@ -1141,6 +1125,7 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbc
   double lower_bound,
   double upper_bound) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
+	nvtx3::scoped_range range{ "PSBatchApply" };
 
 	// PlaintextCache::next() advances a read cursor, which is logically
 	// read-only from the caller's perspective (precomp can be
