@@ -712,9 +712,10 @@ void evalIntegerMult(Ciphertext& out,
 			b_processed.add(tmp);
 		}
 		
-		out.copy(b_processed);
-		return;
-		
+
+		//out.copy(b_processed);
+		//return;
+		//b_processed è giusto (INT)
 
 		// --------------------------------------------------------
 		// Convert binary to decimal
@@ -722,6 +723,8 @@ void evalIntegerMult(Ciphertext& out,
 
 		Ciphertext a_decimal(a.cc_);
 		bintodec(cc, a_decimal, a_processed, repetitions * 4);
+		out.copy(a_decimal);
+		return;
 
 		Ciphertext b_decimal(a.cc_);
 		bintodec(cc, b_decimal, b_processed, repetitions * 4);
