@@ -1509,9 +1509,11 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 
 	//QUA RESULT è GIUSTO
 	
+		return;
+		
 	evalChebyshevSeriesPSBatch(cc, result, coeffs4BitsMultiplier, -1, 1);
 
-	return;
+
 
 	// evalChebyshevSeriesPSBatchApply(cc, result, precomp4bits, coeffs, -1, 1);
 	// evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
