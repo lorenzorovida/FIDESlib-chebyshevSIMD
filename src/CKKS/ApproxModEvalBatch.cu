@@ -229,8 +229,6 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
   const std::vector<std::vector<double>>& weightsPerSlot,
   PlaintextCache* cache				   = nullptr,
   AlignedCiphertextCache* alignedCache = nullptr) {
-	out.copy(*ctxs[0]);
-	return;
 
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
 	assert(ctxs.size() == weightsPerSlot.size());
@@ -286,6 +284,9 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 		}
 	}
 
+	/*
+	* TODO questa parte ci mette tempo, non posso precomputare tutto il vettore?
+	*/
 	std::vector<Plaintext> weightPtsStorage;
 	weightPtsStorage.reserve(n);
 	std::vector<const Plaintext*> weightPts(n);
