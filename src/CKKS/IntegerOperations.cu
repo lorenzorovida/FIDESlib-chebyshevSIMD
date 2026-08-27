@@ -1177,7 +1177,7 @@ void divInteger(Ciphertext& out,
 		{
 			Ciphertext one(num.cc_);
 			// TODO: replace with FIDESlib's actual trivial-encryption call.
-			one.trivialEncrypt(makePerSlotPlaintext(cc, cc_, mask, term));
+			//one.trivialEncrypt(makePerSlotPlaintext(cc, cc_, mask, term));
 
 			evalIntegerAdd(term, one, bits * 2);
 			binboot(term, term);
