@@ -544,9 +544,6 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext a_processed(a.cc_);
 		a_processed.copy(a_low);
 
-		//SI RICOMINCIA: a_processed
-		out.copy(a_processed);
-		return;
 
 
 		// --------------------------------------------------------
@@ -618,6 +615,10 @@ void evalIntegerMult(Ciphertext& out,
 			tmp.rotate(a_processed, -8192);
 			a_processed.add(tmp);
 		}
+
+		//SI RICOMINCIA: a_processed
+		out.copy(a_processed);
+		return;
 
 		// ========================================================
 		// B
