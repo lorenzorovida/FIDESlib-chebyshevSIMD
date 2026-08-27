@@ -723,6 +723,8 @@ void evalIntegerMult(Ciphertext& out,
 		return;
 	} else {
 		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, cc);
+		out.copy(result);
+		return;
 	}
 
 	// ============================================================
