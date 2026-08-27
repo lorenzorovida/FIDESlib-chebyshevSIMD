@@ -1507,7 +1507,7 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 
 	result.addPt(minusOnePt);
 	
-	evalChebyshevSeriesPSBatch(cc, result, cacheChebyshev4BitsMultiplier, coeffs4BitsMultiplier, -1, 1);
+	evalChebyshevSeriesPSBatch(cc, result, coeffs4BitsMultiplier, -1, 1);
 
 	// evalChebyshevSeriesPSBatchApply(cc, result, precomp4bits, coeffs, -1, 1);
 	// evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
