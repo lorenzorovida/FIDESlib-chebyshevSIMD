@@ -722,6 +722,9 @@ void evalIntegerMult(Ciphertext& out,
 		// --------------------------------------------------------
 
 		
+		out.copy(a_processed);
+		return;
+		
 		Ciphertext a_decimal(a.cc_);
 		bintodec(cc, a_decimal, a_processed, repetitions * 4);
 		//a_decimal seems right (INT and 30 bool)
