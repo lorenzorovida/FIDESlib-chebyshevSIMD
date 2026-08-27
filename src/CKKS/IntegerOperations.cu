@@ -33,6 +33,294 @@ Plaintext makePerSlotPlaintext(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 	return Plaintext(cc_, raw);
 }
 
+// ============================================================
+// binboot
+//
+// CPU reference (CKKSController::binboot):
+//
+//   Ctxt CKKSController::binboot(const Ctxt &c) {
+//       return context->EvalBootstrapStCFirstBits(c);
+//   }
+//
+// FIDESlib doesn't expose EvalBootstrapStCFirstBits directly; every call
+// site in this file instead drops to the level the "first bits" bootstrap
+// circuit expects (5 if NoiseLevel==2, else 4) and then calls
+// BootstrapStCFirstBits(...). This wraps that exact pattern so div_integer
+// (which calls binboot(...) a dozen times) doesn't have to repeat it.
+// ============================================================
+void binboot(Ciphertext& out, const Ciphertext& c) {
+	if (&out != &c) {
+		out.copy(c);
+	}
+
+	if (out.NoiseLevel == 2) {
+		out.dropToLevel(5, false);
+	} else {
+		out.dropToLevel(4, false);
+	}
+
+	BootstrapStCFirstBits(out, out.slots, false);
+}
+
+// ============================================================
+// binary_or
+//
+// CPU reference (CKKSController::binary_or):
+//
+//   Ctxt CKKSController::binary_or(const Ctxt &a, const Ctxt &b) {
+//       // a+b - a*b
+//       return sub(add(a, b), mult(a, b));
+//   }
+// ============================================================
+void binaryOr(Ciphertext& out, const Ciphertext& a, const Ciphertext& b) {
+	Ciphertext prod(a.cc_);
+	prod.mult(a, b, true);
+
+	out.add(a, b);
+	out.sub(prod);
+}
+
+// ============================================================
+// Repeated-Chebyshev-LUT (mirrors OpenFHE's
+// EvalChebyshevSeriesPSBatchRepeated). We reuse FIDESlib's existing
+// PS-batch machinery (evalChebyshevSeriesPSBatchPrecompute /
+// evalChebyshevSeriesPSBatchApply, as used by preprocessChebyshevMultiplication
+// / multiplier4bits above) -- "repeated" on the CPU side just means the
+// coefficient set is periodically tiled across the slots, which is exactly
+// what PSBatch already does when `coeffs.size()` divides the slot count.
+// ============================================================
+void preprocessChebyshevRepeated(ChebyshevRepeatedLUT& lut,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+  Ciphertext& c,
+  std::vector<std::vector<double>> coeffs,
+  int a,
+  int b) {
+
+	lut.coeffs = coeffs;
+	lut.repeat = static_cast<int>(c.slots / coeffs.size());
+	lut.precomp = evalChebyshevSeriesPSBatchPrecompute(cc, c, coeffs, a, b);
+}
+
+void evalChebyshevRepeatedApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+  Ciphertext& c,
+  const ChebyshevRepeatedLUT& lut) {
+
+	if (!lut.precomp) {
+		throw std::invalid_argument(
+		  "evalChebyshevRepeatedApply: LUT not precomputed, call preprocessChebyshevRepeated first");
+	}
+
+	evalChebyshevSeriesPSBatchApply(cc, c, lut.precomp, lut.coeffs, -1, 1);
+}
+
+// ============================================================
+// inverse_bit_length
+//
+// CPU reference (CKKSController::inverse_bit_length):
+//
+//   int step = 1;
+//   Ctxt result = a->Clone();
+//   while (step < bits) {
+//       result = binary_or(result, rot(result, step));
+//       step *= 2;
+//   }
+//   result = binboot(result);
+//   for (int i = 0; i < log2(bits); i++)
+//       result = add(result, rot(result, -pow(2, i)));
+//   // result now holds bit_length(a) in the last (partial) slot of each group
+//   vector<double> mask(result->GetSlots());
+//   int stride = bits * bits / 2;
+//   for (int i = 0; i < zslots; i++)
+//       mask[(bits - 1) + i * stride] = -1.0 / (bits / 2.0);
+//   result = mult(result, mask);
+//   for (int i = 0; i < zslots; i++)
+//       mask[(bits - 1) + i * stride] = 1.0;
+//   result = add(result, encode(mask, result->GetLevel()));
+//   Ctxt resultclone = result->Clone();
+//   result = add(result, rot(result, 1));
+//   result = add(result, rot(result, 2));
+//   result = add(result, rot(result, 4));
+//   result = sub(result, rot(resultclone, 7));
+//   result = rot(result, bits - 7);
+//   return result;
+// ============================================================
+void inverseBitLength(Ciphertext& out, const Ciphertext& a, int bits, int zslots,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+
+	FIDESlib::CKKS::Context& cc_ = a.cc_;
+
+	// --------------------------------------------------------
+	// result = OR-reduce a with all rot(a, step), step = 1,2,4,...
+	// so every bit slot becomes 1 iff any bit at or below it is set
+	// (i.e. a "sticky OR" prefix scan up to `bits`).
+	// --------------------------------------------------------
+	Ciphertext result(a.cc_);
+	result.copy(a);
+
+	for (int step = 1; step < bits; step *= 2) {
+		Ciphertext rotated(a.cc_);
+		rotated.rotate(result, step);
+
+		Ciphertext orred(a.cc_);
+		binaryOr(orred, result, rotated);
+
+		result.copy(orred);
+	}
+
+	binboot(result, result);
+
+	// --------------------------------------------------------
+	// Sum all the ones -> popcount of the OR-mask == bit_length(a),
+	// landing in the last (partial) slot of each `stride`-sized group.
+	// --------------------------------------------------------
+	const int rounds = static_cast<int>(std::log2(bits));
+
+	for (int i = 0; i < rounds; ++i) {
+		const int rotation = -(1 << i);
+
+		Ciphertext rotated(a.cc_);
+		rotated.rotate(result, rotation);
+
+		result.add(rotated);
+	}
+
+	// --------------------------------------------------------
+	// result[(bits-1) + i*stride] holds bit_length(a) for group i.
+	// Rescale it into [-1, 1] as: -bit_length(a) / (bits/2) + 1
+	// --------------------------------------------------------
+	const int stride = bits * bits / 2;
+
+	std::vector<double> maskNeg(a.slots, 0.0);
+	for (int i = 0; i < zslots; ++i) {
+		maskNeg[(bits - 1) + i * stride] = -1.0 / (bits / 2.0);
+	}
+
+	result.multPt(makePerSlotPlaintext(cc, cc_, maskNeg, result));
+
+	std::vector<double> maskOne(a.slots, 0.0);
+	for (int i = 0; i < zslots; ++i) {
+		maskOne[(bits - 1) + i * stride] = 1.0;
+	}
+
+	result.addPt(makePerSlotPlaintext(cc, cc_, maskOne, result));
+
+	// --------------------------------------------------------
+	// Broadcast that single normalized value to slots (bits-1)+{0,1,2,4}
+	// via: result += rot(result,1) + rot(result,2) + rot(result,4)
+	//               - rot(resultclone, 7)
+	// then shift the whole group left by (bits - 7) so the LUT input
+	// lands where the caller expects it (slot 0 onward per group).
+	// --------------------------------------------------------
+	Ciphertext resultClone(a.cc_);
+	resultClone.copy(result);
+
+	Ciphertext r1(a.cc_);
+	r1.rotate(result, 1);
+	result.add(r1);
+
+	Ciphertext r2(a.cc_);
+	r2.rotate(result, 2);
+	result.add(r2);
+
+	Ciphertext r4(a.cc_);
+	r4.rotate(result, 4);
+	result.add(r4);
+
+	Ciphertext r7(a.cc_);
+	r7.rotate(resultClone, 7);
+	result.sub(r7);
+
+	result.rotate(result, bits - 7);
+
+	out.copy(result);
+}
+
+// ============================================================
+// blind_rotation
+//
+// Takes a `bits`-wide integer `a` and a 7-bit (LSB-to-the-right) binary
+// index, and homomorphically rotates `a` right by that many positions,
+// via 7 conditional (mux) rotations by powers of two.
+//
+// CPU reference (CKKSController::blind_rotation):
+//
+//   Ctxt result = a->Clone();
+//   if (stride == 0) stride = bits * bits / 2;
+//   for (int i = 0; i < 7; i++) {
+//       vector<double> mask(a->GetSlots());
+//       for (int j = 0; j < zslots; j++) mask[i + j * stride] = 1;
+//       Ctxt current_index = mult(index, encode(mask, index->GetLevel()));
+//       current_index = rot(current_index, i);
+//       for (int j = 0; j < log2(bits); j++)
+//           current_index = add(current_index, rot(current_index, -pow(2, j)));
+//       // If condition (mux): result = result*(1-idx) + rot(result,-2^i)*idx
+//       result = add(mult(result, sub(1, current_index)), mult(rot(result, -pow(2, i)), current_index));
+//   }
+//   return result;
+// ============================================================
+void blindRotation(Ciphertext& out,
+  const Ciphertext& a,
+  const Ciphertext& index,
+  int bits,
+  int zslots,
+  int stride,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+
+	FIDESlib::CKKS::Context& cc_ = a.cc_;
+
+	if (stride == 0) {
+		stride = bits * bits / 2;
+	}
+
+	const int rounds = static_cast<int>(std::log2(bits));
+
+	Ciphertext result(a.cc_);
+	result.copy(a);
+
+	for (int i = 0; i < 7; ++i) {
+
+		// --------------------------------------------------------
+		// Extract bit `i` of `index` (per group) and broadcast it
+		// across the group so it can be used as a per-slot select mask.
+		// --------------------------------------------------------
+		std::vector<double> mask(a.slots, 0.0);
+		for (int j = 0; j < zslots; ++j) {
+			mask[i + j * stride] = 1.0;
+		}
+
+		Ciphertext currentIndex(a.cc_);
+		currentIndex.multPt(index, makePerSlotPlaintext(cc, cc_, mask, index));
+		currentIndex.rotate(currentIndex, i);
+
+		for (int j = 0; j < rounds; ++j) {
+			Ciphertext rotated(a.cc_);
+			rotated.rotate(currentIndex, -(1 << j));
+			currentIndex.add(rotated);
+		}
+
+		// --------------------------------------------------------
+		// Mux: result = result * (1 - idx) + rot(result, -2^i) * idx
+		// --------------------------------------------------------
+		Ciphertext oneMinusIdx(a.cc_);
+		std::vector<double> ones(a.slots, 1.0);
+		oneMinusIdx.multScalar(currentIndex, -1.0, true);
+		oneMinusIdx.addPt(makePerSlotPlaintext(cc, cc_, ones, oneMinusIdx));
+
+		Ciphertext keep(a.cc_);
+		keep.mult(result, oneMinusIdx, true);
+
+		Ciphertext shifted(a.cc_);
+		shifted.rotate(result, -(1 << i));
+
+		Ciphertext take(a.cc_);
+		take.mult(shifted, currentIndex, true);
+
+		result.add(keep, take);
+	}
+
+	out.copy(result);
+}
+
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
 	if (bits <= 0) {
 		throw std::invalid_argument("evalIntegerAdd: bits must be > 0");
@@ -442,7 +730,7 @@ void evalIntegerMult(Ciphertext& out,
 
 	std::vector<double> mask1(a.slots, 0.0);
 
-	for (int j = 0; j < repetitions; ++j) {
+	for (int j = 0; j < repetitions_original; ++j) {
 
 		for (int i = 0; i < bits; ++i) {
 
@@ -454,7 +742,7 @@ void evalIntegerMult(Ciphertext& out,
 
 	std::vector<double> mask2(a.slots, 0.0);
 
-	for (int j = 0; j < repetitions; ++j) {
+	for (int j = 0; j < repetitions_original; ++j) {
 
 		for (int i = 0; i < bits; ++i) {
 
@@ -608,6 +896,362 @@ void evalIntegerMult(Ciphertext& out,
 		BootstrapStCFirstBits(result, result.slots, false);
 		
 	}
+
+	out.copy(result);
+}
+
+// ============================================================
+// preprocessDivIntegerLUTs
+//
+// Bundles the two repeated-Chebyshev LUT precomputations div_integer
+// needs:
+//   1) bitLengthDecompose: decomposes the normalized bit-length hint
+//      (output of inverse_bit_length) into 7 binary "digit" slots per
+//      group, so it can drive blind_rotation. CPU side loads
+//      p1..p7-norm-247-LUT-DIVISION.txt plus (bits-7) garbage copies of
+//      p1 to fill out a full `bits`-wide repeat period.
+//   2) reciprocalHint: the actual bits+2-wide Newton-Raphson seed LUT
+//      (LUT-DIVISION-<bits>-bits-<i>.txt for i in [0, bits+2)) padded
+//      with copies of column 0 out to a full `bits*bits/2`-wide repeat
+//      period.
+//
+// Callers supply the raw coefficient columns themselves (e.g. read once
+// from the same files the CPU uses via read_vector_file, or generated in
+// Python/offline) instead of this function touching the filesystem --
+// this only handles building/caching the PSBatch precomputation, mirroring
+// preprocessChebyshevMultiplication/multiplier4bits above.
+// ============================================================
+void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
+  int bits,
+  int zslots,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+  Ciphertext& like,
+  const std::vector<std::vector<double>>& bitLengthCoeffs,
+  const std::vector<std::vector<double>>& reciprocalCoeffs) {
+
+	if (static_cast<int>(bitLengthCoeffs.size()) != bits) {
+		throw std::invalid_argument(
+		  "preprocessDivIntegerLUTs: bitLengthCoeffs must have exactly `bits` columns "
+		  "(7 real + (bits-7) garbage, matching the CPU's p1..p7 + padding layout)");
+	}
+
+	if (static_cast<int>(reciprocalCoeffs.size()) != bits * bits / 2) {
+		throw std::invalid_argument(
+		  "preprocessDivIntegerLUTs: reciprocalCoeffs must have exactly bits*bits/2 columns "
+		  "((bits+2) real + garbage padding, matching the CPU's repeat period)");
+	}
+
+	preprocessChebyshevRepeated(luts.bitLengthDecompose, cc, like, bitLengthCoeffs, -1, 1);
+	preprocessChebyshevRepeated(luts.reciprocalHint, cc, like, reciprocalCoeffs, 0, 256);
+}
+
+// ============================================================
+// div_integer (ciphertext / ciphertext)
+//
+// Direct translation of CKKSController::div_integer(const Ctxt&, const
+// Ctxt&, int, int). See that function for the annotated CPU reference;
+// comments below point back to the corresponding CPU lines.
+// ============================================================
+void divInteger(Ciphertext& out,
+  const Ciphertext& num,
+  const Ciphertext& den,
+  int bits,
+  int zslots,
+  const DivIntegerLUTs& luts,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+
+	const int LUT_BITS = 8;
+	FIDESlib::CKKS::Context& cc_ = num.cc_;
+	const int stride = bits * bits / 2;
+
+	// --------------------------------------------------------
+	// b = inverse_bit_length(den, bits, zslots)  -- normalized \hat{x} in [-1,1]
+	// --------------------------------------------------------
+	Ciphertext b(num.cc_);
+	inverseBitLength(b, den, bits, zslots, cc);
+
+	// --------------------------------------------------------
+	// s = EvalChebyshevSeriesPSBatchRepeated(b, coeffs, -1, 1, repeat)
+	// s = binboot(s)
+	//
+	// This decomposes bits - bit_length(den) into the 7-bit binary index
+	// blind_rotation expects.
+	// --------------------------------------------------------
+	Ciphertext s(num.cc_);
+	s.copy(b);
+	evalChebyshevRepeatedApply(cc, s, luts.bitLengthDecompose);
+	binboot(s, s);
+
+	// --------------------------------------------------------
+	// den_norm = blind_rotation(den, s, bits, zslots)   // den << (bits - bitlen(den))
+	// den_norm = binboot(den_norm)
+	// --------------------------------------------------------
+	Ciphertext denNorm(num.cc_);
+	blindRotation(denNorm, den, s, bits, zslots, /*stride=*/0, cc);
+	binboot(denNorm, denNorm);
+
+	// --------------------------------------------------------
+	// den_norm_rot = rot(den_norm, bits - 1 - LUT_BITS)
+	//
+	// Bring the top LUT_BITS bits of the normalized denominator down to
+	// slot 0 of each group so they can be packed into a decimal index.
+	// --------------------------------------------------------
+	Ciphertext denNormRot(num.cc_);
+	denNormRot.rotate(denNorm, bits - 1 - LUT_BITS);
+
+	// --------------------------------------------------------
+	// idx = den_norm_rot * {2^0..2^(LUT_BITS-1), 0, 0, ...} (per group)
+	// idx = sum of log2(LUT_BITS) rotations of idx  -> idx in [0, 256)
+	// --------------------------------------------------------
+	std::vector<double> mask(num.slots, 0.0);
+	for (int j = 0; j < zslots; ++j) {
+		for (int i = 0; i < LUT_BITS; ++i) {
+			mask[stride * j + i] = std::pow(2.0, i);
+		}
+	}
+
+	Ciphertext idx(num.cc_);
+	idx.multPt(denNormRot, makePerSlotPlaintext(cc, cc_, mask, denNormRot));
+
+	{
+		const int idxRounds = static_cast<int>(std::log2(LUT_BITS));
+		for (int i = 0; i < idxRounds; ++i) {
+			Ciphertext rotated(num.cc_);
+			rotated.rotate(idx, 1 << i);
+			idx.add(rotated);
+		}
+	}
+
+	// --------------------------------------------------------
+	// idx = idx * {1 at slot 0 of each group, else 0}   (keep only the packed value)
+	// idx_masked_clone = idx.Clone()
+	// idx = sum of log2(bits) rotations of idx by -2^j  (broadcast within group)
+	// idx += rot(idx_masked_clone, -bits) + rot(idx_masked_clone, -bits-1)
+	// --------------------------------------------------------
+	std::fill(mask.begin(), mask.end(), 0.0);
+	for (int j = 0; j < zslots; ++j) {
+		mask[j * stride] = 1.0;
+	}
+
+	idx.multPt(makePerSlotPlaintext(cc, cc_, mask, idx));
+
+	Ciphertext idxMaskedClone(num.cc_);
+	idxMaskedClone.copy(idx);
+
+	{
+		const int idxRounds = static_cast<int>(std::log2(bits));
+		for (int i = 0; i < idxRounds; ++i) {
+			Ciphertext rotated(num.cc_);
+			rotated.rotate(idx, -(1 << i));
+			idx.add(rotated);
+		}
+	}
+
+	{
+		Ciphertext rotated(num.cc_);
+		rotated.rotate(idxMaskedClone, -bits);
+		idx.add(rotated);
+	}
+	{
+		Ciphertext rotated(num.cc_);
+		rotated.rotate(idxMaskedClone, -bits - 1);
+		idx.add(rotated);
+	}
+
+	// --------------------------------------------------------
+	// x = EvalChebyshevSeriesPSBatchRepeated(idx, coeffs, 0, 256, repeat)
+	// x = binboot(x)
+	//
+	// x is the Newton-Raphson reciprocal seed ("first hint").
+	// --------------------------------------------------------
+	Ciphertext x(num.cc_);
+	x.copy(idx);
+	evalChebyshevRepeatedApply(cc, x, luts.reciprocalHint);
+	binboot(x, x);
+
+	// --------------------------------------------------------
+	// Newton-Raphson refinement loop:
+	//   for iter in [0, ceil(log2(bits/LUT_BITS))):
+	//       term = mul_integer(x, den_norm, bits, bits, zslots, zslots, true)
+	//       term += rot(den_norm, -bits)        * bit `bits`   of x   (broadcast)
+	//       term += rot(den_norm, -bits-1)      * bit `bits+1` of x   (broadcast)
+	//       term = ~term (bitwise complement over the low bits*2+1 bits)
+	//       term = binboot(add_integer(term, {1 at slot 0}, bits*2, false))  // two's complement negation, i.e. -term
+	//       term = rot(term, bits)
+	//       x = mul_integer(rot(x,2), rot(term,2), bits, bits, zslots, zslots, true)
+	//       x = rot(rot(rot(rot(rot(x, bits), -1), -1), -1), -1)
+	// --------------------------------------------------------
+	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
+
+	for (int iter = 0; iter < newtonIters; ++iter) {
+
+		Ciphertext term(num.cc_);
+		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
+
+		// term += broadcast(bit `bits` of x) * rot(den_norm, -bits)
+		std::fill(mask.begin(), mask.end(), 0.0);
+		for (int j = 0; j < zslots; ++j) {
+			mask[bits + j * stride] = 1.0;
+		}
+
+		{
+			Ciphertext lastBit(num.cc_);
+			lastBit.multPt(x, makePerSlotPlaintext(cc, cc_, mask, x));
+
+			const int bcRounds = static_cast<int>(std::log2(bits));
+			for (int j = 0; j < bcRounds; ++j) {
+				Ciphertext rotated(num.cc_);
+				rotated.rotate(lastBit, -(1 << j));
+				lastBit.add(rotated);
+			}
+
+			Ciphertext denShift(num.cc_);
+			denShift.rotate(denNorm, -bits);
+			lastBit.mult(denShift, true);
+
+			evalIntegerAdd(term, lastBit, bits);
+			binboot(term, term);
+		}
+
+		// term += broadcast(bit `bits+1` of x) * rot(den_norm, -bits-1)
+		std::fill(mask.begin(), mask.end(), 0.0);
+		for (int j = 0; j < zslots; ++j) {
+			mask[(bits + 1) + j * stride] = 1.0;
+		}
+
+		{
+			Ciphertext lastBit(num.cc_);
+			lastBit.multPt(x, makePerSlotPlaintext(cc, cc_, mask, x));
+
+			const int bcRounds = static_cast<int>(std::log2(bits));
+			for (int j = 0; j < bcRounds; ++j) {
+				Ciphertext rotated(num.cc_);
+				rotated.rotate(lastBit, -(1 << j));
+				lastBit.add(rotated);
+			}
+
+			Ciphertext denShift(num.cc_);
+			denShift.rotate(denNorm, -bits);
+			denShift.rotate(denShift, -1);
+			lastBit.mult(denShift, true);
+
+			evalIntegerAdd(term, lastBit, bits);
+			binboot(term, term);
+		}
+
+		// term = complement(term) over the low (bits*2+1) bits of each group
+		std::fill(mask.begin(), mask.end(), 0.0);
+		for (int j = 0; j < zslots; ++j) {
+			for (int i = 0; i < bits * 2 + 1; ++i) {
+				mask[i + j * stride] = 1.0;
+			}
+		}
+
+		{
+			Ciphertext ones(num.cc_);
+			ones.copy(term);
+			Ciphertext complemented(num.cc_);
+			complemented.multScalar(term, -1.0, true);
+			complemented.addPt(makePerSlotPlaintext(cc, cc_, mask, complemented));
+			term.copy(complemented);
+		}
+
+		// term = binboot(add_integer(term, {1 at slot 0 of each group}, bits*2, false))
+		// (the "+1" that finishes two's-complement negation: -term == ~term + 1)
+		//
+		// NOTE: the CPU calls add_integer(term, encrypt(mask, ...), ...) here,
+		// i.e. it needs the "+1" constant as an actual (trivially-encrypted)
+		// ciphertext, because add_integer takes two Ctxt. FIDESlib's
+		// Ciphertext, as used elsewhere in this file, only exposes
+		// plaintext-ciphertext ops (multPt/addPt) -- there's no trivial-encrypt
+		// entry point visible in the code made available to this port. Whatever
+		// that entry point is called in the rest of the FIDESlib codebase
+		// (e.g. an EncryptZero/LoadPlaintext-style constructor), plug it in
+		// here; `one` must be a ciphertext holding 1.0 at slot 0 of every
+		// `stride`-sized group and 0 elsewhere, at term's level/noise degree.
+		std::fill(mask.begin(), mask.end(), 0.0);
+		for (int j = 0; j < zslots; ++j) {
+			mask[j * stride] = 1.0;
+		}
+
+		{
+			Ciphertext one(num.cc_);
+			// TODO: replace with FIDESlib's actual trivial-encryption call.
+			one.trivialEncrypt(makePerSlotPlaintext(cc, cc_, mask, term));
+
+			evalIntegerAdd(term, one, bits * 2);
+			binboot(term, term);
+		}
+
+		term.rotate(term, bits);  // drop the low `bits` garbage bits
+
+		// x = mul_integer(rot(x,2), rot(term,2), bits, bits, zslots, zslots, true)
+		{
+			Ciphertext x2(num.cc_);
+			x2.rotate(x, 2);
+			Ciphertext term2(num.cc_);
+			term2.rotate(term, 2);
+
+			Ciphertext newX(num.cc_);
+			evalIntegerMult(newX, x2, term2, bits, bits, zslots, zslots, true, cc);
+			x.copy(newX);
+		}
+
+		x.rotate(x, bits);
+		x.rotate(x, -1);
+		x.rotate(x, -1);
+		x.rotate(x, -1);
+		x.rotate(x, -1);
+	}
+
+	// --------------------------------------------------------
+	// result = mul_integer(rot(num, 2), rot(x, 2), bits, bits, zslots, zslots, true)
+	// result = rot(rot(rot(rot(result, -1), -1), -1), -1)
+	// result = rot(result, bits)
+	// result = result * {1 at low bits*2 bits of each group}
+	// --------------------------------------------------------
+	Ciphertext result(num.cc_);
+	{
+		Ciphertext num2(num.cc_);
+		num2.rotate(num, 2);
+		Ciphertext x2(num.cc_);
+		x2.rotate(x, 2);
+		evalIntegerMult(result, num2, x2, bits, bits, zslots, zslots, true, cc);
+	}
+
+	result.rotate(result, -1);
+	result.rotate(result, -1);
+	result.rotate(result, -1);
+	result.rotate(result, -1);
+
+	result.rotate(result, bits);
+
+	std::fill(mask.begin(), mask.end(), 0.0);
+	for (int j = 0; j < zslots; ++j) {
+		for (int i = 0; i < bits * 2; ++i) {
+			mask[i + j * stride] = 1.0;
+		}
+	}
+	result.multPt(makePerSlotPlaintext(cc, cc_, mask, result));
+
+	// --------------------------------------------------------
+	// result = blind_rotation(result, s, bits*2, zslots, bits*bits/2)
+	// result = rot(result, bits)
+	// result = result * {1 at low bits bits of each group}
+	// --------------------------------------------------------
+	Ciphertext rotatedResult(num.cc_);
+	blindRotation(rotatedResult, result, s, bits * 2, zslots, stride, cc);
+	result.copy(rotatedResult);
+
+	result.rotate(result, bits);
+
+	std::fill(mask.begin(), mask.end(), 0.0);
+	for (int j = 0; j < zslots; ++j) {
+		for (int i = 0; i < bits; ++i) {
+			mask[i + j * stride] = 1.0;
+		}
+	}
+	result.multPt(makePerSlotPlaintext(cc, cc_, mask, result));
 
 	out.copy(result);
 }
@@ -861,9 +1505,6 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 	Plaintext minusOnePt(result.cc_, raw);
 
 	result.addPt(minusOnePt);
-
-	std::cout << "Result info: " << result.getLevel() << ", " << result.NoiseLevel << std::endl;
-
 	
 	evalChebyshevSeriesPSBatchApply(cc, result, cacheChebyshev4BitsMultiplier, coeffs4BitsMultiplier, -1, 1);
 
