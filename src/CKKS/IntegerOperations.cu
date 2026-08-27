@@ -1485,6 +1485,8 @@ void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecom
 
 		rolled_ctxt.rotate(c, -entry.shift);
 
+		std::cout << "Rotate " << entry.shift << endl;
+
 		// masked = rolled_ctxt * precomputed_mask
 		Ciphertext masked(c.cc_);
 
