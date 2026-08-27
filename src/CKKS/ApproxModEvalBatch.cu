@@ -29,7 +29,6 @@
 #include "CudaUtils.cuh"
 #include <iostream>
 #include <map>
-#include <optional>
 // Uncomment to trace level/NoiseLevel at key checkpoints, mirrored in
 // ApproxModEval.cu, for side-by-side debugging against the scalar original.
 // #define DEBUG_CHEBYSHEV_TRACE 1
@@ -230,13 +229,6 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
   const std::vector<std::vector<double>>& weightsPerSlot,
   PlaintextCache* cache				  = nullptr,
   AlignedCiphertextCache* alignedCache = nullptr) {
-#ifdef DEBUG_CHEBYSHEV_TRACE
-	cudaEvent_t start, stop;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-
-	cudaEventRecord(start);
-#endif
 
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
 	assert(ctxs.size() == weightsPerSlot.size());
@@ -310,19 +302,6 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
 	if (out.cc.rescaleTechnique == FIXEDMANUAL) {
 		out.rescale();
 	}
-
-#ifdef DEBUG_CHEBYSHEV_TRACE
-	cudaEventRecord(stop);
-	cudaEventSynchronize(stop);
-
-	float milliseconds = 0;
-	cudaEventElapsedTime(&milliseconds, start, stop);
-
-	printf("Tempo evalLinearWSumMutablePtBatch: %f ms\n", milliseconds);
-
-	cudaEventDestroy(start);
-	cudaEventDestroy(stop);
-#endif
 }
 
 /**
@@ -370,62 +349,6 @@ void multPerSlotScalar(Ciphertext& ctxt,
 }
 
 /**
- * Scratch pool for the `qu`/`su` temporaries innerEvalChebyshevPSBatch
- * declares at the top of every recursive invocation.
- *
- * WHY THIS EXISTS: both the q-branch and the s-branch of the
- * Paterson-Stockmeyer recursion can recurse independently (see the two
- * `if (lbcrypto::Degree(...) > k)` checks), so the recursion tree can be a
- * full binary tree of depth `m` -- up to 2^m total invocations, EACH of
- * which unconditionally declares its own fresh `Ciphertext qu(cc_);` and
- * `Ciphertext su(cc_);` (real GPU buffer allocation), even though the value
- * held is only ever needed within that single invocation and its own
- * subtree. Confirmed by profiling: with evalLinearWSumMutablePtBatch's body
- * stubbed out entirely (no multPt/addMultPt/Plaintext work at all), runtime
- * was unchanged, and nsys showed ~15-16 separate multi-millisecond
- * Ciphertext constructions per call -- matching a depth-~4 binary tree
- * (2^4=16) exactly.
- *
- * FIX: since the recursion is single-threaded and strictly depth-first (the
- * q-subtree fully completes -- freeing everything it used -- before the
- * s-subtree at the very same depth begins), a buffer slot is only ever
- * "in use" by one active call at a time per depth. So instead of one fresh
- * Ciphertext per NODE (up to 2^m of them), we only need one per DEPTH LEVEL
- * (m of them), reused by every sibling that visits that depth. This is safe
- * because every branch in innerEvalChebyshevPSBatch already fully
- * overwrites qu/su before combining them (via .copy() or .multPt(), which
- * itself starts with `this->copy(...)`) -- nothing ever reads a stale value
- * left over from a previous occupant of the slot.
- *
- * Scoped like AlignedCiphertextCache: constructed once per top-level
- * evalChebyshevSeriesPSBatchImpl call, sized to that call's initial `m`,
- * and threaded down through the whole recursion.
- */
-struct CiphertextScratchPool {
-	std::vector<Ciphertext> quByDepth;
-	std::vector<Ciphertext> suByDepth;
-
-	CiphertextScratchPool(FIDESlib::CKKS::Context& cc_, uint32_t maxDepth) {
-		quByDepth.reserve(maxDepth + 1);
-		suByDepth.reserve(maxDepth + 1);
-		for (uint32_t i = 0; i <= maxDepth; ++i) {
-			quByDepth.emplace_back(cc_);
-			suByDepth.emplace_back(cc_);
-		}
-	}
-
-	Ciphertext& qu(uint32_t depth) {
-		assert(depth < quByDepth.size() && "CiphertextScratchPool: recursion deeper than expected maxDepth");
-		return quByDepth[depth];
-	}
-
-	Ciphertext& su(uint32_t depth) {
-		assert(depth < suByDepth.size() && "CiphertextScratchPool: recursion deeper than expected maxDepth");
-		return suByDepth[depth];
-	}
-};
-
-/**
  * Batched counterpart of innerEvalChebyshevPS (ApproxModEval.cu).
  *
  * `batchOfCoefficients` holds one Chebyshev-coefficient vector per slot; all
@@ -445,13 +368,11 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   int level_offset					  = 0,
   int max_m							  = 1000,
   PlaintextCache* cache				  = nullptr,
-  AlignedCiphertextCache* alignedCache = nullptr,
-  CiphertextScratchPool* scratchPool	  = nullptr) {
+  AlignedCiphertextCache* alignedCache = nullptr) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
 	FIDESlib::CKKS::Context& cc_ = ctxt.cc_;
 	ContextData& ccd			 = ctxt.cc;
-	uint32_t depth				 = static_cast<uint32_t>(max_m - (int)m);
 
 	uint32_t k2m2k = k * (1 << (m - 1)) - k;
 
@@ -559,7 +480,6 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 
 		std::vector<double> freeTerm;
 		if (needCompute) {
-			std::cout << "421 Ha needed compute" << std::endl;
 			freeTerm.resize(batchSize);
 			for (size_t b = 0; b < batchSize; ++b)
 				freeTerm[b] = divcsVec[b]->q.front() / 2.0;
@@ -580,15 +500,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 	}
 
 	// --- Evaluate q at u (recursively if its degree still exceeds k) ---
-	// See CiphertextScratchPool's doc comment: this used to be an
-	// unconditional `Ciphertext qu(cc_);` -- a fresh GPU allocation at
-	// EVERY recursion node (up to 2^m of them) -- now reused across
-	// sibling branches at the same depth via the pool, falling back to a
-	// local allocation only when no pool is supplied.
-	std::optional<Ciphertext> quFallback;
-	Ciphertext* quPtr =
-	  scratchPool != nullptr ? &scratchPool->qu(depth) : &(quFallback.emplace(cc_));
-	Ciphertext& qu = *quPtr;
+	Ciphertext qu(cc_);
 	if (lbcrypto::Degree(divqrVec[0]->q) > k) {
 		assert(m > 2);
 		bool needComputeQCoeffs = (cache == nullptr) || cache->recording;
@@ -604,7 +516,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 		} else {
 			qCoeffs = cache->nextVec2();
 		}
-		innerEvalChebyshevPSBatch(cc, ctxt, qu, qCoeffs, k, m - 1, T, T2, level_offset, max_m, cache, alignedCache, scratchPool);
+		innerEvalChebyshevPSBatch(cc, ctxt, qu, qCoeffs, k, m - 1, T, T2, level_offset, max_m, cache, alignedCache);
 
 		if (qu.NoiseLevel == 2)
 			qu.rescale();
@@ -705,13 +617,10 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 	}
 
 	// --- Evaluate s2 at u (recursively if its degree still exceeds k) ---
-	std::optional<Ciphertext> suFallback;
-	Ciphertext* suPtr =
-	  scratchPool != nullptr ? &scratchPool->su(depth) : &(suFallback.emplace(cc_));
-	Ciphertext& su = *suPtr;
+	Ciphertext su(cc_);
 	if (lbcrypto::Degree(s2Vec[0]) > k) {
 		assert(m > 2);
-		innerEvalChebyshevPSBatch(cc, ctxt, su, s2Vec, k, m - 1, T, T2, level_offset + 1, max_m, cache, alignedCache, scratchPool);
+		innerEvalChebyshevPSBatch(cc, ctxt, su, s2Vec, k, m - 1, T, T2, level_offset + 1, max_m, cache, alignedCache);
 	} else {
 		auto scopy0 = s2Vec[0];
 		scopy0.resize(k);
@@ -721,8 +630,6 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			std::vector<std::vector<double>> weights;
 
 			if (needCompute) {
-				std::cout << "572 Ha needato compute!" << std::endl;
-
 				std::vector<uint32_t> selectedIdx;
 				for (uint32_t i = 0; i < s2Vec[0].size() - 1; ++i) {
 					bool anyNonZero = false;
@@ -761,7 +668,6 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 
 			std::vector<double> freeTerm;
 			if (needCompute) {
-				std::cout << "613 Ha needed compute" << std::endl;
 				freeTerm.resize(batchSize);
 				for (size_t b = 0; b < batchSize; ++b)
 					freeTerm[b] = s2Vec[b].front() / 2.0;
@@ -782,7 +688,6 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			bool needCompute = (cache == nullptr) || cache->recording;
 			std::vector<double> freeTerm;
 			if (needCompute) {
-				std::cout << "634 Ha needed compute" << std::endl;
 				freeTerm.resize(batchSize);
 				for (size_t b = 0; b < batchSize; ++b)
 					freeTerm[b] = s2Vec[b].front() / 2.0;
@@ -850,14 +755,6 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	if (static_cast<int>(batchOfCoefficients.size()) != ctxt.slots)
 		OPENFHE_THROW("The set of coefficients must be as large as the number of slots of the input ciphertext");
 
-	cudaEvent_t start, stop;
-#ifdef DEBUG_CHEBYSHEV_TRACE
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-
-	cudaEventRecord(start);
-#endif
-
 	size_t coeffSize = batchOfCoefficients[0].size();
 	for (const auto& v : batchOfCoefficients) {
 		if (v.size() != coeffSize)
@@ -889,26 +786,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	std::vector<std::vector<double>> f2Batch(batchOfCoefficients.size());
 
 	if (cache != nullptr && !cache->recording) {
-#ifdef DEBUG_CHEBYSHEV_TRACE
-		cudaEvent_t start2, stop2;
-		cudaEventCreate(&start2);
-		cudaEventCreate(&stop2);
-
-		cudaEventRecord(start2);
 		f2Batch = cache->nextF2();
-		cudaEventRecord(stop2);
-		cudaEventSynchronize(stop2);
-
-		float milliseconds2 = 0;
-		cudaEventElapsedTime(&milliseconds2, start2, stop2);
-
-		printf("Loading from cache: %f ms\n", milliseconds2);
-
-		cudaEventDestroy(start2);
-		cudaEventDestroy(stop2);
-#else
-		f2Batch = cache->nextF2();
-#endif
 	} else {
 		for (size_t b = 0; b < batchOfCoefficients.size(); ++b) {
 			f2Batch[b] = batchOfCoefficients[b];
@@ -920,14 +798,6 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	}
 
 	ContextData& ccd = ctxt.cc;
-
-#ifdef DEBUG_CHEBYSHEV_TRACE
-	cudaEvent_t startSame, stopSame;
-	cudaEventCreate(&startSame);
-	cudaEventCreate(&stopSame);
-
-	cudaEventRecord(startSame);
-#endif
 
 	// --- Compute Chebyshev powers T[1..k], T2[1..m], T2km1 ---
 	// Identical to evalChebyshevSeries: these depend only on ctxt, not on the
@@ -1023,31 +893,6 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 #ifdef DEBUG_CHEBYSHEV_TRACE
 	std::cout << "[BATCH] T2km1 level=" << T2km1.getLevel() << " noise=" << T2km1.NoiseLevel << std::endl;
 #endif
-
-#ifdef DEBUG_CHEBYSHEV_TRACE
-	cudaEventRecord(stopSame);
-	cudaEventSynchronize(stopSame);
-
-	float millisecondsSame = 0;
-	cudaEventElapsedTime(&millisecondsSame, startSame, stopSame);
-
-	printf("Same call: %f ms\n", millisecondsSame);
-
-	cudaEventDestroy(startSame);
-	cudaEventDestroy(stopSame);
-
-	cudaEventRecord(stop);
-	cudaEventSynchronize(stop);
-
-	float milliseconds = 0;
-	cudaEventElapsedTime(&milliseconds, start, stop);
-
-	printf("First call: %f ms\n", milliseconds);
-
-	cudaEventDestroy(start);
-	cudaEventDestroy(stop);
-#endif
-
 	// --- Batched Paterson-Stockmeyer evaluation ---
 	// Scoped to this single top-level call: memoizes T[i]/T2[i] alignment
 	// copies by (pointer, targetLevel) across the whole recursion below, so
@@ -1055,13 +900,7 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	// instead of once per evalLinearWSumMutablePtBatch call that needs it.
 	// See AlignedCiphertextCache's doc comment for why this is safe/correct.
 	AlignedCiphertextCache alignedCache(cc_);
-	// See CiphertextScratchPool's doc comment: reuses qu/su buffers by
-	// recursion DEPTH (m+1 slots) instead of allocating a fresh pair at
-	// every one of the up-to-2^m recursion NODES -- this was the dominant
-	// cost, confirmed by profiling with evalLinearWSumMutablePtBatch's body
-	// stubbed out entirely and the cost remaining unchanged.
-	CiphertextScratchPool scratchPool(cc_, m);
-	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache, &alignedCache, &scratchPool);
+	innerEvalChebyshevPSBatch(cc, ctxt, ctxt, f2Batch, k, m, T, T2, 0, m, cache, &alignedCache);
 #ifdef DEBUG_CHEBYSHEV_TRACE
 	std::cout << "[BATCH] after innerEvalChebyshevPSBatch (before final sub): level=" << ctxt.getLevel() << " noise=" << ctxt.NoiseLevel << std::endl;
 #endif
