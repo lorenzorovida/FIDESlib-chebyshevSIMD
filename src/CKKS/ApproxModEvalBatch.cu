@@ -229,7 +229,7 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
   const std::vector<std::vector<double>>& weightsPerSlot,
   PlaintextCache* cache				   = nullptr,
   AlignedCiphertextCache* alignedCache = nullptr) {
-	out.copy(*ctxt[0]);
+	out.copy(*ctxs[0]);
 	return;
 
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
