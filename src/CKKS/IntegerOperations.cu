@@ -724,6 +724,8 @@ void evalIntegerMult(Ciphertext& out,
 		
 		Ciphertext a_decimal(a.cc_);
 		bintodec(cc, a_decimal, a_processed, repetitions * 4);
+		out.copy(a_decimal);
+		return;
 		//a_decimal seems right (INT)
 
 		Ciphertext b_decimal(a.cc_);
@@ -731,8 +733,8 @@ void evalIntegerMult(Ciphertext& out,
 
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, cc);
 
-		out.copy(a_decimal);
-		return;
+		//WRONG
+		
 		
 	} else {
 		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, cc);
