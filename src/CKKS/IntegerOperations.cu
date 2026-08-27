@@ -1346,10 +1346,12 @@ void preprocessProcessArray(int bits,
   FIDESlib::CKKS::Context& cc_,
   bool forB) {
 
-	int mask_size = (bits - 1)* ((bits - 1)/ 2);
+	int mask_size = bits * bits / 2;
 
 	// Assuming full reps?
-	int rep = (slots * 2) / ((bits - 1) * (bits - 1));
+	int rep = (slots * 2) / (bits * bits);
+
+	std::cout << "Mask size: " << mask_size << ", " << rep << std::endl;
 
 	if (mask_size <= 0) {
 		throw std::invalid_argument("preprocessProcessArray: mask_size must be > 0");
@@ -1366,26 +1368,26 @@ void preprocessProcessArray(int bits,
 	ProcessArrayPrecomputation* precomp = nullptr;
 
 	if (forB) {
-		if (bits > 128)
+		if (bits >= 128)
 			precomp = &precomp128b;
-		else if (bits > 64)
+		else if (bits >= 64)
 			precomp = &precomp64b;
-		else if (bits > 32)
+		else if (bits >= 32)
 			precomp = &precomp32b;
-		else if (bits > 16)
+		else if (bits >= 16)
 			precomp = &precomp16b;
-		else if (bits > 8)
+		else if (bits >= 8)
 			precomp = &precomp8b;
 	} else {
-		if (bits > 128)
+		if (bits >= 128)
 			precomp = &precomp128;
-		else if (bits > 64)
+		else if (bits >= 64)
 			precomp = &precomp64;
-		else if (bits > 32)
+		else if (bits >= 32)
 			precomp = &precomp32;
-		else if (bits > 16)
+		else if (bits >= 16)
 			precomp = &precomp16;
-		else if (bits > 8)
+		else if (bits >= 8)
 			precomp = &precomp8;
 	}
 
