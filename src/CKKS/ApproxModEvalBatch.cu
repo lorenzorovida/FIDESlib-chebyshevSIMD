@@ -326,9 +326,9 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
  * rescale a `ctxt` that had already been silently rescaled here).
  */
 void addPerSlotScalar(Ciphertext& ctxt, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_, const std::vector<double>& values, PlaintextCache* cache = nullptr) {
-	Plaintext storage(cc_);
-	const Plaintext* pt = makePerSlotPlaintext(cc, cc_, values, ctxt, storage, cache);
-	ctxt.addPt(*pt);
+	//Plaintext storage(cc_);
+	//const Plaintext* pt = makePerSlotPlaintext(cc, cc_, values, ctxt, storage, cache);
+	//ctxt.addPt(*pt);
 }
 
 /**
@@ -346,9 +346,9 @@ void multPerSlotScalar(Ciphertext& ctxt,
   const std::vector<double>& values,
   bool rescale,
   PlaintextCache* cache = nullptr) {
-	Plaintext storage(cc_);
-	const Plaintext* pt = makePerSlotPlaintext(cc, cc_, values, src, storage, cache);
-	ctxt.multPt(src, *pt, rescale);
+	//Plaintext storage(cc_);
+	//const Plaintext* pt = makePerSlotPlaintext(cc, cc_, values, src, storage, cache);
+	//ctxt.multPt(src, *pt, rescale);
 }
 
 /**
@@ -965,7 +965,6 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbc
   double upper_bound) {
 
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
-	nvtx3::scoped_range range{ "PSBatchApply" };
 
 	// PlaintextCache::next() advances a read cursor, which is logically
 	// read-only from the caller's perspective (precomp can be
