@@ -14,12 +14,12 @@
 namespace FIDESlib::CKKS {
 
 struct ProcessArrayPrecomputation {
-    struct Entry {
-        int shift;
-        Plaintext mask;
-    };
+	struct Entry {
+		int shift;
+		Plaintext mask;
+	};
 
-    std::vector<Entry> entries;
+	std::vector<Entry> entries;
 };
 
 extern ProcessArrayPrecomputation precomp8;
@@ -52,21 +52,14 @@ extern std::vector<std::vector<double>> coeffs4BitsMultiplier;
 // on every ciphertext that shares that shape.
 // ----------------------------------------------------------------------
 struct ChebyshevRepeatedLUT {
-    std::shared_ptr<PSBatchPrecompute> precomp;
-    std::vector<std::vector<double>> coeffs;
-    int repeat = 0;
+	std::shared_ptr<PSBatchPrecompute> precomp;
+	std::vector<std::vector<double>> coeffs;
+	int repeat = 0;
 };
 
-void preprocessChebyshevRepeated(ChebyshevRepeatedLUT& lut,
-  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-  Ciphertext& c,
-  std::vector<std::vector<double>> coeffs,
-  int a,
-  int b);
+void preprocessChebyshevRepeated(ChebyshevRepeatedLUT& lut, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, std::vector<std::vector<double>> coeffs, int a, int b);
 
-void evalChebyshevRepeatedApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-  Ciphertext& c,
-  const ChebyshevRepeatedLUT& lut);
+void evalChebyshevRepeatedApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, const ChebyshevRepeatedLUT& lut);
 
 // binboot: FIDESlib's BootstrapStCFirstBits, wrapped as a standalone
 // function (mirrors CKKSController::binboot on the CPU side, which just
@@ -79,16 +72,9 @@ void binboot(Ciphertext& out, const Ciphertext& c);
 // square_root_integer. See CKKSController::inverse_bit_length /
 // CKKSController::blind_rotation on the CPU side for the reference
 // algorithm; the GPU versions below are a direct, per-op translation.
-void inverseBitLength(Ciphertext& out, const Ciphertext& a, int bits, int zslots,
-  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
+void inverseBitLength(Ciphertext& out, const Ciphertext& a, int bits, int zslots, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 
-void blindRotation(Ciphertext& out,
-  const Ciphertext& a,
-  const Ciphertext& index,
-  int bits,
-  int zslots,
-  int stride,
-  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
+void blindRotation(Ciphertext& out, const Ciphertext& a, const Ciphertext& index, int bits, int zslots, int stride, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 
 void binaryOr(Ciphertext& out, const Ciphertext& a, const Ciphertext& b);
 
@@ -100,8 +86,8 @@ void binaryOr(Ciphertext& out, const Ciphertext& a, const Ciphertext& b);
 // once (from the same coefficient files/values as the CPU LUTs) via
 // preprocessDivIntegerLUTs.
 struct DivIntegerLUTs {
-    ChebyshevRepeatedLUT bitLengthDecompose;  // p1..p7-norm-247-LUT-DIVISION (+ garbage)
-    ChebyshevRepeatedLUT reciprocalHint;      // LUT-DIVISION-<bits>-bits-<i> (+ garbage)
+	ChebyshevRepeatedLUT bitLengthDecompose; // p1..p7-norm-247-LUT-DIVISION (+ garbage)
+	ChebyshevRepeatedLUT reciprocalHint;	 // LUT-DIVISION-<bits>-bits-<i> (+ garbage)
 };
 
 void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
@@ -112,13 +98,7 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
   const std::vector<std::vector<double>>& bitLengthCoeffs,
   const std::vector<std::vector<double>>& reciprocalCoeffs);
 
-void divInteger(Ciphertext& out,
-  const Ciphertext& num,
-  const Ciphertext& den,
-  int bits,
-  int zslots,
-  const DivIntegerLUTs& luts,
-  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
+void divInteger(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, const DivIntegerLUTs& luts, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, int depth);
@@ -132,8 +112,6 @@ void evalIntegerMult(Ciphertext& out,
   bool overflow,
   lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 
-
-
 void cleanAndReduce(Ciphertext& out, const Ciphertext& c);
 void clean(Ciphertext& out, const Ciphertext& c);
 void mod2Shallow(Ciphertext& out, const Ciphertext& c);
@@ -145,6 +123,7 @@ void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, 
 void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, int repetitions, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 
 void preprocessProcessArray(int bits,
+  int bitsOriginal,
   const std::vector<std::pair<int, int>>& mask_roll_pairs,
   int slots,
   int level,

@@ -20,15 +20,14 @@ ProcessArrayPrecomputation precomp128b;
 std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
 std::vector<std::vector<double>> coeffs4BitsMultiplier;
 
-Plaintext makePerSlotPlaintext(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-                                FIDESlib::CKKS::Context& cc_,
-                                const std::vector<double>& values,
-                                const Ciphertext& like) {
-	uint32_t openfheLevel = static_cast<uint32_t>(like.cc.L - like.getLevel());
-	size_t noiseScaleDeg   = static_cast<size_t>(like.NoiseLevel);
-	auto pt                = cc->MakeCKKSPackedPlaintext(values, /*noiseScaleDeg=*/noiseScaleDeg,
-	                                                       /*level=*/openfheLevel, nullptr,
-	                                                      /*slots=*/like.slots);
+Plaintext makePerSlotPlaintext(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_, const std::vector<double>& values, const Ciphertext& like) {
+	uint32_t openfheLevel			 = static_cast<uint32_t>(like.cc.L - like.getLevel());
+	size_t noiseScaleDeg			 = static_cast<size_t>(like.NoiseLevel);
+	auto pt							 = cc->MakeCKKSPackedPlaintext(values,
+	  /*noiseScaleDeg=*/noiseScaleDeg,
+	  /*level=*/openfheLevel,
+	  nullptr,
+	  /*slots=*/like.slots);
 	FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
 	return Plaintext(cc_, raw);
 }
@@ -89,25 +88,17 @@ void binaryOr(Ciphertext& out, const Ciphertext& a, const Ciphertext& b) {
 // coefficient set is periodically tiled across the slots, which is exactly
 // what PSBatch already does when `coeffs.size()` divides the slot count.
 // ============================================================
-void preprocessChebyshevRepeated(ChebyshevRepeatedLUT& lut,
-  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-  Ciphertext& c,
-  std::vector<std::vector<double>> coeffs,
-  int a,
-  int b) {
+void preprocessChebyshevRepeated(ChebyshevRepeatedLUT& lut, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, std::vector<std::vector<double>> coeffs, int a, int b) {
 
-	lut.coeffs = coeffs;
-	lut.repeat = static_cast<int>(c.slots / coeffs.size());
+	lut.coeffs	= coeffs;
+	lut.repeat	= static_cast<int>(c.slots / coeffs.size());
 	lut.precomp = evalChebyshevSeriesPSBatchPrecompute(cc, c, coeffs, a, b);
 }
 
-void evalChebyshevRepeatedApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-  Ciphertext& c,
-  const ChebyshevRepeatedLUT& lut) {
+void evalChebyshevRepeatedApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, const ChebyshevRepeatedLUT& lut) {
 
 	if (!lut.precomp) {
-		throw std::invalid_argument(
-		  "evalChebyshevRepeatedApply: LUT not precomputed, call preprocessChebyshevRepeated first");
+		throw std::invalid_argument("evalChebyshevRepeatedApply: LUT not precomputed, call preprocessChebyshevRepeated first");
 	}
 
 	evalChebyshevSeriesPSBatchApply(cc, c, lut.precomp, lut.coeffs, -1, 1);
@@ -144,8 +135,7 @@ void evalChebyshevRepeatedApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 //   result = rot(result, bits - 7);
 //   return result;
 // ============================================================
-void inverseBitLength(Ciphertext& out, const Ciphertext& a, int bits, int zslots,
-  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+void inverseBitLength(Ciphertext& out, const Ciphertext& a, int bits, int zslots, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 
 	FIDESlib::CKKS::Context& cc_ = a.cc_;
 
@@ -258,13 +248,7 @@ void inverseBitLength(Ciphertext& out, const Ciphertext& a, int bits, int zslots
 //   }
 //   return result;
 // ============================================================
-void blindRotation(Ciphertext& out,
-  const Ciphertext& a,
-  const Ciphertext& index,
-  int bits,
-  int zslots,
-  int stride,
-  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+void blindRotation(Ciphertext& out, const Ciphertext& a, const Ciphertext& index, int bits, int zslots, int stride, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 
 	FIDESlib::CKKS::Context& cc_ = a.cc_;
 
@@ -513,7 +497,6 @@ void evalIntegerMult(Ciphertext& out,
 
 		a_low.multPt(makePerSlotPlaintext(cc, cc_, masklow, a_low));
 
-
 		// --------------------------------------------------------
 		// maskhigh
 		// --------------------------------------------------------
@@ -544,8 +527,6 @@ void evalIntegerMult(Ciphertext& out,
 		Ciphertext a_processed(a.cc_);
 		a_processed.copy(a_low);
 
-		
-
 		// --------------------------------------------------------
 		// process_array(...)
 		// --------------------------------------------------------
@@ -572,7 +553,6 @@ void evalIntegerMult(Ciphertext& out,
 
 		out.copy(a_processed);
 		return;
-
 
 		// --------------------------------------------------------
 		// Combine A
@@ -620,10 +600,9 @@ void evalIntegerMult(Ciphertext& out,
 			a_processed.add(tmp);
 		}
 
-		
-		//out.copy(a_processed);
-		//return;
-		//A_PROCESSED SEMBRA GIUSTO (INT)
+		// out.copy(a_processed);
+		// return;
+		// A_PROCESSED SEMBRA GIUSTO (INT)
 
 		// ========================================================
 		// B
@@ -715,35 +694,29 @@ void evalIntegerMult(Ciphertext& out,
 			tmp.rotate(b_processed, -16384);
 			b_processed.add(tmp);
 		}
-		
 
-		//out.copy(b_processed);
-		//return;
-		//b_processed è giusto (INT)
+		// out.copy(b_processed);
+		// return;
+		// b_processed è giusto (INT)
 
 		// --------------------------------------------------------
 		// Convert binary to decimal
 		// --------------------------------------------------------
 
-		
-
-		
 		Ciphertext a_decimal(a.cc_);
 		bintodec(cc, a_decimal, a_processed, repetitions * 4);
-		//a_decimal seems right (INT and 30 bool)
+		// a_decimal seems right (INT and 30 bool)
 
 		Ciphertext b_decimal(a.cc_);
 		bintodec(cc, b_decimal, b_processed, repetitions * 4);
-		//seems right
+		// seems right
 
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, cc);
 
-	
-		//SBAGLIATO!!
+		// SBAGLIATO!!
 		out.copy(result);
 		return;
-		
-		
+
 	} else {
 		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, cc);
 		out.copy(result);
@@ -797,7 +770,6 @@ void evalIntegerMult(Ciphertext& out,
 	p1.copy(result);
 	p1.multPt(makePerSlotPlaintext(cc, cc_, mask1, p1));
 
-
 	// ------------------------------------------------------------
 	// p2 = rot(p1, -(-rep_size/2 + bits/2))
 	// ------------------------------------------------------------
@@ -822,8 +794,6 @@ void evalIntegerMult(Ciphertext& out,
 
 	masked2.copy(result);
 	masked2.multPt(makePerSlotPlaintext(cc, cc_, mask2, masked2));
-
-	
 
 	Ciphertext p3(a.cc_);
 
@@ -855,18 +825,17 @@ void evalIntegerMult(Ciphertext& out,
 	// Final CSA + bootstrap
 	// ============================================================
 
+	// p1 correct
+	// out.copy(p1);
+	// return;
 
-	//p1 correct
-	//out.copy(p1);
-	//return;
+	// p2 correct
+	// out.copy(p2);
+	// return;
 
-	//p2 correct
-	//out.copy(p2);
-	//return;
-
-	//p3 all zeros, but also in clear
-	//out.copy(p3);
-	//return;
+	// p3 all zeros, but also in clear
+	// out.copy(p3);
+	// return;
 
 	if (false && !overflow && bits == bits_original && bits != 8) {
 
@@ -891,9 +860,9 @@ void evalIntegerMult(Ciphertext& out,
 
 		result.copy(S);
 	} else {
-		
+
 		csa4(result, p1, p2, p3, p4, bits);
-		
+
 		if (result.NoiseLevel == 2) {
 			result.dropToLevel(5, false);
 		} else {
@@ -901,7 +870,6 @@ void evalIntegerMult(Ciphertext& out,
 		}
 
 		BootstrapStCFirstBits(result, result.slots, false);
-		
 	}
 
 	out.copy(result);
@@ -937,15 +905,13 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
   const std::vector<std::vector<double>>& reciprocalCoeffs) {
 
 	if (static_cast<int>(bitLengthCoeffs.size()) != bits) {
-		throw std::invalid_argument(
-		  "preprocessDivIntegerLUTs: bitLengthCoeffs must have exactly `bits` columns "
-		  "(7 real + (bits-7) garbage, matching the CPU's p1..p7 + padding layout)");
+		throw std::invalid_argument("preprocessDivIntegerLUTs: bitLengthCoeffs must have exactly `bits` columns "
+									"(7 real + (bits-7) garbage, matching the CPU's p1..p7 + padding layout)");
 	}
 
 	if (static_cast<int>(reciprocalCoeffs.size()) != bits * bits / 2) {
-		throw std::invalid_argument(
-		  "preprocessDivIntegerLUTs: reciprocalCoeffs must have exactly bits*bits/2 columns "
-		  "((bits+2) real + garbage padding, matching the CPU's repeat period)");
+		throw std::invalid_argument("preprocessDivIntegerLUTs: reciprocalCoeffs must have exactly bits*bits/2 columns "
+									"((bits+2) real + garbage padding, matching the CPU's repeat period)");
 	}
 
 	preprocessChebyshevRepeated(luts.bitLengthDecompose, cc, like, bitLengthCoeffs, -1, 1);
@@ -959,17 +925,11 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
 // Ctxt&, int, int). See that function for the annotated CPU reference;
 // comments below point back to the corresponding CPU lines.
 // ============================================================
-void divInteger(Ciphertext& out,
-  const Ciphertext& num,
-  const Ciphertext& den,
-  int bits,
-  int zslots,
-  const DivIntegerLUTs& luts,
-  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+void divInteger(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, const DivIntegerLUTs& luts, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 
-	const int LUT_BITS = 8;
+	const int LUT_BITS			 = 8;
 	FIDESlib::CKKS::Context& cc_ = num.cc_;
-	const int stride = bits * bits / 2;
+	const int stride			 = bits * bits / 2;
 
 	// --------------------------------------------------------
 	// b = inverse_bit_length(den, bits, zslots)  -- normalized \hat{x} in [-1,1]
@@ -1190,7 +1150,7 @@ void divInteger(Ciphertext& out,
 			binboot(term, term);
 		}
 
-		term.rotate(term, bits);  // drop the low `bits` garbage bits
+		term.rotate(term, bits); // drop the low `bits` garbage bits
 
 		// x = mul_integer(rot(x,2), rot(term,2), bits, bits, zslots, zslots, true)
 		{
@@ -1338,6 +1298,7 @@ void processArray(Ciphertext& c_processed,
 }
 */
 void preprocessProcessArray(int bits,
+  int bitsOriginal,
   const std::vector<std::pair<int, int>>& mask_roll_pairs,
   int slots,
   int level,
@@ -1346,10 +1307,10 @@ void preprocessProcessArray(int bits,
   FIDESlib::CKKS::Context& cc_,
   bool forB) {
 
-	int mask_size = bits * bits / 2;
+	int mask_size = bitsOriginal * bitsOriginal / 2;
 
 	// Assuming full reps?
-	int rep = (slots * 2) / (bits * bits);
+	int rep = (slots * 2) / (bitsOriginal * bitsOriginal);
 
 	std::cout << "Mask size: " << mask_size << ", " << rep << std::endl;
 
@@ -1465,7 +1426,6 @@ void preprocessProcessArray(int bits,
 
 		precomp->entries.push_back(std::move(entry));
 	}
-
 }
 
 void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c) {
@@ -1473,7 +1433,6 @@ void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, 
 
 	coeffs4BitsMultiplier = coeffs;
 }
-
 
 void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp) {
 	if (precomp.entries.size() == 0) {
@@ -1518,17 +1477,13 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 
 	result.addPt(minusOnePt);
 
-	//QUA RESULT è GIUSTO
-	
-	
+	// QUA RESULT è GIUSTO
 
 	evalChebyshevSeriesPSBatch(cc, result, coeffs4BitsMultiplier, -1, 1);
 
-
-
 	// evalChebyshevSeriesPSBatchApply(cc, result, precomp4bits, coeffs, -1, 1);
 	// evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
-    // evalChebyshevSeries(result, coeffs4BitsMultiplier[0], -1, 1);
+	// evalChebyshevSeries(result, coeffs4BitsMultiplier[0], -1, 1);
 
 	if (result.NoiseLevel == 2) {
 		result.dropToLevel(5, false);
@@ -1610,13 +1565,12 @@ void majorityBit(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, cons
 	// total := a + b + c
 	// a is right
 	// b seems right
-	
 
 	Ciphertext total(cc_);
 	total.add(a, b);
-	total.add(c);	
+	total.add(c);
 
-	//total is right
+	// total is right
 
 	// sq := total^2
 	Ciphertext sq(cc_);
@@ -1661,7 +1615,6 @@ void csa3(Ciphertext& S, Ciphertext& C, const Ciphertext& a, const Ciphertext& b
 	sPlusC.add(S, c);
 	mod2Shallow(S, sPlusC);
 
-
 	majorityBit(C, a, b, c);
 }
 
@@ -1675,23 +1628,16 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 	Ciphertext s1(a.cc_);
 	Ciphertext c1(a.cc_);
 
-
 	csa3(s1, c1, a, b, c);
 
-	
-
-	//s1 è giusto
-	//c1 è giusto
-
-
+	// s1 è giusto
+	// c1 è giusto
 
 	// c1 = rot(c1, -1)
 	Ciphertext c1_rot(a.cc_);
 	c1_rot.rotate(c1, -1);
 
-	//c1 rot is broken it seems
-
-	
+	// c1 rot is broken it seems
 
 	// ------------------------------------------------------------
 	// Second CSA:
@@ -1703,14 +1649,12 @@ void csa4(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, const Ciphe
 	Ciphertext c2(a.cc_);
 
 	// all zeros????
-	//out.copy(d);
-	//return;
+	// out.copy(d);
+	// return;
 
 	csa3(s2, c2, s1, c1_rot, d);
 
-	
-
-	//s2 è sbagliato
+	// s2 è sbagliato
 
 	// c2 = rot(c2, -1)
 	Ciphertext c2_rot(a.cc_);
