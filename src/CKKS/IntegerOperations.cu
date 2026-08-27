@@ -1306,8 +1306,6 @@ void preprocessProcessArray(int bits,
 	// Assuming full reps?
 	int rep = (slots * 2) / (bitsOriginal * bitsOriginal);
 
-	std::cout << "Mask size: " << mask_size << ", " << rep << std::endl;
-
 	if (mask_size <= 0) {
 		throw std::invalid_argument("preprocessProcessArray: mask_size must be > 0");
 	}
@@ -1470,7 +1468,7 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 
 	// QUA RESULT è GIUSTO
 
-	evalChebyshevSeriesPSBatch(cc, result, coeffs4BitsMultiplier, -1, 1);
+	evalChebyshevSeriesPSBatchApply(cc, result, cacheChebyshev4BitsMultiplier, coeffs4BitsMultiplier, -1, 1);
 
 	// evalChebyshevSeriesPSBatchApply(cc, result, precomp4bits, coeffs, -1, 1);
 	// evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);
