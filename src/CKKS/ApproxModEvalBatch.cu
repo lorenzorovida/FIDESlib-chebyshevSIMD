@@ -29,7 +29,6 @@
 #include "CudaUtils.cuh"
 #include <iostream>
 #include <map>
-#include <nvtx3/nvtx3.hpp>
 // Uncomment to trace level/NoiseLevel at key checkpoints, mirrored in
 // ApproxModEval.cu, for side-by-side debugging against the scalar original.
 // #define DEBUG_CHEBYSHEV_TRACE 1
@@ -117,7 +116,7 @@ struct AlignedCiphertextCache {
 			return &it->second;
 		}
 		auto [inserted, _] = storage.emplace(key, Ciphertext(cc_));
-		Ciphertext& a	   = inserted->second;
+		Ciphertext& a		= inserted->second;
 		a.copy(*src);
 		if (a.NoiseLevel == 2)
 			a.rescale();
@@ -228,10 +227,8 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
   FIDESlib::CKKS::Context& cc_,
   const std::vector<Ciphertext*>& ctxs,
   const std::vector<std::vector<double>>& weightsPerSlot,
-  PlaintextCache* cache				   = nullptr,
+  PlaintextCache* cache				  = nullptr,
   AlignedCiphertextCache* alignedCache = nullptr) {
-	out.copy(*ctxs[0]);
-	return;
 
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
 	assert(ctxs.size() == weightsPerSlot.size());
@@ -326,9 +323,19 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
  * rescale a `ctxt` that had already been silently rescaled here).
  */
 void addPerSlotScalar(Ciphertext& ctxt, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_, const std::vector<double>& values, PlaintextCache* cache = nullptr) {
-	//Plaintext storage(cc_);
-	//const Plaintext* pt = makePerSlotPlaintext(cc, cc_, values, ctxt, storage, cache);
-	//ctxt.addPt(*pt);
+	if (cache != nullptr && !cache->recording) {
+		// Apply/replay mode: makePerSlotPlaintext's fast path never touches
+		// its `storage` out-param, it just returns a pointer straight into
+		// the cache (&cache->next()). Constructing a local Plaintext here
+		// just to discard it unused was allocating real GPU memory on every
+		// single call for nothing -- this was the dominant cost, not
+		// multPt/addMultPt itself.
+		ctxt.addPt(cache->next());
+		return;
+	}
+	Plaintext storage(cc_);
+	const Plaintext* pt = makePerSlotPlaintext(cc, cc_, values, ctxt, storage, cache);
+	ctxt.addPt(*pt);
 }
 
 /**
@@ -346,9 +353,15 @@ void multPerSlotScalar(Ciphertext& ctxt,
   const std::vector<double>& values,
   bool rescale,
   PlaintextCache* cache = nullptr) {
-	//Plaintext storage(cc_);
-	//const Plaintext* pt = makePerSlotPlaintext(cc, cc_, values, src, storage, cache);
-	//ctxt.multPt(src, *pt, rescale);
+	if (cache != nullptr && !cache->recording) {
+		// See addPerSlotScalar: avoid an unused Plaintext allocation on the
+		// hot Apply path.
+		ctxt.multPt(src, cache->next(), rescale);
+		return;
+	}
+	Plaintext storage(cc_);
+	const Plaintext* pt = makePerSlotPlaintext(cc, cc_, values, src, storage, cache);
+	ctxt.multPt(src, *pt, rescale);
 }
 
 /**
@@ -368,9 +381,9 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   uint32_t m,
   const std::vector<Ciphertext*>& T,
   const std::vector<Ciphertext*>& T2,
-  int level_offset					   = 0,
-  int max_m							   = 1000,
-  PlaintextCache* cache				   = nullptr,
+  int level_offset					  = 0,
+  int max_m							  = 1000,
+  PlaintextCache* cache				  = nullptr,
   AlignedCiphertextCache* alignedCache = nullptr) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
@@ -726,9 +739,13 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 		} else {
 			freeTerm = cache->nextVec1();
 		}
-		Plaintext storage(cc_);
-		const Plaintext* pt = makePerSlotPlaintext(cc, cc_, freeTerm, *T2[m - 1], storage, cache);
-		cu.addPt(*T2[m - 1], *pt);
+		if (cache != nullptr && !cache->recording) {
+			cu.addPt(*T2[m - 1], cache->next());
+		} else {
+			Plaintext storageFreeTerm(cc_);
+			const Plaintext* pt = makePerSlotPlaintext(cc, cc_, freeTerm, *T2[m - 1], storageFreeTerm, cache);
+			cu.addPt(*T2[m - 1], *pt);
+		}
 	}
 	if (ccd.rescaleTechnique == FIXEDMANUAL && out.NoiseLevel == 2)
 		cu.rescale();
@@ -892,7 +909,6 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 #ifdef DEBUG_CHEBYSHEV_TRACE
 	std::cout << "[BATCH] T2km1 level=" << T2km1.getLevel() << " noise=" << T2km1.NoiseLevel << std::endl;
 #endif
-
 	// --- Batched Paterson-Stockmeyer evaluation ---
 	// Scoped to this single top-level call: memoizes T[i]/T2[i] alignment
 	// copies by (pointer, targetLevel) across the whole recursion below, so
@@ -963,7 +979,6 @@ void FIDESlib::CKKS::evalChebyshevSeriesPSBatchApply(lbcrypto::CryptoContext<lbc
   const std::vector<std::vector<double>>& batchOfCoefficients,
   double lower_bound,
   double upper_bound) {
-
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
 	// PlaintextCache::next() advances a read cursor, which is logically
