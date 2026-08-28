@@ -1248,6 +1248,18 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		// once by the caller (see evalIntegerDivision's doc comment in the
 		// header) and passed in here, the same way `luts` is.
 		{
+			// `one` must have been encrypted at a level at least as fresh as
+			// `term`'s here (dropToLevel only lowers, never raises). If the
+			// caller built `one` at a shallower level, fail loudly instead of
+			// letting a bad level slip through to the GPU kernel below (an
+			// invalid drop target has previously shown up as a CUDA "illegal
+			// memory access" rather than a clean error).
+			if (one.getLevel() < term.getLevel()) {
+				throw std::invalid_argument(
+				  "evalIntegerDivision: `one` was encrypted at a lower level than term's post-bootstrap "
+				  "level; DivIntegerPrecomputations must encrypt it at the top of the modulus chain (level 0)");
+			}
+
 			Ciphertext oneAtLevel(num.cc_);
 			oneAtLevel.copy(one);
 			oneAtLevel.dropToLevel(term.getLevel(), false);

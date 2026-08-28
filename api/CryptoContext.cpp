@@ -1216,12 +1216,22 @@ void CryptoContextImpl<DCRTPoly>::DivIntegerPrecomputations(const Ciphertext<DCR
 	// the subtraction" line -- note it loops `for (int j = 0; j < 1; j++)`,
 	// NOT `j < zslots` like every other mask in that function; reproduced
 	// verbatim here rather than silently widened to all groups).
+	//
+	// LEVEL: on the CPU, `term` is freshly bootstrapped (binboot) right
+	// before this "+1" step every iteration, so `term->GetLevel()` there is
+	// always the same high, near-top level. `one` must therefore be
+	// encrypted at the TOP of the modulus chain (level 0, i.e. 0 levels
+	// consumed) rather than at `c`'s level -- evalIntegerDivision only ever
+	// drops `one` down to match term's level (dropToLevel can lower a
+	// ciphertext, never raise it), so encrypting `one` at anything less
+	// fresh than term's post-bootstrap level would make that drop invalid
+	// and is the likely cause of a GPU-side illegal-memory-access crash.
 	// `noise` matches the noise-scale-degree convention used by
 	// MakeCKKSPackedPlaintext elsewhere in this file.
 	std::vector<double> mask(c_gpu->slots, 0.0);
 	mask[0] = 1.0;
 
-	Plaintext onePt			 = this->MakeCKKSPackedPlaintext(mask, noise, this->multiplicative_depth - c_gpu->getLevel(), nullptr, c_gpu->slots);
+	Plaintext onePt			 = this->MakeCKKSPackedPlaintext(mask, noise, 0, nullptr, c_gpu->slots);
 	Ciphertext<DCRTPoly> one = this->Encrypt(onePt, pk);
 
 	const uint64_t key				  = (static_cast<uint64_t>(bits) << 32) | static_cast<uint32_t>(zslots);
