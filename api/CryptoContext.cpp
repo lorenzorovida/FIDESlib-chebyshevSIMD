@@ -1102,6 +1102,39 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	std::cout << "Done preprocessing with " << bits << " bits! " << std::endl;
 }
 
+void CryptoContextImpl<DCRTPoly>::IntegerMultPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int repetitions, int slots, int noise) {
+	FIDESlib::CudaNvtxRange r("API");
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW("IntegerMultPrecomputations has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
+	}
+
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
+
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*c);
+	auto res_gpu				= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto c_gpu					= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
+
+	auto& cc = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
+	std::cout << "Starting evalIntegerMult mask preprocessing with " << bits << " bits! " << std::endl;
+
+	// Mirrors evalIntegerMult's recursion exactly: bits halves and
+	// repetitions quadruples at every level until the bits == 8 base
+	// case, so mask1/mask2 need to be precomputed once for each of
+	// those (bits, repetitions) pairs.
+	int level = 12;
+
+	for (int curBits = bits, curRepetitions = repetitions; curBits >= 8; curBits /= 2, curRepetitions *= 4) {
+		FIDESlib::CKKS::preprocessIntegerMult(curBits, curRepetitions, slots, level, static_cast<size_t>(noise), cc, res_gpu->cc_);
+	}
+
+	std::cout << "Done preprocessing evalIntegerMult masks with " << bits << " bits! " << std::endl;
+}
+
 void CryptoContextImpl<DCRTPoly>::ProcessMultiplications(std::vector<std::vector<double>> coeffs, const Ciphertext<DCRTPoly>& c) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {

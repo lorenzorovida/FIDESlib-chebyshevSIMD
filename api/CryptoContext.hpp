@@ -219,6 +219,7 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	Ciphertext<DCRTPoly> CsaCarry(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c);
 	Ciphertext<DCRTPoly> MajorityBit(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c);
 	Ciphertext<DCRTPoly> BinToDec(const Ciphertext<DCRTPoly>& ct, int repetitions);
+	void IntegerMultPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int repetitions, int slots, int noise);
     void ProcessArrayPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int slots, int noise );
 	Ciphertext<DCRTPoly> Multiplier4bits(const Ciphertext<DCRTPoly>& ctxtA, const Ciphertext<DCRTPoly>& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs);
 

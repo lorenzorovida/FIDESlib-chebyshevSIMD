@@ -58,6 +58,13 @@ struct ChebyshevRepeatedLUT {
 };
 
 void preprocessChebyshevRepeated(ChebyshevRepeatedLUT& lut, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, std::vector<std::vector<double>> coeffs, int a, int b);
+void preprocessIntegerMult(int bits,
+  int repetitions,
+  int slots,
+  int level,
+  size_t noise,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+  FIDESlib::CKKS::Context& cc_);
 
 void evalChebyshevRepeatedApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, const ChebyshevRepeatedLUT& lut);
 
