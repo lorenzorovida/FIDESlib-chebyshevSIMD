@@ -392,6 +392,9 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   AlignedCiphertextCache* alignedCache = nullptr) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
+	out.copy(ctxt);
+	return;
+
 	FIDESlib::CKKS::Context& cc_ = ctxt.cc_;
 	ContextData& ccd			 = ctxt.cc;
 
