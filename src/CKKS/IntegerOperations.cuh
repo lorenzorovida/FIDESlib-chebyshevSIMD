@@ -41,6 +41,8 @@ struct ChebyshevRepeatedLUT {
 	std::shared_ptr<PSBatchPrecompute> precomp;
 	std::vector<std::vector<double>> coeffs;
 	int repeat = 0;
+	int a = -1; // input-range lower bound this LUT was built with (see preprocessChebyshevRepeated)
+	int b = 1;	// input-range upper bound this LUT was built with
 };
 
 struct DivIntegerLUTs {

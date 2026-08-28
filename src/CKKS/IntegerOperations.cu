@@ -152,18 +152,40 @@ void binaryOr(Ciphertext& out, const Ciphertext& a, const Ciphertext& b) {
 
 // ============================================================
 // Repeated-Chebyshev-LUT (mirrors OpenFHE's
-// EvalChebyshevSeriesPSBatchRepeated). We reuse FIDESlib's existing
-// PS-batch machinery (evalChebyshevSeriesPSBatchPrecompute /
-// evalChebyshevSeriesPSBatchApply, as used by preprocessChebyshevMultiplication
-// / multiplier4bits above) -- "repeated" on the CPU side just means the
-// coefficient set is periodically tiled across the slots, which is exactly
-// what PSBatch already does when `coeffs.size()` divides the slot count.
+// EvalChebyshevSeriesPSBatchRepeated(ctxt, coeffs, a, b, repeat)). We reuse
+// FIDESlib's existing PS-batch machinery (evalChebyshevSeriesPSBatchPrecompute
+// / evalChebyshevSeriesPSBatchApply, as used by preprocessChebyshevMultiplication
+// / multiplier4bits above), but unlike OpenFHE's PSBatch, FIDESlib's
+// evalChebyshevSeriesPSBatchImpl requires the coefficient vector to already
+// be as large as the ciphertext's slot count -- it does NOT tile a shorter
+// "base" set internally. So the tiling that OpenFHE's `repeat` parameter
+// does implicitly, we have to do explicitly here: replicate the caller's
+// base column set `repeat = c.slots / coeffs.size()` times before handing
+// it to PSBatch. Callers (e.g. preprocessDivIntegerLUTs) keep passing just
+// the base column set, same as the CPU's un-tiled `coeffs` vector.
 // ============================================================
 void preprocessChebyshevRepeated(ChebyshevRepeatedLUT& lut, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, std::vector<std::vector<double>> coeffs, int a, int b) {
 
-	lut.coeffs	= coeffs;
-	lut.repeat	= static_cast<int>(c.slots / coeffs.size());
-	lut.precomp = evalChebyshevSeriesPSBatchPrecompute(cc, c, coeffs, a, b);
+	if (coeffs.empty()) {
+		throw std::invalid_argument("preprocessChebyshevRepeated: coeffs must not be empty");
+	}
+	if (c.slots % coeffs.size() != 0) {
+		throw std::invalid_argument("preprocessChebyshevRepeated: c.slots must be a multiple of coeffs.size()");
+	}
+
+	const size_t repeat = c.slots / coeffs.size();
+
+	std::vector<std::vector<double>> tiled;
+	tiled.reserve(coeffs.size() * repeat);
+	for (size_t r = 0; r < repeat; ++r) {
+		tiled.insert(tiled.end(), coeffs.begin(), coeffs.end());
+	}
+
+	lut.coeffs	= coeffs; // keep the caller's original (un-tiled) base set for reference
+	lut.repeat	= static_cast<int>(repeat);
+	lut.a		= a;
+	lut.b		= b;
+	lut.precomp = evalChebyshevSeriesPSBatchPrecompute(cc, c, tiled, a, b);
 }
 
 void evalChebyshevRepeatedApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, const ChebyshevRepeatedLUT& lut) {
@@ -172,7 +194,17 @@ void evalChebyshevRepeatedApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 		throw std::invalid_argument("evalChebyshevRepeatedApply: LUT not precomputed, call preprocessChebyshevRepeated first");
 	}
 
-	evalChebyshevSeriesPSBatchApply(cc, c, lut.precomp, lut.coeffs, -1, 1);
+	std::vector<std::vector<double>> tiled;
+	tiled.reserve(lut.coeffs.size() * lut.repeat);
+	for (int r = 0; r < lut.repeat; ++r) {
+		tiled.insert(tiled.end(), lut.coeffs.begin(), lut.coeffs.end());
+	}
+
+	// Use the (a, b) this LUT was actually precomputed with -- previously
+	// hardcoded to (-1, 1) here regardless of the LUT, which silently gave
+	// the reciprocal-hint LUT (built with a=0, b=256) the wrong input-range
+	// rescaling at apply time.
+	evalChebyshevSeriesPSBatchApply(cc, c, lut.precomp, tiled, lut.a, lut.b);
 }
 
 // ============================================================
