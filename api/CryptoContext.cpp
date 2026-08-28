@@ -804,21 +804,32 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Cipherte
 	return result;
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultDivision(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots) {
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultDivision(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, const PublicKey<DCRTPoly>& pk) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	// Fall back to CPU.
 	if (this->devices.empty()) {
 
-		OPENFHE_THROW("EvalMultInteger has no CPU fallback with the OpenFHE "
+		OPENFHE_THROW("EvalMultDivision has no CPU fallback with the OpenFHE "
 					  "library currently linked. Configure at least one GPU device, or "
 					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
 					  "to enable the CPU path.");
 	}
 
+	const uint64_t key = (static_cast<uint64_t>(bits) << 32) | static_cast<uint32_t>(zslots);
+	auto cached			= this->div_integer_one_cache.find(key);
+	if (cached == this->div_integer_one_cache.end()) {
+		OPENFHE_THROW("EvalMultDivision: no precomputation found for bits=" + std::to_string(bits) + ", zslots=" + std::to_string(zslots) +
+					  ". Call DivIntegerPrecomputations(..., bits, zslots, ...) once before the first EvalMultDivision "
+					  "call with this (bits, zslots) combination.");
+	}
+
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct1));
 
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct2));
+
+	Ciphertext<DCRTPoly>& one = cached->second;
+	this->LoadCiphertext(one);
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
 
@@ -828,9 +839,11 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultDivision(const Ciphert
 
 	auto ct2_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
 
+	auto one_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(one->gpu));
+
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
-	FIDESlib::CKKS::evalIntegerDivision(*res_gpu, *ct1_gpu, *ct2_gpu, bits, bits, zslots, zslots, overflow, context);
+	FIDESlib::CKKS::evalIntegerDivision(*res_gpu, *ct1_gpu, *ct2_gpu, bits, zslots, FIDESlib::CKKS::lutsDiv, *one_gpu, context);
 
 	return result;
 }
@@ -1133,6 +1146,88 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 	}
 
 	std::cout << "Done preprocessing with " << bits << " bits! " << std::endl;
+}
+
+// One-time setup for EvalMultDivision at a given (bits, zslots). Mirrors
+// IntegerMultPrecomputations/ProcessArrayPrecomputations: called once by the
+// application before the first EvalMultDivision(..., bits, zslots, ...) call.
+//
+// Builds two things `evalIntegerDivision` needs but cannot build itself:
+//   1. `lutsDiv`, via preprocessDivIntegerLUTs -- the two repeated-Chebyshev
+//      LUT precomputations (bit-length decomposition + reciprocal hint) that
+//      replace the CPU's per-call `read_vector_file(...)` disk reads in
+//      div_integer (see CKKSController::div_integer, the two `coeffs.push_back
+//      (read_vector_file(...))` blocks). The caller supplies the already-
+//      loaded coefficient vectors (`bitLengthCoeffs`, `reciprocalCoeffs`) --
+//      this method does not touch the filesystem, matching every other GPU
+//      precompute entry point in this file.
+//   2. The constant-1 ciphertext consumed by evalIntegerDivision's Newton-
+//      Raphson correction step. On the CPU this is built fresh every loop
+//      iteration via `encrypt(mask, term->GetLevel())` (div_integer, the
+//      "+1 that corrects the subtraction" line) because a genuine (non-
+//      trivial) encryption needs the public key, which FIDESlib::CKKS::
+//      Ciphertext has no access to. We build it once, at the level `term`
+//      settles at after each loop iteration's binboot -- that level is the
+//      same on every iteration since binboot always bootstraps to the same
+//      target depth -- and evalIntegerDivision drops it to `term`'s exact
+//      level on each use as a safety net.
+//
+//      NOTE ON THE MASK: the CPU's mask here is
+//        for (int j = 0; j < 1; j++) { mask[j * stride] = 1; }
+//      i.e. it sets slot 0 of ONLY THE FIRST group to 1 -- not slot 0 of
+//      every one of the `zslots` groups, unlike every other mask in this
+//      function. This looks like it may only be correct for zslots == 1;
+//      we reproduce it exactly as written (see the flagged block below)
+//      rather than silently changing the semantics, but it's worth
+//      double-checking against your reference results when zslots > 1.
+void CryptoContextImpl<DCRTPoly>::DivIntegerPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int zslots, const PublicKey<DCRTPoly>& pk, int noise,
+  const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& reciprocalCoeffs) {
+	FIDESlib::CudaNvtxRange r("API");
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW("DivIntegerPrecomputations has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
+	}
+
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
+
+	auto c_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
+	auto& cc   = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
+	// ---- 1. LUT precomputation ----
+	// `bitLengthCoeffs`/`reciprocalCoeffs` are the same coefficient vectors
+	// the CPU loads from "../coeffs/LUTs/<bits> bits/lut/p{1..7}-norm-247-
+	// LUT-DIVISION.txt" (+ garbage padding to `bits` columns) and
+	// "../coeffs/LUTs/<bits> bits/division/LUT-DIVISION-<bits>-bits-<i>.txt"
+	// (+ garbage padding to bits*bits/2 columns) -- see div_integer for the
+	// exact file list and padding counts. File I/O is left to the caller,
+	// same as preprocessDivIntegerLUTs's own signature.
+	//
+	// This populates the module-level `lutsDiv` global declared in
+	// IntegerOperations.cuh; evalIntegerDivision reads it back out via the
+	// `luts` parameter passed in by EvalMultDivision below.
+	FIDESlib::CKKS::preprocessDivIntegerLUTs(FIDESlib::CKKS::lutsDiv, bits, zslots, cc, *c_gpu, bitLengthCoeffs, reciprocalCoeffs);
+
+	// ---- 2. Constant-1 ciphertext ----
+	// Mirrors the CPU's `encrypt(mask, term->GetLevel())`, mask = {1 at slot
+	// 0 of group 0 only, 0 elsewhere} (see div_integer's "+1 that corrects
+	// the subtraction" line -- note it loops `for (int j = 0; j < 1; j++)`,
+	// NOT `j < zslots` like every other mask in that function; reproduced
+	// verbatim here rather than silently widened to all groups).
+	// `noise` matches the noise-scale-degree convention used by
+	// MakeCKKSPackedPlaintext elsewhere in this file.
+	std::vector<double> mask(c_gpu->slots, 0.0);
+	mask[0] = 1.0;
+
+	Plaintext onePt			 = this->MakeCKKSPackedPlaintext(mask, noise, this->multiplicative_depth - c_gpu->getLevel(), nullptr, c_gpu->slots);
+	Ciphertext<DCRTPoly> one = this->Encrypt(onePt, pk);
+
+	const uint64_t key				  = (static_cast<uint64_t>(bits) << 32) | static_cast<uint32_t>(zslots);
+	this->div_integer_one_cache[key] = one;
+
+	std::cout << "Done preprocessing div_integer with " << bits << " bits! " << std::endl;
 }
 
 void CryptoContextImpl<DCRTPoly>::ProcessMultiplications(std::vector<std::vector<double>> coeffs, const Ciphertext<DCRTPoly>& c) {

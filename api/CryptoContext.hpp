@@ -212,7 +212,12 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	Ciphertext<DCRTPoly> EvalAddInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits);
 	Ciphertext<DCRTPoly> EvalEqualInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, std::vector<double> coeffsSinc, int depth);
 	Ciphertext<DCRTPoly> EvalMultInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, bool overflow);
-	Ciphertext<DCRTPoly> EvalMultDivision(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots);
+	// `pk` is needed because the Newton-Raphson refinement in evalIntegerDivision
+	// needs a genuinely-encrypted constant "1" ciphertext (not just a plaintext
+	// mask) to finish a two's-complement negation -- see DivIntegerPrecomputations.
+	// Call DivIntegerPrecomputations(ct1, bits, zslots, pk, noise) once before the
+	// first EvalMultDivision call with a given (bits, zslots) combination.
+	Ciphertext<DCRTPoly> EvalMultDivision(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, const PublicKey<DCRTPoly>& pk);
 
 	
 	// Support
@@ -223,6 +228,14 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	Ciphertext<DCRTPoly> BinToDec(const Ciphertext<DCRTPoly>& ct, int repetitions);
 	void IntegerMultPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int repetitions, int slots, int noise);
     void ProcessArrayPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int slots, int noise );
+	// One-time setup for EvalMultDivision at a given (bits, zslots): builds the
+	// LUT precomputations (bit-length + reciprocal-hint tables, mirroring
+	// IntegerMultPrecomputations/ProcessArrayPrecomputations) and encrypts the
+	// constant-1 ciphertext EvalMultDivision needs. `c` is only used as a
+	// template ciphertext (its .cc_/level), the same way ProcessArrayPrecomputations
+	// uses its `c` argument -- its data is not read.
+	void DivIntegerPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int zslots, const PublicKey<DCRTPoly>& pk, int noise,
+	  const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& reciprocalCoeffs);
 	Ciphertext<DCRTPoly> Multiplier4bits(const Ciphertext<DCRTPoly>& ctxtA, const Ciphertext<DCRTPoly>& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs);
 
 
@@ -278,6 +291,12 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	std::vector<uint32_t> slots_bootstrap;
 	/// @brief Secret key distribution.
 	SecretKeyDist keyDist = UNIFORM_TERNARY;
+
+	/// @brief Cache of the constant-1 ciphertext used by EvalMultDivision's
+	/// Newton-Raphson correction step, keyed by (bits << 32 | zslots) so a
+	/// distinct constant is kept per (bits, zslots) combination. Populated by
+	/// DivIntegerPrecomputations; consumed by EvalMultDivision.
+	std::unordered_map<uint64_t, Ciphertext<DCRTPoly>> div_integer_one_cache;
 
 	// ---- Copy helpers ----
 

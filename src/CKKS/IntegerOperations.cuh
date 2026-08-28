@@ -105,7 +105,15 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
   const std::vector<std::vector<double>>& bitLengthCoeffs,
   const std::vector<std::vector<double>>& reciprocalCoeffs);
 
-void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, const DivIntegerLUTs& luts, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
+// `one`: a genuine (non-trivial) encryption of the constant mask
+// {1 at slot 0 of every bits*bits/2-sized group, 0 elsewhere}, at a level
+// deep enough to survive the two's-complement "+1" step inside the Newton-
+// Raphson loop (see the CPU's `encrypt(mask, term->GetLevel())` call in
+// div_integer). FIDESlib::CKKS::Ciphertext has no key material in scope to
+// encrypt this itself, so the caller builds it once -- the same way `luts`
+// is built once -- via CryptoContextImpl<DCRTPoly>::Encrypt(pt, pk) (see
+// CryptoContextImpl<DCRTPoly>::DivIntegerPrecomputations).
+void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, const DivIntegerLUTs& luts, const Ciphertext& one, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, int depth);
 void evalIntegerMult(Ciphertext& out,

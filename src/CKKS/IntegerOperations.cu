@@ -1000,8 +1000,14 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
 	preprocessChebyshevRepeated(luts.reciprocalHint, cc, like, reciprocalCoeffs, 0, 256);
 }
 
-void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, const DivIntegerLUTs& luts, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
-	preprocessDivIntegerLUTs(lits, bits, zslots, cc, num, bitLengthCoeffs, reciprocalCoeffs);
+void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, const DivIntegerLUTs& luts, const Ciphertext& one, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+	// `luts` is precomputed once by the caller via preprocessDivIntegerLUTs
+	// (see CryptoContextImpl<DCRTPoly>::DivIntegerPrecomputations), exactly
+	// like IntegerMultPrecomputations/ProcessArrayPrecomputations do for
+	// EvalMultInteger -- it must NOT be rebuilt on every call.
+	if (!luts.bitLengthDecompose.precomp || !luts.reciprocalHint.precomp) {
+		throw std::invalid_argument("evalIntegerDivision: luts not precomputed -- call DivIntegerPrecomputations first");
+	}
 
 	const int LUT_BITS			 = 8;
 	FIDESlib::CKKS::Context& cc_ = num.cc_;
@@ -1202,27 +1208,19 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		// term = binboot(add_integer(term, {1 at slot 0 of each group}, bits*2, false))
 		// (the "+1" that finishes two's-complement negation: -term == ~term + 1)
 		//
-		// NOTE: the CPU calls add_integer(term, encrypt(mask, ...), ...) here,
-		// i.e. it needs the "+1" constant as an actual (trivially-encrypted)
-		// ciphertext, because add_integer takes two Ctxt. FIDESlib's
-		// Ciphertext, as used elsewhere in this file, only exposes
-		// plaintext-ciphertext ops (multPt/addPt) -- there's no trivial-encrypt
-		// entry point visible in the code made available to this port. Whatever
-		// that entry point is called in the rest of the FIDESlib codebase
-		// (e.g. an EncryptZero/LoadPlaintext-style constructor), plug it in
-		// here; `one` must be a ciphertext holding 1.0 at slot 0 of every
-		// `stride`-sized group and 0 elsewhere, at term's level/noise degree.
-		std::fill(mask.begin(), mask.end(), 0.0);
-		for (int j = 0; j < zslots; ++j) {
-			mask[j * stride] = 1.0;
-		}
-
+		// The CPU calls add_integer(term, encrypt(mask, ...), ...) here, i.e.
+		// it needs the "+1" constant as a genuinely-encrypted ciphertext (not
+		// just a plaintext mask), because add_integer's carry-lookahead logic
+		// takes two ciphertexts. `one` is exactly that: a real encryption of
+		// {1 at slot 0 of every bits*bits/2-sized group, 0 elsewhere}, built
+		// once by the caller (see evalIntegerDivision's doc comment in the
+		// header) and passed in here, the same way `luts` is.
 		{
-			Ciphertext one(num.cc_);
-			// TODO: replace with FIDESlib's actual trivial-encryption call.
-			// one.trivialEncrypt(makePerSlotPlaintext(cc, cc_, mask, term));
+			Ciphertext oneAtLevel(num.cc_);
+			oneAtLevel.copy(one);
+			oneAtLevel.dropToLevel(term.getLevel(), false);
 
-			evalIntegerAdd(term, one, bits * 2);
+			evalIntegerAdd(term, oneAtLevel, bits * 2);
 			binboot(term, term);
 		}
 
