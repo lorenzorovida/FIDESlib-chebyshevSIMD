@@ -37,6 +37,17 @@ extern ProcessArrayPrecomputation precomp128b;
 extern std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
 extern std::vector<std::vector<double>> coeffs4BitsMultiplier;
 
+struct ChebyshevRepeatedLUT {
+	std::shared_ptr<PSBatchPrecompute> precomp;
+	std::vector<std::vector<double>> coeffs;
+	int repeat = 0;
+};
+
+struct DivIntegerLUTs {
+	ChebyshevRepeatedLUT bitLengthDecompose; // p1..p7-norm-247-LUT-DIVISION (+ garbage)
+	ChebyshevRepeatedLUT reciprocalHint;	 // LUT-DIVISION-<bits>-bits-<i> (+ garbage)
+};
+
 extern DivIntegerLUTs lutsDiv;
 
 // ----------------------------------------------------------------------
@@ -53,11 +64,7 @@ extern DivIntegerLUTs lutsDiv;
 // preprocessChebyshevRepeated(...) once, and evalChebyshevRepeatedApply(...)
 // on every ciphertext that shares that shape.
 // ----------------------------------------------------------------------
-struct ChebyshevRepeatedLUT {
-	std::shared_ptr<PSBatchPrecompute> precomp;
-	std::vector<std::vector<double>> coeffs;
-	int repeat = 0;
-};
+
 
 void preprocessChebyshevRepeated(ChebyshevRepeatedLUT& lut, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, std::vector<std::vector<double>> coeffs, int a, int b);
 void preprocessIntegerMult(int bits, int repetitions, int slots, int level, size_t noise, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_);
@@ -88,10 +95,7 @@ void binaryOr(Ciphertext& out, const Ciphertext& a, const Ciphertext& b);
 // disk reads (see preprocessChebyshevRepeated); the caller builds these
 // once (from the same coefficient files/values as the CPU LUTs) via
 // preprocessDivIntegerLUTs.
-struct DivIntegerLUTs {
-	ChebyshevRepeatedLUT bitLengthDecompose; // p1..p7-norm-247-LUT-DIVISION (+ garbage)
-	ChebyshevRepeatedLUT reciprocalHint;	 // LUT-DIVISION-<bits>-bits-<i> (+ garbage)
-};
+
 
 void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
   int bits,
