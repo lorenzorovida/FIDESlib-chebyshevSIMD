@@ -392,8 +392,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   AlignedCiphertextCache* alignedCache = nullptr) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
-	out.copy(ctxt);
-	return;
+	
 
 	FIDESlib::CKKS::Context& cc_ = ctxt.cc_;
 	ContextData& ccd			 = ctxt.cc;
@@ -450,6 +449,9 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 		divcsVec = cache->nextCs();
 		s2Vec	 = cache->nextS2();
 	}
+
+	out.copy(ctxt);
+	return;
 
 	// Degrees of divqr->q, divcs->q, s2 are structurally identical across the
 	// whole batch (same k, m and same input degree), so index 0 is used as
