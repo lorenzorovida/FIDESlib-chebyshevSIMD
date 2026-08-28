@@ -745,11 +745,11 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			freeTerm = cache->nextVec1();
 		}
 		if (cache != nullptr && !cache->recording) {
-			cu.addPt(*T2[m - 1], cache->next());
+			//cu.addPt(*T2[m - 1], cache->next());
 		} else {
 			Plaintext storageFreeTerm(cc_);
 			const Plaintext* pt = makePerSlotPlaintext(cc, cc_, freeTerm, *T2[m - 1], storageFreeTerm, cache);
-			cu.addPt(*T2[m - 1], *pt);
+			//cu.addPt(*T2[m - 1], *pt);
 		}
 	}
 	if (ccd.rescaleTechnique == FIXEDMANUAL && out.NoiseLevel == 2)
