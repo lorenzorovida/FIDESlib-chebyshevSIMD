@@ -229,6 +229,8 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
   const std::vector<std::vector<double>>& weightsPerSlot,
   PlaintextCache* cache				   = nullptr,
   AlignedCiphertextCache* alignedCache = nullptr) {
+	out.copy(*ctxs[0]);
+	return;
 
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
 	assert(ctxs.size() == weightsPerSlot.size());
@@ -333,7 +335,7 @@ void addPerSlotScalar(Ciphertext& ctxt, lbcrypto::CryptoContext<lbcrypto::DCRTPo
 		// just to discard it unused was allocating real GPU memory on every
 		// single call for nothing -- this was the dominant cost, not
 		// multPt/addMultPt itself.
-		ctxt.addPt(cache->next());
+		//ctxt.addPt(cache->next());
 		return;
 	}
 	Plaintext storage(cc_);
@@ -359,7 +361,7 @@ void multPerSlotScalar(Ciphertext& ctxt,
 	if (cache != nullptr && !cache->recording) {
 		// See addPerSlotScalar: avoid an unused Plaintext allocation on the
 		// hot Apply path.
-		ctxt.multPt(src, cache->next(), rescale);
+		//ctxt.multPt(src, cache->next(), rescale);
 		return;
 	}
 	Plaintext storage(cc_);
