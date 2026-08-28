@@ -1,6 +1,8 @@
 #include "CKKS/Ciphertext.cuh"
 #include "CKKS/IntegerOperations.cuh"
 
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <stdexcept>
 #include <unordered_map>
@@ -33,22 +35,61 @@ std::vector<std::vector<double>> coeffs4BitsMultiplier;
 //
 // On GPU the expensive part is exactly that encoding step:
 // makePerSlotPlaintext() runs MakeCKKSPackedPlaintext(...) +
-// GetRawPlainText(...) on every single call. Since mask1/mask2 depend
-// only on (bits, bits_original, repetitions, slots) -- never on the
-// ciphertext contents -- they are identical across calls at a given
-// recursion level, so we precompute+encode them once here, keyed by
-// `bits`, exactly like the precomp8..precomp128b cache above does for
-// process_array's masks. Plaintext has no default constructor (see
-// ProcessArrayPrecomputation::Entry, which is only ever
-// move-constructed), so entries are held as unique_ptr instead of by
-// value to keep this a plain global map.
+// GetRawPlainText(...) on every single call. The *shape* of mask1/
+// mask2 depends only on (bits, repetitions, slots) -- never on the
+// ciphertext contents. BUT the encoded Plaintext also bakes in the
+// level and noiseScaleDeg of the ciphertext it was built against
+// (makePerSlotPlaintext reads both off `result`), and `result`'s
+// level is NOT constant across calls: evalIntegerMult bootstraps
+// (binboot / BootstrapStCFirstBits) at the end of every single call,
+// including every recursive call at every bits level, so the level
+// seen here varies depending on how deep/which path the recursion
+// took. A previous version of this cache fixed `level` to a constant
+// (12) ahead of time to mirror ProcessArrayPrecomputations, which
+// silently produced wrong results whenever `result`'s real level
+// didn't match -- multiplying a ciphertext by a plaintext encoded at
+// the wrong level/rescale point corrupts the CKKS scale.
+//
+// So the cache key here is (bits, repetitions, level, noiseScaleDeg)
+// rather than just `bits`: this still avoids re-encoding on repeat
+// calls that land at the same recursion level with the same noise
+// state (the common case, since the same bits_original always drives
+// the same sequence of levels/noise), while never handing back a
+// Plaintext encoded for the wrong level. Plaintext has no default
+// constructor (see ProcessArrayPrecomputation::Entry, which is only
+// ever move-constructed), so entries are held as unique_ptr instead
+// of by value to keep this a plain global map.
 // ============================================================
 struct IntegerMultMaskPrecomputation {
 	std::unique_ptr<Plaintext> mask1;
 	std::unique_ptr<Plaintext> mask2;
 };
 
-std::unordered_map<int, IntegerMultMaskPrecomputation> integerMultMaskCache;
+struct IntegerMultMaskKey {
+	int bits;
+	int repetitions;
+	int slots;
+	uint32_t openfheLevel;
+	size_t noiseScaleDeg;
+
+	bool operator==(const IntegerMultMaskKey& other) const {
+		return bits == other.bits && repetitions == other.repetitions && slots == other.slots &&
+			   openfheLevel == other.openfheLevel && noiseScaleDeg == other.noiseScaleDeg;
+	}
+};
+
+struct IntegerMultMaskKeyHash {
+	size_t operator()(const IntegerMultMaskKey& k) const {
+		size_t h = std::hash<int>()(k.bits);
+		h		 = h * 31 + std::hash<int>()(k.repetitions);
+		h		 = h * 31 + std::hash<int>()(k.slots);
+		h		 = h * 31 + std::hash<uint32_t>()(k.openfheLevel);
+		h		 = h * 31 + std::hash<size_t>()(k.noiseScaleDeg);
+		return h;
+	}
+};
+
+std::unordered_map<IntegerMultMaskKey, IntegerMultMaskPrecomputation, IntegerMultMaskKeyHash> integerMultMaskCache;
 
 Plaintext makePerSlotPlaintext(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_, const std::vector<double>& values, const Ciphertext& like) {
 	uint32_t openfheLevel			 = static_cast<uint32_t>(like.cc.L - like.getLevel());
@@ -751,27 +792,22 @@ void evalIntegerMult(Ciphertext& out,
 	// Recombine multiplication result
 	// ============================================================
 
-	// mask1/mask2 depend only on (bits, repetitions, slots), never on
-	// the ciphertext contents, so they're precomputed once per
-	// recursion level in preprocessIntegerMult and cached here instead
-	// of being rebuilt + re-encoded on every call (see
-	// IntegerMultMaskPrecomputation above). Falls back to building them
-	// on the fly -- same as the CPU reference -- if the cache wasn't
-	// populated, so this stays correct even without the precompute
-	// step, just slower.
-	auto maskIt = integerMultMaskCache.find(bits);
+	// mask1/mask2's *shape* depends only on (bits, repetitions, slots),
+	// but the encoded Plaintext also bakes in result's level/noise,
+	// which change across recursion depth (every call bootstraps at
+	// the end). So we cache by the full (bits, repetitions, slots,
+	// level, noise) key: on the first call at a given recursion depth
+	// we pay the encode cost once, and every later call that lands at
+	// the same depth with the same noise state reuses it -- while
+	// never reusing a Plaintext encoded for the wrong level.
+	uint32_t openfheLevel  = static_cast<uint32_t>(result.cc.L - result.getLevel());
+	size_t noiseScaleDeg   = static_cast<size_t>(result.NoiseLevel);
 
-	std::unique_ptr<Plaintext> fallbackMask1Pt;
-	std::unique_ptr<Plaintext> fallbackMask2Pt;
-	const Plaintext* mask1Pt = nullptr;
-	const Plaintext* mask2Pt = nullptr;
+	IntegerMultMaskKey maskKey{ bits, repetitions, result.slots, openfheLevel, noiseScaleDeg };
 
-	if (maskIt != integerMultMaskCache.end()) {
-		mask1Pt = maskIt->second.mask1.get();
-		mask2Pt = maskIt->second.mask2.get();
-	} else {
-		std::cerr << "No precomputations found for evalIntegerMult recombination masks! Call IntegerMultPrecomputations" << std::endl;
+	auto maskIt = integerMultMaskCache.find(maskKey);
 
+	if (maskIt == integerMultMaskCache.end()) {
 		const int dunn = (bits * bits / base_mult) * 2;
 
 		std::vector<double> mask1(a.slots, 0.0);
@@ -792,11 +828,15 @@ void evalIntegerMult(Ciphertext& out,
 			}
 		}
 
-		fallbackMask1Pt = std::make_unique<Plaintext>(makePerSlotPlaintext(cc, cc_, mask1, result));
-		fallbackMask2Pt = std::make_unique<Plaintext>(makePerSlotPlaintext(cc, cc_, mask2, result));
-		mask1Pt			= fallbackMask1Pt.get();
-		mask2Pt			= fallbackMask2Pt.get();
+		IntegerMultMaskPrecomputation entry;
+		entry.mask1 = std::make_unique<Plaintext>(makePerSlotPlaintext(cc, cc_, mask1, result));
+		entry.mask2 = std::make_unique<Plaintext>(makePerSlotPlaintext(cc, cc_, mask2, result));
+
+		maskIt = integerMultMaskCache.emplace(maskKey, std::move(entry)).first;
 	}
+
+	const Plaintext* mask1Pt = maskIt->second.mask1.get();
+	const Plaintext* mask2Pt = maskIt->second.mask2.get();
 
 	// ------------------------------------------------------------
 	// p1 = result * mask1
@@ -1469,77 +1509,6 @@ void preprocessProcessArray(int bits,
 
 		precomp->entries.push_back(std::move(entry));
 	}
-}
-
-// ============================================================
-// preprocessIntegerMult
-//
-// Builds and encodes the mask1/mask2 plaintexts used by
-// evalIntegerMult's recombination step (see the "dunn" section at the
-// top of this file for the runtime formulas this mirrors exactly),
-// and stores them in integerMultMaskCache keyed by `bits`.
-//
-// Must be called once per recursion level -- i.e. once for each value
-// `bits` takes on while evalIntegerMult(..., bits_original, ...)
-// recurses (bits_original, bits_original/2, ..., 8) -- before
-// evalIntegerMult is invoked with that bits_original. See
-// CryptoContextImpl<DCRTPoly>::IntegerMultPrecomputations in
-// CryptoContext.cpp, which drives this the same way
-// ProcessArrayPrecomputations drives preprocessProcessArray.
-// ============================================================
-void preprocessIntegerMult(int bits,
-  int repetitions,
-  int slots,
-  int level,
-  size_t noise,
-  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-  FIDESlib::CKKS::Context& cc_) {
-
-	if (bits <= 0) {
-		throw std::invalid_argument("preprocessIntegerMult: bits must be > 0");
-	}
-
-	if (repetitions <= 0) {
-		throw std::invalid_argument("preprocessIntegerMult: repetitions must be > 0");
-	}
-
-	if (slots <= 0) {
-		throw std::invalid_argument("preprocessIntegerMult: slots must be > 0");
-	}
-
-	const int base_mult = 8;
-	const int rep_size	 = bits * bits / 2;
-	const int dunn		 = (bits * bits / base_mult) * 2;
-
-	std::vector<double> mask1(slots, 0.0);
-
-	for (int j = 0; j < repetitions; ++j) {
-		for (int i = 0; i < bits; ++i) {
-			mask1[(j * rep_size) + i] = 1.0;
-			mask1[(j * rep_size) + i + dunn] = 1.0;
-		}
-	}
-
-	std::vector<double> mask2(slots, 0.0);
-
-	for (int j = 0; j < repetitions; ++j) {
-		for (int i = 0; i < bits; ++i) {
-			mask2[(j * rep_size) + rep_size / 4 + i] = 1.0;
-			mask2[(j * rep_size) + rep_size / 4 + i + dunn] = 1.0;
-		}
-	}
-
-	auto encode = [&](const std::vector<double>& values) -> std::unique_ptr<Plaintext> {
-		auto pt							 = cc->MakeCKKSPackedPlaintext(values, noise, level, nullptr, slots);
-		FIDESlib::CKKS::RawPlainText raw = FIDESlib::CKKS::GetRawPlainText(cc, pt);
-		return std::make_unique<Plaintext>(cc_, raw);
-	};
-
-	IntegerMultMaskPrecomputation entry;
-	entry.mask1 = encode(mask1);
-	entry.mask2 = encode(mask2);
-
-	integerMultMaskCache[bits] = std::move(entry);
 }
 
 void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c) {
