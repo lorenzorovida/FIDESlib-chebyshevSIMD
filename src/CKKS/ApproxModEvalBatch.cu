@@ -229,9 +229,6 @@ void evalLinearWSumMutablePtBatch(Ciphertext& out,
   const std::vector<std::vector<double>>& weightsPerSlot,
   PlaintextCache* cache				   = nullptr,
   AlignedCiphertextCache* alignedCache = nullptr) {
-	out.copy(*ctxs[0]);
-	return;
-
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() }.substr());
 	assert(ctxs.size() == weightsPerSlot.size());
 	uint32_t n = static_cast<uint32_t>(ctxs.size());
@@ -331,11 +328,9 @@ void addPerSlotScalar(Ciphertext& ctxt, lbcrypto::CryptoContext<lbcrypto::DCRTPo
 	if (cache != nullptr && !cache->recording) {
 		// Apply/replay mode: makePerSlotPlaintext's fast path never touches
 		// its `storage` out-param, it just returns a pointer straight into
-		// the cache (&cache->next()). Constructing a local Plaintext here
-		// just to discard it unused was allocating real GPU memory on every
-		// single call for nothing -- this was the dominant cost, not
-		// multPt/addMultPt itself.
-		//ctxt.addPt(cache->next());
+		// the cache (&cache->next()), so no GPU allocation happens here
+		// beyond the addPt itself.
+		ctxt.addPt(cache->next());
 		return;
 	}
 	Plaintext storage(cc_);
@@ -359,9 +354,10 @@ void multPerSlotScalar(Ciphertext& ctxt,
   bool rescale,
   PlaintextCache* cache = nullptr) {
 	if (cache != nullptr && !cache->recording) {
-		// See addPerSlotScalar: avoid an unused Plaintext allocation on the
-		// hot Apply path.
-		//ctxt.multPt(src, cache->next(), rescale);
+		// See addPerSlotScalar: no unused Plaintext allocation on the Apply
+		// path, makePerSlotPlaintext's fast path returns a pointer straight
+		// into the cache.
+		ctxt.multPt(src, cache->next(), rescale);
 		return;
 	}
 	Plaintext storage(cc_);
@@ -392,19 +388,34 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
   AlignedCiphertextCache* alignedCache = nullptr) {
 	FIDESlib::CudaNvtxRange r(std::string{ scb::current().function_name() });
 
-	
-
 	FIDESlib::CKKS::Context& cc_ = ctxt.cc_;
 	ContextData& ccd			 = ctxt.cc;
 
 	uint32_t k2m2k = k * (1 << (m - 1)) - k;
 
 	size_t batchSize = batchOfCoefficients.size();
-	std::vector<std::shared_ptr<lbcrypto::longDiv<double>>> divqrVec(batchSize);
-	std::vector<std::shared_ptr<lbcrypto::longDiv<double>>> divcsVec(batchSize);
-	std::vector<std::vector<double>> s2Vec(batchSize);
+
+	// PERFORMANCE NOTE: these three quantities are only ever READ from this
+	// point on (never mutated), in both the compute and cache-replay paths.
+	// The compute path needs owning local storage (freshly computed here);
+	// the replay path can and should bind directly to the cache's storage by
+	// reference, since PlaintextCache::next{Qr,Cs,S2}() already return
+	// `const vector<...>&`. Previously this function unconditionally
+	// declared owning `std::vector` locals and, on the replay path, assigned
+	// the cache's reference INTO them (`s2Vec = cache->nextS2();`), which
+	// deep-copies a batchSize-length vector (s2Vec: batchSize separate
+	// heap-allocated inner vectors) on every single recursion node, every
+	// single Apply call -- this dominated runtime even after every other
+	// per-call cost had been cached away. Binding references instead makes
+	// the replay path do zero additional allocation/copying here.
+	std::vector<std::shared_ptr<lbcrypto::longDiv<double>>> divqrVecOwned;
+	std::vector<std::shared_ptr<lbcrypto::longDiv<double>>> divcsVecOwned;
+	std::vector<std::vector<double>> s2VecOwned;
 
 	if (cache == nullptr || (cache != nullptr && cache->recording)) {
+		divqrVecOwned.resize(batchSize);
+		divcsVecOwned.resize(batchSize);
+		s2VecOwned.resize(batchSize);
 		for (size_t b = 0; b < batchSize; ++b) {
 			// Add T^{k(2^m - 1)}(y) to the polynomial that has to be evaluated
 			std::vector<double> f2 = batchOfCoefficients[b];
@@ -435,23 +446,54 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			s2.resize(int32_t(k2m2k + 1), 0.0);
 			s2.back() = 1;
 
-			divqrVec[b] = divqr;
-			divcsVec[b] = divcs;
-			s2Vec[b]	= std::move(s2);
+			divqrVecOwned[b] = divqr;
+			divcsVecOwned[b] = divcs;
+			s2VecOwned[b]	 = std::move(s2);
 		}
 		if (cache != nullptr && cache->recording) {
-			cache->recordQr(divqrVec);
-			cache->recordCs(divcsVec);
-			cache->recordS2(s2Vec);
+			cache->recordQr(divqrVecOwned);
+			cache->recordCs(divcsVecOwned);
+			cache->recordS2(s2VecOwned);
 		}
-	} else {
-		divqrVec = cache->nextQr();
-		divcsVec = cache->nextCs();
-		s2Vec	 = cache->nextS2();
 	}
 
-	out.copy(ctxt);
-	return;
+	// Bind by pointer (not a ternary-initialized reference) so it's
+	// unambiguous that exactly one branch runs and each cache->next*() is
+	// called exactly once (preserving the read-cursor order the whole
+	// record/replay scheme depends on).
+	const std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>* divqrVecPtr;
+	const std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>* divcsVecPtr;
+	const std::vector<std::vector<double>>* s2VecPtr;
+	if (cache != nullptr && !cache->recording) {
+		divqrVecPtr = &cache->nextQr();
+		divcsVecPtr = &cache->nextCs();
+		s2VecPtr	= &cache->nextS2();
+	} else {
+		divqrVecPtr = &divqrVecOwned;
+		divcsVecPtr = &divcsVecOwned;
+		s2VecPtr	= &s2VecOwned;
+	}
+	const std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& divqrVec = *divqrVecPtr;
+	const std::vector<std::shared_ptr<lbcrypto::longDiv<double>>>& divcsVec = *divcsVecPtr;
+	const std::vector<std::vector<double>>& s2Vec							  = *s2VecPtr;
+
+	// PERFORMANCE NOTE (see the divqrVec/divcsVec/s2Vec comment above for the
+	// full explanation): every "coeffs"/"weights"/"freeTerm"/"qCoeffs" value
+	// below is, on the Apply/replay path, an already-extracted vector sitting
+	// in `cache` -- PlaintextCache::nextVec1()/nextVec2() already return
+	// `const vector<...>&`. The call sites only ever READ these values
+	// afterward (passed as `const vector<...>&` into
+	// evalLinearWSumMutablePtBatch/addPerSlotScalar/multPerSlotScalar), so
+	// there is no need to copy them into a fresh owning local first. These
+	// helpers make that explicit: on replay they return a reference straight
+	// into the cache; on compute they return a reference to the
+	// caller-provided owning local that was just filled in.
+	auto cachedVec1 = [&](std::vector<double>& owned) -> const std::vector<double>& {
+		return (cache != nullptr && !cache->recording) ? cache->nextVec1() : owned;
+	};
+	auto cachedVec2 = [&](std::vector<std::vector<double>>& owned) -> const std::vector<std::vector<double>>& {
+		return (cache != nullptr && !cache->recording) ? cache->nextVec2() : owned;
+	};
 
 	// Degrees of divqr->q, divcs->q, s2 are structurally identical across the
 	// whole batch (same k, m and same input degree), so index 0 is used as
@@ -465,38 +507,37 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 	if (dc >= 1) {
 		bool needCompute = (cache == nullptr) || cache->recording;
 		if (dc == 1) {
-			std::vector<double> coeffs;
+			std::vector<double> coeffsOwned;
 			if (needCompute) {
-				coeffs.resize(batchSize);
+				coeffsOwned.resize(batchSize);
 				for (size_t b = 0; b < batchSize; ++b)
-					coeffs[b] = divcsVec[b]->q[1];
+					coeffsOwned[b] = divcsVec[b]->q[1];
 				if (cache != nullptr && cache->recording) {
-					std::vector<double> toStore = coeffs;
+					std::vector<double> toStore = coeffsOwned;
 					cache->recordVec1(std::move(toStore));
 				}
-			} else {
-				coeffs = cache->nextVec1();
 			}
+			const std::vector<double>& coeffs = cachedVec1(coeffsOwned);
 			multPerSlotScalar(cu, cc, cc_, *T[0], coeffs, true, cache);
 		} else {
 			std::vector<Ciphertext*> ctxs(dc);
-			std::vector<std::vector<double>> weights;
+			std::vector<std::vector<double>> weightsOwned;
 			if (needCompute) {
-				weights.assign(dc, std::vector<double>(batchSize));
+				weightsOwned.assign(dc, std::vector<double>(batchSize));
 				for (uint32_t i = 0; i < dc; ++i) {
 					ctxs[i] = T[i];
 					for (size_t b = 0; b < batchSize; ++b)
-						weights[i][b] = divcsVec[b]->q[i + 1];
+						weightsOwned[i][b] = divcsVec[b]->q[i + 1];
 				}
 				if (cache != nullptr && cache->recording) {
-					std::vector<std::vector<double>> toStore = weights;
+					std::vector<std::vector<double>> toStore = weightsOwned;
 					cache->recordVec2(std::move(toStore));
 				}
 			} else {
 				for (uint32_t i = 0; i < dc; ++i)
 					ctxs[i] = T[i];
-				weights = cache->nextVec2();
 			}
+			const std::vector<std::vector<double>>& weights = cachedVec2(weightsOwned);
 
 			cu.dropToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
 			cu.growToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
@@ -504,19 +545,17 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			evalLinearWSumMutablePtBatch(cu, cc, cc_, ctxs, weights, cache, alignedCache);
 		}
 
-		std::vector<double> freeTerm;
+		std::vector<double> freeTermOwned;
 		if (needCompute) {
-			freeTerm.resize(batchSize);
+			freeTermOwned.resize(batchSize);
 			for (size_t b = 0; b < batchSize; ++b)
-				freeTerm[b] = divcsVec[b]->q.front() / 2.0;
+				freeTermOwned[b] = divcsVec[b]->q.front() / 2.0;
 			if (cache != nullptr && cache->recording) {
-				std::vector<double> toStore = freeTerm;
+				std::vector<double> toStore = freeTermOwned;
 				cache->recordVec1(std::move(toStore));
 			}
-		} else {
-			freeTerm = cache->nextVec1();
 		}
-		addPerSlotScalar(cu, cc, cc_, freeTerm, cache);
+		addPerSlotScalar(cu, cc, cc_, cachedVec1(freeTermOwned), cache);
 
 		if (ccd.rescaleTechnique == FIXEDMANUAL) {
 			cu.rescale();
@@ -530,18 +569,17 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 	if (lbcrypto::Degree(divqrVec[0]->q) > k) {
 		assert(m > 2);
 		bool needComputeQCoeffs = (cache == nullptr) || cache->recording;
-		std::vector<std::vector<double>> qCoeffs;
+		std::vector<std::vector<double>> qCoeffsOwned;
 		if (needComputeQCoeffs) {
-			qCoeffs.resize(batchSize);
+			qCoeffsOwned.resize(batchSize);
 			for (size_t b = 0; b < batchSize; ++b)
-				qCoeffs[b] = divqrVec[b]->q;
+				qCoeffsOwned[b] = divqrVec[b]->q;
 			if (cache != nullptr && cache->recording) {
-				std::vector<std::vector<double>> toStore = qCoeffs;
+				std::vector<std::vector<double>> toStore = qCoeffsOwned;
 				cache->recordVec2(std::move(toStore));
 			}
-		} else {
-			qCoeffs = cache->nextVec2();
 		}
+		const std::vector<std::vector<double>>& qCoeffs = cachedVec2(qCoeffsOwned);
 		innerEvalChebyshevPSBatch(cc, ctxt, qu, qCoeffs, k, m - 1, T, T2, level_offset, max_m, cache, alignedCache);
 
 		if (qu.NoiseLevel == 2)
@@ -553,7 +591,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 		if (lbcrypto::Degree(qcopy0) > 0) {
 			bool needCompute = (cache == nullptr) || cache->recording;
 			std::vector<Ciphertext*> ctxs;
-			std::vector<std::vector<double>> weights;
+			std::vector<std::vector<double>> weightsOwned;
 
 			if (needCompute) {
 				std::vector<uint32_t> selectedIdx;
@@ -571,40 +609,38 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 						std::vector<double> w(batchSize);
 						for (size_t b = 0; b < batchSize; ++b)
 							w[b] = divqrVec[b]->q[i + 1];
-						weights.push_back(std::move(w));
+						weightsOwned.push_back(std::move(w));
 					}
 				}
 				if (cache != nullptr && cache->recording) {
 					std::vector<uint32_t> idxCopy = selectedIdx;
 					cache->recordCtxsSelection(std::move(idxCopy));
-					std::vector<std::vector<double>> weightsCopy = weights;
+					std::vector<std::vector<double>> weightsCopy = weightsOwned;
 					cache->recordVec2(std::move(weightsCopy));
 				}
 			} else {
 				const std::vector<uint32_t>& selectedIdx = cache->nextCtxsSelection();
 				for (uint32_t idx : selectedIdx)
 					ctxs.push_back(T[idx]);
-				weights = cache->nextVec2();
 			}
+			const std::vector<std::vector<double>>& weights = cachedVec2(weightsOwned);
 
 			qu.growToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
 			qu.dropToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - level_offset);
 
 			evalLinearWSumMutablePtBatch(qu, cc, cc_, ctxs, weights, cache, alignedCache);
 
-			std::vector<double> freeTerm;
+			std::vector<double> freeTermOwned;
 			if (needCompute) {
-				freeTerm.resize(batchSize);
+				freeTermOwned.resize(batchSize);
 				for (size_t b = 0; b < batchSize; ++b)
-					freeTerm[b] = divqrVec[b]->q.front() / 2.0;
+					freeTermOwned[b] = divqrVec[b]->q.front() / 2.0;
 				if (cache != nullptr && cache->recording) {
-					std::vector<double> toStore = freeTerm;
+					std::vector<double> toStore = freeTermOwned;
 					cache->recordVec1(std::move(toStore));
 				}
-			} else {
-				freeTerm = cache->nextVec1();
 			}
-			addPerSlotScalar(qu, cc, cc_, freeTerm, cache);
+			addPerSlotScalar(qu, cc, cc_, cachedVec1(freeTermOwned), cache);
 
 			if (T[k - 1]->NoiseLevel == 1)
 				qu.rescale();
@@ -623,19 +659,17 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 			multIntScalar(qu, (uint64_t)divqrVec[0]->q.back());
 
 			bool needCompute = (cache == nullptr) || cache->recording;
-			std::vector<double> freeTerm;
+			std::vector<double> freeTermOwned;
 			if (needCompute) {
-				freeTerm.resize(batchSize);
+				freeTermOwned.resize(batchSize);
 				for (size_t b = 0; b < batchSize; ++b)
-					freeTerm[b] = divqrVec[b]->q.front() / 2.0;
+					freeTermOwned[b] = divqrVec[b]->q.front() / 2.0;
 				if (cache != nullptr && cache->recording) {
-					std::vector<double> toStore = freeTerm;
+					std::vector<double> toStore = freeTermOwned;
 					cache->recordVec1(std::move(toStore));
 				}
-			} else {
-				freeTerm = cache->nextVec1();
 			}
-			addPerSlotScalar(qu, cc, cc_, freeTerm, cache);
+			addPerSlotScalar(qu, cc, cc_, cachedVec1(freeTermOwned), cache);
 
 			if (qu.NoiseLevel == 2)
 				qu.rescale();
@@ -653,7 +687,7 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 		if (lbcrypto::Degree(scopy0) > 0) {
 			bool needCompute = (cache == nullptr) || cache->recording;
 			std::vector<Ciphertext*> ctxs;
-			std::vector<std::vector<double>> weights;
+			std::vector<std::vector<double>> weightsOwned;
 
 			if (needCompute) {
 				std::vector<uint32_t> selectedIdx;
@@ -671,40 +705,38 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 						std::vector<double> w(batchSize);
 						for (size_t b = 0; b < batchSize; ++b)
 							w[b] = s2Vec[b][i + 1];
-						weights.push_back(std::move(w));
+						weightsOwned.push_back(std::move(w));
 					}
 				}
 				if (cache != nullptr && cache->recording) {
 					std::vector<uint32_t> idxCopy = selectedIdx;
 					cache->recordCtxsSelection(std::move(idxCopy));
-					std::vector<std::vector<double>> weightsCopy = weights;
+					std::vector<std::vector<double>> weightsCopy = weightsOwned;
 					cache->recordVec2(std::move(weightsCopy));
 				}
 			} else {
 				const std::vector<uint32_t>& selectedIdx = cache->nextCtxsSelection();
 				for (uint32_t idx : selectedIdx)
 					ctxs.push_back(T[idx]);
-				weights = cache->nextVec2();
 			}
+			const std::vector<std::vector<double>>& weights = cachedVec2(weightsOwned);
 
 			su.growToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - 1 - level_offset);
 			su.dropToLevel(T2[m - 1]->getLevel() + (T2[m - 1]->NoiseLevel == 1 ? 1 : 0) - 1 - level_offset);
 
 			evalLinearWSumMutablePtBatch(su, cc, cc_, ctxs, weights, cache, alignedCache);
 
-			std::vector<double> freeTerm;
+			std::vector<double> freeTermOwned;
 			if (needCompute) {
-				freeTerm.resize(batchSize);
+				freeTermOwned.resize(batchSize);
 				for (size_t b = 0; b < batchSize; ++b)
-					freeTerm[b] = s2Vec[b].front() / 2.0;
+					freeTermOwned[b] = s2Vec[b].front() / 2.0;
 				if (cache != nullptr && cache->recording) {
-					std::vector<double> toStore = freeTerm;
+					std::vector<double> toStore = freeTermOwned;
 					cache->recordVec1(std::move(toStore));
 				}
-			} else {
-				freeTerm = cache->nextVec1();
 			}
-			addPerSlotScalar(su, cc, cc_, freeTerm, cache);
+			addPerSlotScalar(su, cc, cc_, cachedVec1(freeTermOwned), cache);
 
 			// The highest order coefficient will always be 1 because s2 is
 			// monic (structurally, across the whole batch).
@@ -712,19 +744,17 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 		} else {
 			su.copy(*T[k - 1]);
 			bool needCompute = (cache == nullptr) || cache->recording;
-			std::vector<double> freeTerm;
+			std::vector<double> freeTermOwned;
 			if (needCompute) {
-				freeTerm.resize(batchSize);
+				freeTermOwned.resize(batchSize);
 				for (size_t b = 0; b < batchSize; ++b)
-					freeTerm[b] = s2Vec[b].front() / 2.0;
+					freeTermOwned[b] = s2Vec[b].front() / 2.0;
 				if (cache != nullptr && cache->recording) {
-					std::vector<double> toStore = freeTerm;
+					std::vector<double> toStore = freeTermOwned;
 					cache->recordVec1(std::move(toStore));
 				}
-			} else {
-				freeTerm = cache->nextVec1();
 			}
-			addPerSlotScalar(su, cc, cc_, freeTerm, cache);
+			addPerSlotScalar(su, cc, cc_, cachedVec1(freeTermOwned), cache);
 		}
 	}
 
@@ -737,24 +767,25 @@ void innerEvalChebyshevPSBatch(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 		cu.add(*T2[m - 1]);
 	} else {
 		bool needCompute = (cache == nullptr) || cache->recording;
-		std::vector<double> freeTerm;
+		std::vector<double> freeTermOwned;
 		if (needCompute) {
-			freeTerm.resize(batchSize);
+			freeTermOwned.resize(batchSize);
 			for (size_t b = 0; b < batchSize; ++b)
-				freeTerm[b] = divcsVec[b]->q.front() / 2.0;
+				freeTermOwned[b] = divcsVec[b]->q.front() / 2.0;
 			if (cache != nullptr && cache->recording) {
-				std::vector<double> toStore = freeTerm;
+				std::vector<double> toStore = freeTermOwned;
 				cache->recordVec1(std::move(toStore));
 			}
-		} else {
-			freeTerm = cache->nextVec1();
 		}
 		if (cache != nullptr && !cache->recording) {
-			//cu.addPt(*T2[m - 1], cache->next());
+			// Apply/replay: makePerSlotPlaintext's fast path returns a
+			// pointer straight into the cache, no encode/copy needed.
+			cu.addPt(*T2[m - 1], cache->next());
 		} else {
+			const std::vector<double>& freeTerm = cachedVec1(freeTermOwned);
 			Plaintext storageFreeTerm(cc_);
 			const Plaintext* pt = makePerSlotPlaintext(cc, cc_, freeTerm, *T2[m - 1], storageFreeTerm, cache);
-			//cu.addPt(*T2[m - 1], *pt);
+			cu.addPt(*T2[m - 1], *pt);
 		}
 	}
 	if (ccd.rescaleTechnique == FIXEDMANUAL && out.NoiseLevel == 2)
@@ -809,19 +840,23 @@ void evalChebyshevSeriesPSBatchImpl(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&
 	uint32_t k				   = degs[0];
 	uint32_t m				   = degs[1];
 
-	std::vector<std::vector<double>> f2Batch(batchOfCoefficients.size());
+	std::vector<std::vector<double>> f2BatchOwned;
+	const std::vector<std::vector<double>>* f2BatchPtr;
 
 	if (cache != nullptr && !cache->recording) {
-		f2Batch = cache->nextF2();
+		f2BatchPtr = &cache->nextF2();
 	} else {
+		f2BatchOwned.resize(batchOfCoefficients.size());
 		for (size_t b = 0; b < batchOfCoefficients.size(); ++b) {
-			f2Batch[b] = batchOfCoefficients[b];
-			f2Batch[b].resize(n + 1);
+			f2BatchOwned[b] = batchOfCoefficients[b];
+			f2BatchOwned[b].resize(n + 1);
 		}
 		if (cache != nullptr) {
-			cache->recordF2(f2Batch);
+			cache->recordF2(f2BatchOwned);
 		}
+		f2BatchPtr = &f2BatchOwned;
 	}
+	const std::vector<std::vector<double>>& f2Batch = *f2BatchPtr;
 
 	ContextData& ccd = ctxt.cc;
 

@@ -55,36 +55,6 @@ class PlaintextCache {
   public:
 	bool recording = true;
 
-	std::map<std::pair<const Ciphertext*, int32_t>, Ciphertext> storage;
-
-	void recordCtxtWsum(Ciphertext&& ctxt) {
-		ctxtsWsum.push_back(std::move(ctxt));
-	}
-
-	Ciphertext* getAligned(Ciphertext* src, int32_t targetLevel, FIDESlib::CKKS::Context& cc_) {
-		if (!this->recording) {
-			std::cout << "Recupero da cache" << std::endl;
-			return &nextCtxtWsum();
-		}
-		std::cout << "Costruisco da cache" << std::endl;
-
-		Ciphertext* a = new Ciphertext(cc_);
-		a->copy(*src);
-
-		if (a->NoiseLevel == 2)
-			a->rescale();
-
-		a->growToLevel(targetLevel);
-		a->dropToLevel(targetLevel);
-
-		Ciphertext copy(cc_);
-		copy.copy(*a);
-
-		recordCtxtWsum(std::move(copy));
-
-		return a;
-	}
-
 	void record(Plaintext&& pt) {
 		entries.push_back(std::move(pt));
 	}
@@ -95,14 +65,6 @@ class PlaintextCache {
 		  "mismatch with the precompute, or ciphertext structurally different "
 		  "(level/NoiseLevel/slots) from the one used to build the precompute.");
 		return entries[readIdx++];
-	}
-
-	Ciphertext& nextCtxtWsum() {
-		assert(readIdxCtxtWsum < ctxtsWsum.size() &&
-		  "PSBatchPrecompute exhausted: batchOfCoefficients/lower_bound/upper_bound "
-		  "mismatch with the precompute, or ciphertext structurally different "
-		  "(level/NoiseLevel/slots) from the one used to build the precompute.");
-		return ctxtsWsum[readIdxCtxtWsum++];
 	}
 
 	size_t size() const {
@@ -165,8 +127,7 @@ class PlaintextCache {
 		readIdxf2		= 0;
 		readIdxVec1		= 0;
 		readIdxVec2		= 0;
-		readIdxCtxsSel	= 0;
-		readIdxCtxtWsum = 0;
+		readIdxCtxsSel = 0;
 	}
 
 	// --- Generic caching for the per-slot weight-extraction vectors ---
@@ -233,18 +194,16 @@ class PlaintextCache {
 	std::vector<std::vector<double>> vec1;
 	std::vector<std::vector<std::vector<double>>> vec2;
 	std::vector<std::vector<uint32_t>> ctxsSelections;
-	std::vector<Ciphertext> ctxtsWsum;
 
   private:
-	size_t readIdx		   = 0;
-	size_t readIdxQr	   = 0;
-	size_t readIdxCs	   = 0;
-	size_t readIdxS2	   = 0;
-	size_t readIdxf2	   = 0;
-	size_t readIdxVec1	   = 0;
-	size_t readIdxVec2	   = 0;
-	size_t readIdxCtxsSel  = 0;
-	size_t readIdxCtxtWsum = 0;
+	size_t readIdx		  = 0;
+	size_t readIdxQr	  = 0;
+	size_t readIdxCs	  = 0;
+	size_t readIdxS2	  = 0;
+	size_t readIdxf2	  = 0;
+	size_t readIdxVec1	  = 0;
+	size_t readIdxVec2	  = 0;
+	size_t readIdxCtxsSel = 0;
 };
 
 /**
