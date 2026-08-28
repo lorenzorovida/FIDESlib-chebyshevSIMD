@@ -37,6 +37,8 @@ extern ProcessArrayPrecomputation precomp128b;
 extern std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
 extern std::vector<std::vector<double>> coeffs4BitsMultiplier;
 
+extern DivIntegerLUTs lutsDiv;
+
 // ----------------------------------------------------------------------
 // Repeated-Chebyshev-LUT precomputation, mirroring OpenFHE's
 // EvalChebyshevSeriesPSBatchRepeated(ctxt, coeffs, a, b, repeat).
@@ -58,13 +60,7 @@ struct ChebyshevRepeatedLUT {
 };
 
 void preprocessChebyshevRepeated(ChebyshevRepeatedLUT& lut, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, std::vector<std::vector<double>> coeffs, int a, int b);
-void preprocessIntegerMult(int bits,
-  int repetitions,
-  int slots,
-  int level,
-  size_t noise,
-  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-  FIDESlib::CKKS::Context& cc_);
+void preprocessIntegerMult(int bits, int repetitions, int slots, int level, size_t noise, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, FIDESlib::CKKS::Context& cc_);
 
 void evalChebyshevRepeatedApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, const ChebyshevRepeatedLUT& lut);
 
@@ -105,8 +101,7 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
   const std::vector<std::vector<double>>& bitLengthCoeffs,
   const std::vector<std::vector<double>>& reciprocalCoeffs);
 
-void divInteger(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, const DivIntegerLUTs& luts, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
-
+void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, const DivIntegerLUTs& luts, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, int depth);
 void evalIntegerMult(Ciphertext& out,

@@ -23,6 +23,7 @@ ProcessArrayPrecomputation precomp128b;
 
 std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
 std::vector<std::vector<double>> coeffs4BitsMultiplier;
+DivIntegerLUTs lutsDiv;
 
 // ============================================================
 // evalIntegerMult recombination masks (mask1 / mask2)
@@ -73,8 +74,7 @@ struct IntegerMultMaskKey {
 	size_t noiseScaleDeg;
 
 	bool operator==(const IntegerMultMaskKey& other) const {
-		return bits == other.bits && repetitions == other.repetitions && slots == other.slots &&
-			   openfheLevel == other.openfheLevel && noiseScaleDeg == other.noiseScaleDeg;
+		return bits == other.bits && repetitions == other.repetitions && slots == other.slots && openfheLevel == other.openfheLevel && noiseScaleDeg == other.noiseScaleDeg;
 	}
 };
 
@@ -622,7 +622,6 @@ void evalIntegerMult(Ciphertext& out,
 			processArray(a_processed, a, precomp128);
 		}
 
-
 		// --------------------------------------------------------
 		// Combine A
 		// --------------------------------------------------------
@@ -782,10 +781,8 @@ void evalIntegerMult(Ciphertext& out,
 
 		multiplier4bits(result, a_decimal, b_decimal, repetitions * 4, cc);
 
-
 	} else {
 		evalIntegerMult(result, a, b, bits / 2, bits_original, 4 * repetitions, repetitions_original, overflow, cc);
-
 	}
 
 	// ============================================================
@@ -800,8 +797,8 @@ void evalIntegerMult(Ciphertext& out,
 	// we pay the encode cost once, and every later call that lands at
 	// the same depth with the same noise state reuses it -- while
 	// never reusing a Plaintext encoded for the wrong level.
-	uint32_t openfheLevel  = static_cast<uint32_t>(result.cc.L - result.getLevel());
-	size_t noiseScaleDeg   = static_cast<size_t>(result.NoiseLevel);
+	uint32_t openfheLevel = static_cast<uint32_t>(result.cc.L - result.getLevel());
+	size_t noiseScaleDeg  = static_cast<size_t>(result.NoiseLevel);
 
 	IntegerMultMaskKey maskKey{ bits, repetitions, result.slots, openfheLevel, noiseScaleDeg };
 
@@ -814,7 +811,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		for (int j = 0; j < repetitions; ++j) {
 			for (int i = 0; i < bits; ++i) {
-				mask1[(j * rep_size) + i] = 1.0;
+				mask1[(j * rep_size) + i]		 = 1.0;
 				mask1[(j * rep_size) + i + dunn] = 1.0;
 			}
 		}
@@ -823,7 +820,7 @@ void evalIntegerMult(Ciphertext& out,
 
 		for (int j = 0; j < repetitions; ++j) {
 			for (int i = 0; i < bits; ++i) {
-				mask2[(j * rep_size) + rep_size / 4 + i] = 1.0;
+				mask2[(j * rep_size) + rep_size / 4 + i]		= 1.0;
 				mask2[(j * rep_size) + rep_size / 4 + i + dunn] = 1.0;
 			}
 		}
@@ -1003,14 +1000,8 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
 	preprocessChebyshevRepeated(luts.reciprocalHint, cc, like, reciprocalCoeffs, 0, 256);
 }
 
-// ============================================================
-// div_integer (ciphertext / ciphertext)
-//
-// Direct translation of CKKSController::div_integer(const Ctxt&, const
-// Ctxt&, int, int). See that function for the annotated CPU reference;
-// comments below point back to the corresponding CPU lines.
-// ============================================================
-void divInteger(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, const DivIntegerLUTs& luts, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, const DivIntegerLUTs& luts, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+	preprocessDivIntegerLUTs(lits, bits, zslots, cc, num, bitLengthCoeffs, reciprocalCoeffs);
 
 	const int LUT_BITS			 = 8;
 	FIDESlib::CKKS::Context& cc_ = num.cc_;

@@ -212,9 +212,11 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	Ciphertext<DCRTPoly> EvalAddInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits);
 	Ciphertext<DCRTPoly> EvalEqualInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, std::vector<double> coeffsSinc, int depth);
 	Ciphertext<DCRTPoly> EvalMultInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, bool overflow);
+	Ciphertext<DCRTPoly> EvalMultDivision(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, bool overflow);
+
+	
+	// Support
 	void ProcessMultiplications(std::vector<std::vector<double>> coeffs, const Ciphertext<DCRTPoly>& c);
-
-
 	Ciphertext<DCRTPoly> CsaSum(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c);
 	Ciphertext<DCRTPoly> CsaCarry(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c);
 	Ciphertext<DCRTPoly> MajorityBit(const Ciphertext<DCRTPoly>& a, const Ciphertext<DCRTPoly>& b, const Ciphertext<DCRTPoly>& c);
