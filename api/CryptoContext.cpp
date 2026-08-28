@@ -804,7 +804,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultInteger(const Cipherte
 	return result;
 }
 
-Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalIntegerDivision(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, bool overflow) {
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultDivision(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots) {
 	FIDESlib::CudaNvtxRange r("API");
 
 	DivIntegerLUTs
