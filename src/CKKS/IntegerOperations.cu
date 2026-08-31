@@ -23,8 +23,9 @@ ProcessArrayPrecomputation precomp128b;
 
 std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
 std::vector<std::vector<double>> coeffs4BitsMultiplier;
-int cacheChebyshev4BitsMultiplierModelLevel		= -1;
-int cacheChebyshev4BitsMultiplierModelNoiseLevel	= -1;
+int cacheChebyshev4BitsMultiplierModelLevel	  = -1;
+int cacheChebyshev4BitsMultiplierModelNoiseLevel = -1;
+std::map<std::pair<int, int>, std::shared_ptr<PSBatchPrecompute>> cacheChebyshev4BitsMultiplierByLevel;
 DivIntegerLUTs lutsDiv;
 
 // ============================================================
@@ -1212,9 +1213,6 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		Ciphertext term(num.cc_);
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
 
-		out.copy(term);
-		return;
-
 		// term += broadcast(bit `bits` of x) * rot(den_norm, -bits)
 		std::fill(mask.begin(), mask.end(), 0.0);
 		for (int j = 0; j < zslots; ++j) {
@@ -1621,9 +1619,11 @@ void preprocessProcessArray(int bits,
 void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c) {
 	cacheChebyshev4BitsMultiplier = evalChebyshevSeriesPSBatchPrecompute(cc, c, coeffs, -1, 1);
 
-	coeffs4BitsMultiplier						 = coeffs;
-	cacheChebyshev4BitsMultiplierModelLevel	 = c.getLevel();
+	coeffs4BitsMultiplier						  = coeffs;
+	cacheChebyshev4BitsMultiplierModelLevel	  = c.getLevel();
 	cacheChebyshev4BitsMultiplierModelNoiseLevel = c.NoiseLevel;
+
+	cacheChebyshev4BitsMultiplierByLevel[{ c.getLevel(), c.NoiseLevel }] = cacheChebyshev4BitsMultiplier;
 }
 
 void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp) {
@@ -1668,28 +1668,34 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 
 	// QUA RESULT è GIUSTO
 
-	// Rebuild the PSBatch precompute if `result`'s level/NoiseLevel don't
-	// match what cacheChebyshev4BitsMultiplier was built against --
-	// replaying a plaintext cache recorded at a different level/NoiseLevel
-	// reads stale/mismatched RNS data and corrupts the result silently
-	// (no crash, just garbage -- this is what was happening when
-	// multiplier4bits was called from inside evalIntegerDivision's Newton-
-	// Raphson loop, where `result` arrives at whatever level
-	// inverseBitLength/blindRotation left it at, not the level
-	// ProcessMultiplications originally built the cache with).
-	if (!cacheChebyshev4BitsMultiplier || cacheChebyshev4BitsMultiplierModelLevel != result.getLevel() ||
-	  cacheChebyshev4BitsMultiplierModelNoiseLevel != result.NoiseLevel) {
+	// Look up (or lazily build) the PSBatch precompute keyed by `result`'s
+	// exact (level, NoiseLevel) -- multiplier4bits is called both from
+	// EvalMultInteger's straight-line path (always at whatever level
+	// ProcessMultiplications originally set up) and from
+	// evalIntegerDivision's Newton-Raphson loop (at whatever level
+	// inverseBitLength/blindRotation/evalIntegerMult left `result` at,
+	// typically different). Replaying a plaintext cache recorded at a
+	// different level/NoiseLevel silently corrupts the result (no crash,
+	// just garbage) -- and a single shared cache slot would mean whichever
+	// caller runs second evicts/mismatches the other's entry, breaking it.
+	// Keying by (level, NoiseLevel) lets every caller's entry live side by
+	// side, built once and reused after that.
+	const auto cacheKey = std::make_pair(result.getLevel(), static_cast<int>(result.NoiseLevel));
+	auto it				 = cacheChebyshev4BitsMultiplierByLevel.find(cacheKey);
+	std::shared_ptr<PSBatchPrecompute> precomp;
+	if (it != cacheChebyshev4BitsMultiplierByLevel.end()) {
+		precomp = it->second;
+	} else {
 		if (coeffs4BitsMultiplier.empty()) {
 			throw std::invalid_argument(
-			  "multiplier4bits: cacheChebyshev4BitsMultiplier needs rebuilding but coeffs4BitsMultiplier is empty -- "
-			  "call ProcessMultiplications at least once first so the coefficient columns are available");
+			  "multiplier4bits: no cached precompute for this (level, NoiseLevel) and coeffs4BitsMultiplier is "
+			  "empty -- call ProcessMultiplications at least once first so the coefficient columns are available");
 		}
-		cacheChebyshev4BitsMultiplier				  = evalChebyshevSeriesPSBatchPrecompute(cc, result, coeffs4BitsMultiplier, -1, 1);
-		cacheChebyshev4BitsMultiplierModelLevel	  = result.getLevel();
-		cacheChebyshev4BitsMultiplierModelNoiseLevel = result.NoiseLevel;
+		precomp										  = evalChebyshevSeriesPSBatchPrecompute(cc, result, coeffs4BitsMultiplier, -1, 1);
+		cacheChebyshev4BitsMultiplierByLevel[cacheKey] = precomp;
 	}
 
-	evalChebyshevSeriesPSBatchApply(cc, result, cacheChebyshev4BitsMultiplier, coeffs4BitsMultiplier, -1, 1);
+	evalChebyshevSeriesPSBatchApply(cc, result, precomp, coeffs4BitsMultiplier, -1, 1);
 
 	// evalChebyshevSeriesPSBatchApply(cc, result, precomp4bits, coeffs, -1, 1);
 	// evalChebyshevSeriesPSBatchRepeated(cc, result, coeffs, -1, 1);

@@ -8,6 +8,7 @@
 #include "CKKS/Plaintext.cuh"
 #include "CKKS/forwardDefs.cuh"
 
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -37,13 +38,19 @@ extern ProcessArrayPrecomputation precomp128b;
 extern std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
 extern std::vector<std::vector<double>> coeffs4BitsMultiplier;
 // Level/NoiseLevel the ciphertext used to build cacheChebyshev4BitsMultiplier
-// had at the time (see preprocessChebyshevMultiplication / multiplier4bits).
-// Tracked so multiplier4bits can detect a mismatch and rebuild instead of
-// silently replaying a plaintext cache recorded for a different level/noise
-// (see the long comment on evalIntegerDivision for why that mismatch is
-// unsafe -- it applies here identically).
+// had at the time (see preprocessChebyshevMultiplication). Kept for
+// backwards compatibility / inspection; multiplier4bits itself now looks up
+// entries by (level, NoiseLevel) in cacheChebyshev4BitsMultiplierByLevel
+// below, since multiplier4bits is called both from EvalMultInteger's
+// straight-line path (always at the level ProcessMultiplications was set up
+// with) and from evalIntegerDivision's Newton-Raphson loop (at whatever
+// level inverseBitLength/blindRotation/evalIntegerMult left `result` at,
+// which is typically different) -- a single shared cache slot means
+// whichever call happens second silently evicts/mismatches the other's
+// entry. Keying by (level, NoiseLevel) lets both live side by side.
 extern int cacheChebyshev4BitsMultiplierModelLevel;
 extern int cacheChebyshev4BitsMultiplierModelNoiseLevel;
+extern std::map<std::pair<int, int>, std::shared_ptr<PSBatchPrecompute>> cacheChebyshev4BitsMultiplierByLevel;
 
 struct ChebyshevRepeatedLUT {
 	std::shared_ptr<PSBatchPrecompute> precomp;
