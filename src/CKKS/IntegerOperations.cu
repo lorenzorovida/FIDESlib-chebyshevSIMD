@@ -1028,23 +1028,6 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
   const std::vector<std::vector<double>>& bitLengthCoeffs,
   const std::vector<std::vector<double>>& reciprocalCoeffs) {
 
-	if (static_cast<int>(bitLengthCoeffs.size()) != bits) {
-		throw std::invalid_argument("preprocessDivIntegerLUTs: bitLengthCoeffs must have exactly `bits` columns "
-									"(7 real + (bits-7) garbage, matching the CPU's p1..p7 + padding layout)");
-	}
-
-	if (static_cast<int>(reciprocalCoeffs.size()) != bits * bits / 2) {
-		throw std::invalid_argument("preprocessDivIntegerLUTs: reciprocalCoeffs must have exactly bits*bits/2 columns "
-									"((bits+2) real + garbage padding, matching the CPU's repeat period)");
-	}
-
-	preprocessChebyshevRepeated(luts.bitLengthDecompose, cc, like, bitLengthCoeffs, -1, 1);
-	preprocessChebyshevRepeated(luts.reciprocalHint, cc, like, reciprocalCoeffs, 0, 256);
-}
-
-void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, DivIntegerLUTs& luts, const Ciphertext& one,
-  const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& reciprocalCoeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
-
 	const int LUT_BITS			 = 8;
 	FIDESlib::CKKS::Context& cc_ = num.cc_;
 	const int stride			 = bits * bits / 2;
@@ -1064,8 +1047,6 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	// --------------------------------------------------------
 	Ciphertext s(num.cc_);
 	s.copy(b);
-
-	//TODO: inverseButLength è giusto
 
 	// Lazy precompute, on first use (or if a previous call cached this LUT
 	// against a different level/NoiseLevel than `s` actually has right now)
@@ -1089,20 +1070,13 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	evalChebyshevRepeatedApply(cc, s, luts.bitLengthDecompose);
 	binboot(s, s);
 
-	
-
 	// --------------------------------------------------------
 	// den_norm = blind_rotation(den, s, bits, zslots)   // den << (bits - bitlen(den))
 	// den_norm = binboot(den_norm)
 	// --------------------------------------------------------
 	Ciphertext denNorm(num.cc_);
 	blindRotation(denNorm, den, s, bits, zslots, /*stride=*/0, cc);
-
-	
-
 	binboot(denNorm, denNorm);
-
-	
 
 	// --------------------------------------------------------
 	// den_norm_rot = rot(den_norm, bits - 1 - LUT_BITS)
@@ -1200,7 +1174,6 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	evalChebyshevRepeatedApply(cc, x, luts.reciprocalHint);
 	binboot(x, x);
 
-	
 	// --------------------------------------------------------
 	// Newton-Raphson refinement loop:
 	//   for iter in [0, ceil(log2(bits/LUT_BITS))):
@@ -1215,21 +1188,15 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	// --------------------------------------------------------
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
 
-	out.copy(x);
-	return;
-
-	//TODO prima del loop è giusto, poi si rompe tutto (non è neanche tutto binario)
 	for (int iter = 0; iter < newtonIters; ++iter) {
 
 		Ciphertext term(num.cc_);
 
-		std::cout << x.getLevel() << ", " << x.NoiseLevel << std::endl;
-		std::cout << denNorm.getLevel() << ", " << denNorm.NoiseLevel << std::endl;
+		// x e denNorm arrivano dal bootstrap e non hanno lv allineati
+		x.dropToLevel(x.getLevel() - 1);
+		denNorm.dropToLevel(denNorm.getLevel() - 1);
 
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
-
-		out.copy(term);
-		return;
 
 		// term += broadcast(bit `bits` of x) * rot(den_norm, -bits)
 		std::fill(mask.begin(), mask.end(), 0.0);
@@ -1321,9 +1288,8 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			// invalid drop target has previously shown up as a CUDA "illegal
 			// memory access" rather than a clean error).
 			if (one.getLevel() < term.getLevel()) {
-				throw std::invalid_argument(
-				  "evalIntegerDivision: `one` was encrypted at a lower level than term's post-bootstrap "
-				  "level; DivIntegerPrecomputations must encrypt it at the top of the modulus chain (level 0)");
+				throw std::invalid_argument("evalIntegerDivision: `one` was encrypted at a lower level than term's post-bootstrap "
+											"level; DivIntegerPrecomputations must encrypt it at the top of the modulus chain (level 0)");
 			}
 
 			Ciphertext oneAtLevel(num.cc_);
@@ -1348,6 +1314,10 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			term2.rotate(term, 2);
 
 			Ciphertext newX(num.cc_);
+
+			// x2.dropToLevel(x2.getLevel() - 1);
+			term2.dropToLevel(term2.getLevel() - 1);
+
 			evalIntegerMult(newX, x2, term2, bits, bits, zslots, zslots, true, cc);
 			x.copy(newX);
 		}
@@ -1364,11 +1334,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			xRotated.rotate(x, bits);
 			x.rotate(xRotated, -4);
 		}
-
-		out.copy(x);
-		return;
 	}
-
 
 	// --------------------------------------------------------
 	// result = mul_integer(rot(num, 2), rot(x, 2), bits, bits, zslots, zslots, true)
@@ -1382,6 +1348,8 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		num2.rotate(num, 2);
 		Ciphertext x2(num.cc_);
 		x2.rotate(x, 2);
+
+		x2.dropToLevel(x2.getLevel() - 1);
 		evalIntegerMult(result, num2, x2, bits, bits, zslots, zslots, true, cc);
 	}
 
