@@ -1181,9 +1181,6 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	Ciphertext x(num.cc_);
 	x.copy(idx);
 
-	out.copy(x);
-	return;
-
 	// Same lazy-precompute-with-validation pattern as bitLengthDecompose
 	// above, but here `x` is used as the model BEFORE its own binboot
 	// (unlike `s`, which was already freshly bootstrapped via
@@ -1203,6 +1200,8 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	evalChebyshevRepeatedApply(cc, x, luts.reciprocalHint);
 	binboot(x, x);
 
+	out.copy(x);
+	return;
 	// --------------------------------------------------------
 	// Newton-Raphson refinement loop:
 	//   for iter in [0, ceil(log2(bits/LUT_BITS))):
