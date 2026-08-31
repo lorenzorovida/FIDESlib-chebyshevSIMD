@@ -1049,7 +1049,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
   const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& reciprocalCoeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 
 	std::cout << "Input lvl: " << num.getLevel() << std::endl;
-	
+
 	const int LUT_BITS			 = 8;
 	FIDESlib::CKKS::Context& cc_ = num.cc_;
 	const int stride			 = bits * bits / 2;
@@ -1222,6 +1222,9 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 
 
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
+
+		out.copy(term);
+		return;
 
 		// term += broadcast(bit `bits` of x) * rot(den_norm, -bits)
 		std::fill(mask.begin(), mask.end(), 0.0);
