@@ -1211,6 +1211,12 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	for (int iter = 0; iter < newtonIters; ++iter) {
 
 		Ciphertext term(num.cc_);
+
+		//x e denNorm arrivano dal bootstrap e non hanno lv allineati
+		x.dropToLevel(x.getLevel() - 1);
+		denNorm.dropToLevel(denNorm.getLevel() - 1);
+
+
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
 
 		// term += broadcast(bit `bits` of x) * rot(den_norm, -bits)
