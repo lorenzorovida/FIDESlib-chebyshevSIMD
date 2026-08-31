@@ -1215,6 +1215,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	// --------------------------------------------------------
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
 
+	//TODO prima del loop è giusto, poi si rompe tutto (non è neanche tutto binario)
 	for (int iter = 0; iter < newtonIters; ++iter) {
 
 		Ciphertext term(num.cc_);
@@ -1353,10 +1354,11 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			xRotated.rotate(x, bits);
 			x.rotate(xRotated, -4);
 		}
+
+		out.copy(x);
+		return;
 	}
 
-	out.copy(x);
-	return;
 
 	// --------------------------------------------------------
 	// result = mul_integer(rot(num, 2), rot(x, 2), bits, bits, zslots, zslots, true)
