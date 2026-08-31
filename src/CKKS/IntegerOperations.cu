@@ -1065,8 +1065,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	Ciphertext s(num.cc_);
 	s.copy(b);
 
-	out.copy(b);
-	return;
+	//TODO: inverseButLength è giusto
 
 	// Lazy precompute, on first use (or if a previous call cached this LUT
 	// against a different level/NoiseLevel than `s` actually has right now)
@@ -1089,6 +1088,9 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	}
 	evalChebyshevRepeatedApply(cc, s, luts.bitLengthDecompose);
 	binboot(s, s);
+
+	out.copy(s);
+	return;
 
 	// --------------------------------------------------------
 	// den_norm = blind_rotation(den, s, bits, zslots)   // den << (bits - bitlen(den))
