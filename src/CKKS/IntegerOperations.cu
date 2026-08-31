@@ -1219,6 +1219,10 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	for (int iter = 0; iter < newtonIters; ++iter) {
 
 		Ciphertext term(num.cc_);
+
+		std::cout << x.getLevel() << ", " << x.NoiseLevel << std::endl;
+		std::cout << denNorm.getLevel() << ", " << denNorm.NoiseLevel << std::endl;
+
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
 
 		out.copy(term);
