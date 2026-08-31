@@ -1215,6 +1215,9 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	// --------------------------------------------------------
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
 
+	out.copy(denNorm);
+	return;
+	
 	//TODO prima del loop è giusto, poi si rompe tutto (non è neanche tutto binario)
 	for (int iter = 0; iter < newtonIters; ++iter) {
 
