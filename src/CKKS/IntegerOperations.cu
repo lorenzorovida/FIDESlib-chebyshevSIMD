@@ -325,7 +325,11 @@ void inverseBitLength(Ciphertext& out, const Ciphertext& a, int bits, int zslots
 	r7.rotate(resultClone, 7);
 	result.sub(r7);
 
-	result.rotate(result, bits - 7);
+	{
+		Ciphertext rotated(a.cc_);
+		rotated.rotate(result, bits - 7);
+		result.copy(rotated);
+	}
 
 	out.copy(result);
 }
@@ -379,7 +383,11 @@ void blindRotation(Ciphertext& out, const Ciphertext& a, const Ciphertext& index
 
 		Ciphertext currentIndex(a.cc_);
 		currentIndex.multPt(index, makePerSlotPlaintext(cc, cc_, mask, index));
-		currentIndex.rotate(currentIndex, i);
+		{
+			Ciphertext rotated(a.cc_);
+			rotated.rotate(currentIndex, i);
+			currentIndex.copy(rotated);
+		}
 
 		for (int j = 0; j < rounds; ++j) {
 			Ciphertext rotated(a.cc_);
@@ -1246,7 +1254,11 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 
 			Ciphertext denShift(num.cc_);
 			denShift.rotate(denNorm, -bits);
-			denShift.rotate(denShift, -1);
+			{
+				Ciphertext rotated(num.cc_);
+				rotated.rotate(denShift, -1);
+				denShift.copy(rotated);
+			}
 			lastBit.mult(denShift, true);
 
 			evalIntegerAdd(term, lastBit, bits);
@@ -1301,7 +1313,11 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			binboot(term, term);
 		}
 
-		term.rotate(term, bits); // drop the low `bits` garbage bits
+		{
+			Ciphertext rotated(num.cc_);
+			rotated.rotate(term, bits); // drop the low `bits` garbage bits
+			term.copy(rotated);
+		}
 
 		// x = mul_integer(rot(x,2), rot(term,2), bits, bits, zslots, zslots, true)
 		{
@@ -1315,11 +1331,18 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			x.copy(newX);
 		}
 
-		x.rotate(x, bits);
-		x.rotate(x, -1);
-		x.rotate(x, -1);
-		x.rotate(x, -1);
-		x.rotate(x, -1);
+		// CPU: x = rot(x, bits); x = rot(x, -4);  (the intermediate 4x
+		// rot(x,-1) is explicitly commented out in div_integer in favor of a
+		// single rot(x,-4) -- done as one rotation here too, both to match
+		// exactly and because `x.rotate(x, n)` (same object as src and dst)
+		// is not a pattern used safely anywhere else in this file; every
+		// other rotate() call in this port writes into a distinct
+		// destination ciphertext.
+		{
+			Ciphertext xRotated(num.cc_);
+			xRotated.rotate(x, bits);
+			x.rotate(xRotated, -4);
+		}
 	}
 
 	// --------------------------------------------------------
@@ -1337,12 +1360,21 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		evalIntegerMult(result, num2, x2, bits, bits, zslots, zslots, true, cc);
 	}
 
-	result.rotate(result, -1);
-	result.rotate(result, -1);
-	result.rotate(result, -1);
-	result.rotate(result, -1);
+	// CPU does 4 separate rot(result, -1) here (not collapsed to rot(-4)
+	// like the `x` case above), so we keep 4 separate steps too -- but via a
+	// distinct destination buffer each time rather than result.rotate(result, ...)
+	// in-place, for the same reason as the `x` fix above.
+	for (int r = 0; r < 4; ++r) {
+		Ciphertext rotated(num.cc_);
+		rotated.rotate(result, -1);
+		result.copy(rotated);
+	}
 
-	result.rotate(result, bits);
+	{
+		Ciphertext rotated(num.cc_);
+		rotated.rotate(result, bits);
+		result.copy(rotated);
+	}
 
 	std::fill(mask.begin(), mask.end(), 0.0);
 	for (int j = 0; j < zslots; ++j) {
@@ -1361,7 +1393,11 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	blindRotation(rotatedResult, result, s, bits * 2, zslots, stride, cc);
 	result.copy(rotatedResult);
 
-	result.rotate(result, bits);
+	{
+		Ciphertext rotated(num.cc_);
+		rotated.rotate(result, bits);
+		result.copy(rotated);
+	}
 
 	std::fill(mask.begin(), mask.end(), 0.0);
 	for (int j = 0; j < zslots; ++j) {
