@@ -1089,8 +1089,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	evalChebyshevRepeatedApply(cc, s, luts.bitLengthDecompose);
 	binboot(s, s);
 
-	out.copy(s);
-	return;
+	
 
 	// --------------------------------------------------------
 	// den_norm = blind_rotation(den, s, bits, zslots)   // den << (bits - bitlen(den))
@@ -1098,7 +1097,13 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	// --------------------------------------------------------
 	Ciphertext denNorm(num.cc_);
 	blindRotation(denNorm, den, s, bits, zslots, /*stride=*/0, cc);
+
+	out.copy(denNorm);
+	return;
+
 	binboot(denNorm, denNorm);
+
+	
 
 	// --------------------------------------------------------
 	// den_norm_rot = rot(den_norm, bits - 1 - LUT_BITS)
