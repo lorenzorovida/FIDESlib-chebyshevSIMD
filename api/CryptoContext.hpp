@@ -228,12 +228,16 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	Ciphertext<DCRTPoly> BinToDec(const Ciphertext<DCRTPoly>& ct, int repetitions);
 	void IntegerMultPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int repetitions, int slots, int noise);
     void ProcessArrayPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int slots, int noise );
-	// One-time setup for EvalMultDivision at a given (bits, zslots): builds the
-	// LUT precomputations (bit-length + reciprocal-hint tables, mirroring
-	// IntegerMultPrecomputations/ProcessArrayPrecomputations) and encrypts the
-	// constant-1 ciphertext EvalMultDivision needs. `c` is only used as a
-	// template ciphertext (its .cc_/level), the same way ProcessArrayPrecomputations
-	// uses its `c` argument -- its data is not read.
+	// One-time setup for EvalMultDivision at a given (bits, zslots): encrypts
+	// the constant-1 ciphertext EvalMultDivision needs, and stashes the raw
+	// LUT coefficient columns so EvalMultDivision can forward them into
+	// evalIntegerDivision's lazy, self-validating PSBatch precompute (see
+	// the long comment on evalIntegerDivision in IntegerOperations.cuh for
+	// why that precompute can't safely be done ahead of time against a
+	// hand-picked model ciphertext). `c` is only used as a template
+	// ciphertext for the constant-1 encryption (its .cc_/slots), the same
+	// way ProcessArrayPrecomputations uses its `c` argument -- its data is
+	// not read.
 	void DivIntegerPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int zslots, const PublicKey<DCRTPoly>& pk, int noise,
 	  const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& reciprocalCoeffs);
 	Ciphertext<DCRTPoly> Multiplier4bits(const Ciphertext<DCRTPoly>& ctxtA, const Ciphertext<DCRTPoly>& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs);
@@ -297,6 +301,15 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	/// distinct constant is kept per (bits, zslots) combination. Populated by
 	/// DivIntegerPrecomputations; consumed by EvalMultDivision.
 	std::unordered_map<uint64_t, Ciphertext<DCRTPoly>> div_integer_one_cache;
+
+	/// @brief Cache of the raw LUT coefficient columns (bitLength, reciprocal)
+	/// needed to (re)run evalIntegerDivision's lazy PSBatch precompute, keyed
+	/// the same way as div_integer_one_cache. Populated by
+	/// DivIntegerPrecomputations; forwarded by EvalMultDivision into
+	/// evalIntegerDivision on every call (the precompute itself is only
+	/// actually redone when the cached LUT's level/NoiseLevel no longer
+	/// matches -- see evalIntegerDivision).
+	std::unordered_map<uint64_t, std::pair<std::vector<std::vector<double>>, std::vector<std::vector<double>>>> div_integer_coeffs_cache;
 
 	// ---- Copy helpers ----
 

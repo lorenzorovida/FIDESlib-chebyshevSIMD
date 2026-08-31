@@ -185,7 +185,9 @@ void preprocessChebyshevRepeated(ChebyshevRepeatedLUT& lut, lbcrypto::CryptoCont
 	lut.repeat	= static_cast<int>(repeat);
 	lut.a		= a;
 	lut.b		= b;
-	lut.precomp = evalChebyshevSeriesPSBatchPrecompute(cc, c, tiled, a, b);
+	lut.modelLevel		= c.getLevel();
+	lut.modelNoiseLevel = c.NoiseLevel;
+	lut.precomp			= evalChebyshevSeriesPSBatchPrecompute(cc, c, tiled, a, b);
 }
 
 void evalChebyshevRepeatedApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c, const ChebyshevRepeatedLUT& lut) {
@@ -1032,14 +1034,8 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
 	preprocessChebyshevRepeated(luts.reciprocalHint, cc, like, reciprocalCoeffs, 0, 256);
 }
 
-void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, const DivIntegerLUTs& luts, const Ciphertext& one, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
-	// `luts` is precomputed once by the caller via preprocessDivIntegerLUTs
-	// (see CryptoContextImpl<DCRTPoly>::DivIntegerPrecomputations), exactly
-	// like IntegerMultPrecomputations/ProcessArrayPrecomputations do for
-	// EvalMultInteger -- it must NOT be rebuilt on every call.
-	if (!luts.bitLengthDecompose.precomp || !luts.reciprocalHint.precomp) {
-		throw std::invalid_argument("evalIntegerDivision: luts not precomputed -- call DivIntegerPrecomputations first");
-	}
+void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, DivIntegerLUTs& luts, const Ciphertext& one,
+  const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& reciprocalCoeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 
 	const int LUT_BITS			 = 8;
 	FIDESlib::CKKS::Context& cc_ = num.cc_;
@@ -1060,6 +1056,20 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	// --------------------------------------------------------
 	Ciphertext s(num.cc_);
 	s.copy(b);
+
+	// Lazy precompute, on first use (or if a previous call cached this LUT
+	// against a different level/NoiseLevel than `s` actually has right now)
+	// using `s` ITSELF as the model -- this guarantees the plaintext cache
+	// recorded inside evalChebyshevSeriesPSBatchPrecompute is replayed
+	// against a ciphertext at the exact level/NoiseLevel it was recorded at
+	// (see the long comment on evalIntegerDivision in the header for why
+	// this matters -- a mismatch here previously caused a GPU illegal
+	// memory access, not a clean error). Cached in `luts` afterwards;
+	// subsequent calls with matching level/NoiseLevel skip straight to
+	// evalChebyshevRepeatedApply.
+	if (!luts.bitLengthDecompose.precomp || luts.bitLengthDecompose.modelLevel != s.getLevel() || luts.bitLengthDecompose.modelNoiseLevel != s.NoiseLevel) {
+		preprocessChebyshevRepeated(luts.bitLengthDecompose, cc, s, bitLengthCoeffs, -1, 1);
+	}
 	evalChebyshevRepeatedApply(cc, s, luts.bitLengthDecompose);
 	binboot(s, s);
 
@@ -1147,6 +1157,17 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	// --------------------------------------------------------
 	Ciphertext x(num.cc_);
 	x.copy(idx);
+
+	// Same lazy-precompute-with-validation pattern as bitLengthDecompose
+	// above, but here `x` is used as the model BEFORE its own binboot
+	// (unlike `s`, which was already freshly bootstrapped via
+	// inverseBitLength) -- whatever level/NoiseLevel `x` happens to be at
+	// right here, from blindRotation/evalIntegerMult upstream, is what gets
+	// baked into the precompute, and is exactly what it needs to match on
+	// every call.
+	if (!luts.reciprocalHint.precomp || luts.reciprocalHint.modelLevel != x.getLevel() || luts.reciprocalHint.modelNoiseLevel != x.NoiseLevel) {
+		preprocessChebyshevRepeated(luts.reciprocalHint, cc, x, reciprocalCoeffs, 0, 256);
+	}
 	evalChebyshevRepeatedApply(cc, x, luts.reciprocalHint);
 	binboot(x, x);
 

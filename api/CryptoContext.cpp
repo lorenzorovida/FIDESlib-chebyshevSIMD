@@ -824,6 +824,15 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultDivision(const Ciphert
 					  "call with this (bits, zslots) combination.");
 	}
 
+	auto coeffsCached = this->div_integer_coeffs_cache.find(key);
+	if (coeffsCached == this->div_integer_coeffs_cache.end()) {
+		OPENFHE_THROW("EvalMultDivision: no LUT coefficients found for bits=" + std::to_string(bits) + ", zslots=" + std::to_string(zslots) +
+					  ". Call DivIntegerPrecomputations(..., bits, zslots, ...) once before the first EvalMultDivision "
+					  "call with this (bits, zslots) combination.");
+	}
+	const std::vector<std::vector<double>>& bitLengthCoeffs = coeffsCached->second.first;
+	const std::vector<std::vector<double>>& reciprocalCoeffs = coeffsCached->second.second;
+
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct1));
 
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct2));
@@ -843,7 +852,15 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalMultDivision(const Ciphert
 
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
-	FIDESlib::CKKS::evalIntegerDivision(*res_gpu, *ct1_gpu, *ct2_gpu, bits, zslots, FIDESlib::CKKS::lutsDiv, *one_gpu, context);
+	// `FIDESlib::CKKS::lutsDiv` is a persistent cache: evalIntegerDivision
+	// rebuilds its PSBatch precompute lazily, only when the internal
+	// s/x ciphertexts' level/NoiseLevel no longer match what's cached (see
+	// the comment on evalIntegerDivision in IntegerOperations.cuh) -- so
+	// bitLengthCoeffs/reciprocalCoeffs must be forwarded on every call even
+	// though they're normally only actually used the first time (or after a
+	// level/NoiseLevel change upstream of this (bits, zslots) combination).
+	FIDESlib::CKKS::evalIntegerDivision(
+	  *res_gpu, *ct1_gpu, *ct2_gpu, bits, zslots, FIDESlib::CKKS::lutsDiv, *one_gpu, bitLengthCoeffs, reciprocalCoeffs, context);
 
 	return result;
 }
@@ -1152,15 +1169,22 @@ void CryptoContextImpl<DCRTPoly>::ProcessArrayPrecomputations(const Ciphertext<D
 // IntegerMultPrecomputations/ProcessArrayPrecomputations: called once by the
 // application before the first EvalMultDivision(..., bits, zslots, ...) call.
 //
-// Builds two things `evalIntegerDivision` needs but cannot build itself:
-//   1. `lutsDiv`, via preprocessDivIntegerLUTs -- the two repeated-Chebyshev
-//      LUT precomputations (bit-length decomposition + reciprocal hint) that
-//      replace the CPU's per-call `read_vector_file(...)` disk reads in
+// Prepares two things `evalIntegerDivision` needs but cannot build itself:
+//   1. The raw LUT coefficient columns (`bitLengthCoeffs`, `reciprocalCoeffs`)
+//      that replace the CPU's per-call `read_vector_file(...)` disk reads in
 //      div_integer (see CKKSController::div_integer, the two `coeffs.push_back
-//      (read_vector_file(...))` blocks). The caller supplies the already-
-//      loaded coefficient vectors (`bitLengthCoeffs`, `reciprocalCoeffs`) --
-//      this method does not touch the filesystem, matching every other GPU
-//      precompute entry point in this file.
+//      (read_vector_file(...))` blocks). These are just stashed here (in
+//      div_integer_coeffs_cache) and forwarded by EvalMultDivision into
+//      evalIntegerDivision on every call -- the actual PSBatch precompute is
+//      done LAZILY inside evalIntegerDivision itself, directly against its
+//      internal `s`/`x` ciphertexts, rather than ahead of time against `c`
+//      here. That's deliberate: evalChebyshevSeriesPSBatchPrecompute records
+//      a plaintext cache tied to the exact level/NoiseLevel of whatever
+//      ciphertext it's given, and there's no way to guarantee a hand-picked
+//      `c` here matches the level/NoiseLevel `s`/`x` actually have at the
+//      point evalIntegerDivision uses them -- a mismatch there previously
+//      caused a GPU illegal-memory-access crash, not a clean error. See the
+//      long comment on evalIntegerDivision in IntegerOperations.cuh.
 //   2. The constant-1 ciphertext consumed by evalIntegerDivision's Newton-
 //      Raphson correction step. On the CPU this is built fresh every loop
 //      iteration via `encrypt(mask, term->GetLevel())` (div_integer, the
@@ -1194,21 +1218,26 @@ void CryptoContextImpl<DCRTPoly>::DivIntegerPrecomputations(const Ciphertext<DCR
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
 
 	auto c_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
-	auto& cc   = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
-	// ---- 1. LUT precomputation ----
+	const uint64_t key = (static_cast<uint64_t>(bits) << 32) | static_cast<uint32_t>(zslots);
+
+	// ---- 1. Stash the raw LUT coefficient columns ----
 	// `bitLengthCoeffs`/`reciprocalCoeffs` are the same coefficient vectors
 	// the CPU loads from "../coeffs/LUTs/<bits> bits/lut/p{1..7}-norm-247-
 	// LUT-DIVISION.txt" (+ garbage padding to `bits` columns) and
 	// "../coeffs/LUTs/<bits> bits/division/LUT-DIVISION-<bits>-bits-<i>.txt"
 	// (+ garbage padding to bits*bits/2 columns) -- see div_integer for the
-	// exact file list and padding counts. File I/O is left to the caller,
-	// same as preprocessDivIntegerLUTs's own signature.
+	// exact file list and padding counts. File I/O is left to the caller.
 	//
-	// This populates the module-level `lutsDiv` global declared in
-	// IntegerOperations.cuh; evalIntegerDivision reads it back out via the
-	// `luts` parameter passed in by EvalMultDivision below.
-	FIDESlib::CKKS::preprocessDivIntegerLUTs(FIDESlib::CKKS::lutsDiv, bits, zslots, cc, *c_gpu, bitLengthCoeffs, reciprocalCoeffs);
+	// We deliberately do NOT run preprocessDivIntegerLUTs here against `c`:
+	// its PSBatch precompute records a plaintext cache tied to `c`'s exact
+	// level/NoiseLevel, and there is no guarantee `c` matches the
+	// level/NoiseLevel evalIntegerDivision's internal `s`/`x` ciphertexts
+	// actually have at the point they're used (that mismatch previously
+	// caused a GPU illegal-memory-access crash). Instead, evalIntegerDivision
+	// does that precompute itself, lazily, directly against `s`/`x` -- we
+	// just need to hand it these raw columns on every call so it can.
+	this->div_integer_coeffs_cache[key] = { bitLengthCoeffs, reciprocalCoeffs };
 
 	// ---- 2. Constant-1 ciphertext ----
 	// Mirrors the CPU's `encrypt(mask, term->GetLevel())`, mask = {1 at slot
@@ -1224,8 +1253,7 @@ void CryptoContextImpl<DCRTPoly>::DivIntegerPrecomputations(const Ciphertext<DCR
 	// consumed) rather than at `c`'s level -- evalIntegerDivision only ever
 	// drops `one` down to match term's level (dropToLevel can lower a
 	// ciphertext, never raise it), so encrypting `one` at anything less
-	// fresh than term's post-bootstrap level would make that drop invalid
-	// and is the likely cause of a GPU-side illegal-memory-access crash.
+	// fresh than term's post-bootstrap level would make that drop invalid.
 	// `noise` matches the noise-scale-degree convention used by
 	// MakeCKKSPackedPlaintext elsewhere in this file.
 	std::vector<double> mask(c_gpu->slots, 0.0);
@@ -1234,7 +1262,6 @@ void CryptoContextImpl<DCRTPoly>::DivIntegerPrecomputations(const Ciphertext<DCR
 	Plaintext onePt			 = this->MakeCKKSPackedPlaintext(mask, noise, 0, nullptr, c_gpu->slots);
 	Ciphertext<DCRTPoly> one = this->Encrypt(onePt, pk);
 
-	const uint64_t key				  = (static_cast<uint64_t>(bits) << 32) | static_cast<uint32_t>(zslots);
 	this->div_integer_one_cache[key] = one;
 
 	std::cout << "Done preprocessing div_integer with " << bits << " bits! " << std::endl;

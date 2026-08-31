@@ -19,3 +19,6 @@ build/
 deps/openfhe-src/
 
 .cache/
+.DS_Store
+src/.DS_Store
+src/.DS_Store

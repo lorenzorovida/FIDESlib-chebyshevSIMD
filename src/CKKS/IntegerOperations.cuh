@@ -43,6 +43,8 @@ struct ChebyshevRepeatedLUT {
 	int repeat = 0;
 	int a = -1; // input-range lower bound this LUT was built with (see preprocessChebyshevRepeated)
 	int b = 1;	// input-range upper bound this LUT was built with
+	int modelLevel	   = -1; // level of the ciphertext this LUT's plaintext cache was recorded against
+	int modelNoiseLevel = -1; // NoiseLevel of that same ciphertext -- both must match on every replay
 };
 
 struct DivIntegerLUTs {
@@ -92,13 +94,14 @@ void binaryOr(Ciphertext& out, const Ciphertext& a, const Ciphertext& b);
 
 // div_integer: ciphertext / ciphertext division, translated from
 // CKKSController::div_integer(const Ctxt&, const Ctxt&, int, int).
-// `divLut` and `reciprocalLut` are the two repeated-Chebyshev LUT
-// precomputations that replace the CPU's per-call `read_vector_file(...)`
-// disk reads (see preprocessChebyshevRepeated); the caller builds these
-// once (from the same coefficient files/values as the CPU LUTs) via
-// preprocessDivIntegerLUTs.
-
-
+//
+// preprocessDivIntegerLUTs is an internal helper -- evalIntegerDivision
+// calls it lazily, on `s`/`x` themselves, at first use (see the comment
+// above evalIntegerDivision for why). It's still declared here in case a
+// caller wants to warm the cache ahead of time with a ciphertext they are
+// certain will match the real level/NoiseLevel s/x end up at -- but for
+// most callers, just calling evalIntegerDivision directly and letting it
+// self-warm on first use is the safe default.
 void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
   int bits,
   int zslots,
@@ -112,10 +115,37 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
 // deep enough to survive the two's-complement "+1" step inside the Newton-
 // Raphson loop (see the CPU's `encrypt(mask, term->GetLevel())` call in
 // div_integer). FIDESlib::CKKS::Ciphertext has no key material in scope to
-// encrypt this itself, so the caller builds it once -- the same way `luts`
-// is built once -- via CryptoContextImpl<DCRTPoly>::Encrypt(pt, pk) (see
+// encrypt this itself, so the caller builds it once -- via
+// CryptoContextImpl<DCRTPoly>::Encrypt(pt, pk) (see
 // CryptoContextImpl<DCRTPoly>::DivIntegerPrecomputations).
-void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, const DivIntegerLUTs& luts, const Ciphertext& one, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
+//
+// `luts` is precomputed LAZILY, on first use, INSIDE this function -- not
+// ahead of time by the caller. Why: evalChebyshevSeriesPSBatchPrecompute
+// records a plaintext cache by running the real Chebyshev-PS algorithm on a
+// copy of whatever "model" ciphertext it's given, and that recording is only
+// valid to replay (via evalChebyshevSeriesPSBatchApply) against a ciphertext
+// that has the EXACT SAME level and NoiseLevel the model had -- otherwise
+// the cached plaintexts don't match the real ciphertext's RNS/limb layout
+// and the GPU kernel that consumes them reads out of bounds (this is not
+// hypothetical: it's what was crashing before this was made lazy). There is
+// no way to guarantee a hand-picked model ciphertext, built ahead of time by
+// the caller, will coincidentally match the level/NoiseLevel that the
+// internal `s`/`x` ciphertexts happen to have at the point they're used
+// below -- those depend on `num`/`den`'s own level and everything
+// inverseBitLength/blindRotation/evalIntegerMult do to derive them. So we
+// precompute the LUT on first call using `s`/`x` THEMSELVES as the model,
+// right before they'd otherwise be consumed by evalChebyshevRepeatedApply,
+// guaranteeing an exact level/NoiseLevel match. `luts` is cached afterwards
+// (see the DivIntegerLUTs global) and reused on subsequent calls with the
+// same (bits, zslots) -- it is only rebuilt if empty.
+//
+// `bitLengthCoeffs`/`reciprocalCoeffs` are the raw coefficient columns
+// (same layout the CPU reads from p1..p7-norm-247-LUT-DIVISION.txt /
+// LUT-DIVISION-<bits>-bits-<i>.txt, see preprocessDivIntegerLUTs) needed to
+// perform that first-call precompute; on later calls (luts already
+// populated) they're unused and may be passed empty.
+void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, DivIntegerLUTs& luts, const Ciphertext& one,
+  const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& reciprocalCoeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, int depth);
 void evalIntegerMult(Ciphertext& out,
