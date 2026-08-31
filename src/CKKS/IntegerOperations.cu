@@ -1365,8 +1365,6 @@ void evalIntegerDivision(Ciphertext& out,
 			x.rotate(xRotated, -4);
 		}
 	}
-	out.copy(x);
-	return;
 
 	// --------------------------------------------------------
 	// result = mul_integer(rot(num, 2), rot(x, 2), bits, bits, zslots, zslots, true)
@@ -1380,6 +1378,8 @@ void evalIntegerDivision(Ciphertext& out,
 		num2.rotate(num, 2);
 		Ciphertext x2(num.cc_);
 		x2.rotate(x, 2);
+
+		x2.dropToLevel(x2.getLevel() - 1);
 		evalIntegerMult(result, num2, x2, bits, bits, zslots, zslots, true, cc);
 	}
 
