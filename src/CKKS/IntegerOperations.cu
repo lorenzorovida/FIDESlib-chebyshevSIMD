@@ -1200,8 +1200,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	evalChebyshevRepeatedApply(cc, x, luts.reciprocalHint);
 	binboot(x, x);
 
-	out.copy(x);
-	return;
+	
 	// --------------------------------------------------------
 	// Newton-Raphson refinement loop:
 	//   for iter in [0, ceil(log2(bits/LUT_BITS))):
@@ -1355,6 +1354,9 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			x.rotate(xRotated, -4);
 		}
 	}
+
+	out.copy(x);
+	return;
 
 	// --------------------------------------------------------
 	// result = mul_integer(rot(num, 2), rot(x, 2), bits, bits, zslots, zslots, true)
