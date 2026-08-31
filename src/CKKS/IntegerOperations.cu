@@ -1048,6 +1048,8 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
 void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, DivIntegerLUTs& luts, const Ciphertext& one,
   const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& reciprocalCoeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 
+	std::cout << "Input lvl: " << num.getLevel() << std::endl;
+	
 	const int LUT_BITS			 = 8;
 	FIDESlib::CKKS::Context& cc_ = num.cc_;
 	const int stride			 = bits * bits / 2;
@@ -1215,6 +1217,8 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		//x e denNorm arrivano dal bootstrap e non hanno lv allineati
 		x.dropToLevel(x.getLevel() - 1);
 		denNorm.dropToLevel(denNorm.getLevel() - 1);
+
+		std::cout << "x lvl: " << x.getLevel() << std::endl;
 
 
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
