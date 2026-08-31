@@ -1065,6 +1065,9 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	Ciphertext s(num.cc_);
 	s.copy(b);
 
+	out.copy(b);
+	return;
+
 	// Lazy precompute, on first use (or if a previous call cached this LUT
 	// against a different level/NoiseLevel than `s` actually has right now)
 	// using `s` ITSELF as the model -- this guarantees the plaintext cache
