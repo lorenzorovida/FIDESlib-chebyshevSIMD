@@ -1215,21 +1215,15 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	// --------------------------------------------------------
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
 
-	out.copy(x);
-	return;
-
 	//TODO prima del loop è giusto, poi si rompe tutto (non è neanche tutto binario)
 	for (int iter = 0; iter < newtonIters; ++iter) {
 
 		Ciphertext term(num.cc_);
 
-		std::cout << x.getLevel() << ", " << x.NoiseLevel << std::endl;
-		std::cout << denNorm.getLevel() << ", " << denNorm.NoiseLevel << std::endl;
+		x.dropToLevel(x.getLevel() - 1);
+		denNorm.dropToLevel(denNorm.getLevel() - 1);
 
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
-
-		out.copy(term);
-		return;
 
 		// term += broadcast(bit `bits` of x) * rot(den_norm, -bits)
 		std::fill(mask.begin(), mask.end(), 0.0);
@@ -1347,6 +1341,8 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			Ciphertext term2(num.cc_);
 			term2.rotate(term, 2);
 
+			term2.dropToLevel(term2.getLevel() - 1);
+
 			Ciphertext newX(num.cc_);
 			evalIntegerMult(newX, x2, term2, bits, bits, zslots, zslots, true, cc);
 			x.copy(newX);
@@ -1365,8 +1361,6 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			x.rotate(xRotated, -4);
 		}
 
-		out.copy(x);
-		return;
 	}
 
 
@@ -1382,6 +1376,8 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		num2.rotate(num, 2);
 		Ciphertext x2(num.cc_);
 		x2.rotate(x, 2);
+
+		x2.dropToLevel(x2.getLevel() - 1);
 		evalIntegerMult(result, num2, x2, bits, bits, zslots, zslots, true, cc);
 	}
 
