@@ -23,7 +23,7 @@ ProcessArrayPrecomputation precomp128b;
 
 std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
 std::vector<std::vector<double>> coeffs4BitsMultiplier;
-int cacheChebyshev4BitsMultiplierModelLevel	  = -1;
+int cacheChebyshev4BitsMultiplierModelLevel		 = -1;
 int cacheChebyshev4BitsMultiplierModelNoiseLevel = -1;
 std::map<std::pair<int, int>, std::shared_ptr<PSBatchPrecompute>> cacheChebyshev4BitsMultiplierByLevel;
 DivIntegerLUTs lutsDiv;
@@ -184,10 +184,10 @@ void preprocessChebyshevRepeated(ChebyshevRepeatedLUT& lut, lbcrypto::CryptoCont
 		tiled.insert(tiled.end(), coeffs.begin(), coeffs.end());
 	}
 
-	lut.coeffs	= coeffs; // keep the caller's original (un-tiled) base set for reference
-	lut.repeat	= static_cast<int>(repeat);
-	lut.a		= a;
-	lut.b		= b;
+	lut.coeffs			= coeffs; // keep the caller's original (un-tiled) base set for reference
+	lut.repeat			= static_cast<int>(repeat);
+	lut.a				= a;
+	lut.b				= b;
 	lut.modelLevel		= c.getLevel();
 	lut.modelNoiseLevel = c.NoiseLevel;
 	lut.precomp			= evalChebyshevSeriesPSBatchPrecompute(cc, c, tiled, a, b);
@@ -1045,8 +1045,16 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
 	preprocessChebyshevRepeated(luts.reciprocalHint, cc, like, reciprocalCoeffs, 0, 256);
 }
 
-void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, DivIntegerLUTs& luts, const Ciphertext& one,
-  const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& reciprocalCoeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+void evalIntegerDivision(Ciphertext& out,
+  const Ciphertext& num,
+  const Ciphertext& den,
+  int bits,
+  int zslots,
+  DivIntegerLUTs& luts,
+  const Ciphertext& one,
+  const std::vector<std::vector<double>>& bitLengthCoeffs,
+  const std::vector<std::vector<double>>& reciprocalCoeffs,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 
 	std::cout << "Input lvl: " << num.getLevel() << std::endl;
 
@@ -1214,17 +1222,11 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 
 		Ciphertext term(num.cc_);
 
-		//x e denNorm arrivano dal bootstrap e non hanno lv allineati
+		// x e denNorm arrivano dal bootstrap e non hanno lv allineati
 		x.dropToLevel(x.getLevel() - 1);
 		denNorm.dropToLevel(denNorm.getLevel() - 1);
 
-		std::cout << "x lvl: " << x.getLevel() << std::endl;
-
-
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
-
-		out.copy(term);
-		return;
 
 		// term += broadcast(bit `bits` of x) * rot(den_norm, -bits)
 		std::fill(mask.begin(), mask.end(), 0.0);
@@ -1316,9 +1318,8 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			// invalid drop target has previously shown up as a CUDA "illegal
 			// memory access" rather than a clean error).
 			if (one.getLevel() < term.getLevel()) {
-				throw std::invalid_argument(
-				  "evalIntegerDivision: `one` was encrypted at a lower level than term's post-bootstrap "
-				  "level; DivIntegerPrecomputations must encrypt it at the top of the modulus chain (level 0)");
+				throw std::invalid_argument("evalIntegerDivision: `one` was encrypted at a lower level than term's post-bootstrap "
+											"level; DivIntegerPrecomputations must encrypt it at the top of the modulus chain (level 0)");
 			}
 
 			Ciphertext oneAtLevel(num.cc_);
@@ -1343,6 +1344,10 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			term2.rotate(term, 2);
 
 			Ciphertext newX(num.cc_);
+
+			// x2.dropToLevel(x2.getLevel() - 1);
+			term2.dropToLevel(term2.getLevel() - 1);
+
 			evalIntegerMult(newX, x2, term2, bits, bits, zslots, zslots, true, cc);
 			x.copy(newX);
 		}
@@ -1360,6 +1365,8 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			x.rotate(xRotated, -4);
 		}
 	}
+	out.copy(x);
+	return;
 
 	// --------------------------------------------------------
 	// result = mul_integer(rot(num, 2), rot(x, 2), bits, bits, zslots, zslots, true)
@@ -1632,8 +1639,8 @@ void preprocessProcessArray(int bits,
 void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c) {
 	cacheChebyshev4BitsMultiplier = evalChebyshevSeriesPSBatchPrecompute(cc, c, coeffs, -1, 1);
 
-	coeffs4BitsMultiplier						  = coeffs;
-	cacheChebyshev4BitsMultiplierModelLevel	  = c.getLevel();
+	coeffs4BitsMultiplier						 = coeffs;
+	cacheChebyshev4BitsMultiplierModelLevel		 = c.getLevel();
 	cacheChebyshev4BitsMultiplierModelNoiseLevel = c.NoiseLevel;
 
 	cacheChebyshev4BitsMultiplierByLevel[{ c.getLevel(), c.NoiseLevel }] = cacheChebyshev4BitsMultiplier;
@@ -1694,17 +1701,16 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 	// Keying by (level, NoiseLevel) lets every caller's entry live side by
 	// side, built once and reused after that.
 	const auto cacheKey = std::make_pair(result.getLevel(), static_cast<int>(result.NoiseLevel));
-	auto it				 = cacheChebyshev4BitsMultiplierByLevel.find(cacheKey);
+	auto it				= cacheChebyshev4BitsMultiplierByLevel.find(cacheKey);
 	std::shared_ptr<PSBatchPrecompute> precomp;
 	if (it != cacheChebyshev4BitsMultiplierByLevel.end()) {
 		precomp = it->second;
 	} else {
 		if (coeffs4BitsMultiplier.empty()) {
-			throw std::invalid_argument(
-			  "multiplier4bits: no cached precompute for this (level, NoiseLevel) and coeffs4BitsMultiplier is "
-			  "empty -- call ProcessMultiplications at least once first so the coefficient columns are available");
+			throw std::invalid_argument("multiplier4bits: no cached precompute for this (level, NoiseLevel) and coeffs4BitsMultiplier is "
+										"empty -- call ProcessMultiplications at least once first so the coefficient columns are available");
 		}
-		precomp										  = evalChebyshevSeriesPSBatchPrecompute(cc, result, coeffs4BitsMultiplier, -1, 1);
+		precomp										   = evalChebyshevSeriesPSBatchPrecompute(cc, result, coeffs4BitsMultiplier, -1, 1);
 		cacheChebyshev4BitsMultiplierByLevel[cacheKey] = precomp;
 	}
 
