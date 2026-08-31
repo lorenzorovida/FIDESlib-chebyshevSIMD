@@ -36,6 +36,14 @@ extern ProcessArrayPrecomputation precomp128b;
 
 extern std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
 extern std::vector<std::vector<double>> coeffs4BitsMultiplier;
+// Level/NoiseLevel the ciphertext used to build cacheChebyshev4BitsMultiplier
+// had at the time (see preprocessChebyshevMultiplication / multiplier4bits).
+// Tracked so multiplier4bits can detect a mismatch and rebuild instead of
+// silently replaying a plaintext cache recorded for a different level/noise
+// (see the long comment on evalIntegerDivision for why that mismatch is
+// unsafe -- it applies here identically).
+extern int cacheChebyshev4BitsMultiplierModelLevel;
+extern int cacheChebyshev4BitsMultiplierModelNoiseLevel;
 
 struct ChebyshevRepeatedLUT {
 	std::shared_ptr<PSBatchPrecompute> precomp;

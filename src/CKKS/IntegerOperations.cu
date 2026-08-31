@@ -23,6 +23,8 @@ ProcessArrayPrecomputation precomp128b;
 
 std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
 std::vector<std::vector<double>> coeffs4BitsMultiplier;
+int cacheChebyshev4BitsMultiplierModelLevel		= -1;
+int cacheChebyshev4BitsMultiplierModelNoiseLevel	= -1;
 DivIntegerLUTs lutsDiv;
 
 // ============================================================
@@ -1065,8 +1067,6 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	Ciphertext s(num.cc_);
 	s.copy(b);
 
-	//TODO: inverseButLength è giusto
-
 	// Lazy precompute, on first use (or if a previous call cached this LUT
 	// against a different level/NoiseLevel than `s` actually has right now)
 	// using `s` ITSELF as the model -- this guarantees the plaintext cache
@@ -1089,20 +1089,13 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	evalChebyshevRepeatedApply(cc, s, luts.bitLengthDecompose);
 	binboot(s, s);
 
-	
-
 	// --------------------------------------------------------
 	// den_norm = blind_rotation(den, s, bits, zslots)   // den << (bits - bitlen(den))
 	// den_norm = binboot(den_norm)
 	// --------------------------------------------------------
 	Ciphertext denNorm(num.cc_);
 	blindRotation(denNorm, den, s, bits, zslots, /*stride=*/0, cc);
-
-	
-
 	binboot(denNorm, denNorm);
-
-	
 
 	// --------------------------------------------------------
 	// den_norm_rot = rot(den_norm, bits - 1 - LUT_BITS)
@@ -1200,7 +1193,6 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	evalChebyshevRepeatedApply(cc, x, luts.reciprocalHint);
 	binboot(x, x);
 
-	
 	// --------------------------------------------------------
 	// Newton-Raphson refinement loop:
 	//   for iter in [0, ceil(log2(bits/LUT_BITS))):
@@ -1215,21 +1207,10 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	// --------------------------------------------------------
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
 
-	out.copy(x);
-	return;
-
-	//TODO prima del loop è giusto, poi si rompe tutto (non è neanche tutto binario)
 	for (int iter = 0; iter < newtonIters; ++iter) {
 
 		Ciphertext term(num.cc_);
-
-		std::cout << x.getLevel() << ", " << x.NoiseLevel << std::endl;
-		std::cout << denNorm.getLevel() << ", " << denNorm.NoiseLevel << std::endl;
-
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
-
-		out.copy(term);
-		return;
 
 		// term += broadcast(bit `bits` of x) * rot(den_norm, -bits)
 		std::fill(mask.begin(), mask.end(), 0.0);
@@ -1364,11 +1345,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			xRotated.rotate(x, bits);
 			x.rotate(xRotated, -4);
 		}
-
-		out.copy(x);
-		return;
 	}
-
 
 	// --------------------------------------------------------
 	// result = mul_integer(rot(num, 2), rot(x, 2), bits, bits, zslots, zslots, true)
@@ -1641,7 +1618,9 @@ void preprocessProcessArray(int bits,
 void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c) {
 	cacheChebyshev4BitsMultiplier = evalChebyshevSeriesPSBatchPrecompute(cc, c, coeffs, -1, 1);
 
-	coeffs4BitsMultiplier = coeffs;
+	coeffs4BitsMultiplier						 = coeffs;
+	cacheChebyshev4BitsMultiplierModelLevel	 = c.getLevel();
+	cacheChebyshev4BitsMultiplierModelNoiseLevel = c.NoiseLevel;
 }
 
 void processArray(Ciphertext& out, const Ciphertext& c, const ProcessArrayPrecomputation& precomp) {
@@ -1685,6 +1664,27 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 	result.addPt(minusOnePt);
 
 	// QUA RESULT è GIUSTO
+
+	// Rebuild the PSBatch precompute if `result`'s level/NoiseLevel don't
+	// match what cacheChebyshev4BitsMultiplier was built against --
+	// replaying a plaintext cache recorded at a different level/NoiseLevel
+	// reads stale/mismatched RNS data and corrupts the result silently
+	// (no crash, just garbage -- this is what was happening when
+	// multiplier4bits was called from inside evalIntegerDivision's Newton-
+	// Raphson loop, where `result` arrives at whatever level
+	// inverseBitLength/blindRotation left it at, not the level
+	// ProcessMultiplications originally built the cache with).
+	if (!cacheChebyshev4BitsMultiplier || cacheChebyshev4BitsMultiplierModelLevel != result.getLevel() ||
+	  cacheChebyshev4BitsMultiplierModelNoiseLevel != result.NoiseLevel) {
+		if (coeffs4BitsMultiplier.empty()) {
+			throw std::invalid_argument(
+			  "multiplier4bits: cacheChebyshev4BitsMultiplier needs rebuilding but coeffs4BitsMultiplier is empty -- "
+			  "call ProcessMultiplications at least once first so the coefficient columns are available");
+		}
+		cacheChebyshev4BitsMultiplier				  = evalChebyshevSeriesPSBatchPrecompute(cc, result, coeffs4BitsMultiplier, -1, 1);
+		cacheChebyshev4BitsMultiplierModelLevel	  = result.getLevel();
+		cacheChebyshev4BitsMultiplierModelNoiseLevel = result.NoiseLevel;
+	}
 
 	evalChebyshevSeriesPSBatchApply(cc, result, cacheChebyshev4BitsMultiplier, coeffs4BitsMultiplier, -1, 1);
 
