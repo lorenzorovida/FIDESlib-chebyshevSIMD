@@ -1068,7 +1068,13 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	// subsequent calls with matching level/NoiseLevel skip straight to
 	// evalChebyshevRepeatedApply.
 	if (!luts.bitLengthDecompose.precomp || luts.bitLengthDecompose.modelLevel != s.getLevel() || luts.bitLengthDecompose.modelNoiseLevel != s.NoiseLevel) {
+		std::cout << "[evalIntegerDivision] (re)building bitLengthDecompose PSBatch precompute "
+					 "(cached level="
+				  << luts.bitLengthDecompose.modelLevel << ", cached noise=" << luts.bitLengthDecompose.modelNoiseLevel << "; s level=" << s.getLevel()
+				  << ", s noise=" << s.NoiseLevel << ")" << std::endl;
 		preprocessChebyshevRepeated(luts.bitLengthDecompose, cc, s, bitLengthCoeffs, -1, 1);
+	} else {
+		std::cout << "[evalIntegerDivision] reusing cached bitLengthDecompose PSBatch precompute" << std::endl;
 	}
 	evalChebyshevRepeatedApply(cc, s, luts.bitLengthDecompose);
 	binboot(s, s);
@@ -1166,7 +1172,13 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	// baked into the precompute, and is exactly what it needs to match on
 	// every call.
 	if (!luts.reciprocalHint.precomp || luts.reciprocalHint.modelLevel != x.getLevel() || luts.reciprocalHint.modelNoiseLevel != x.NoiseLevel) {
+		std::cout << "[evalIntegerDivision] (re)building reciprocalHint PSBatch precompute "
+					 "(cached level="
+				  << luts.reciprocalHint.modelLevel << ", cached noise=" << luts.reciprocalHint.modelNoiseLevel << "; x level=" << x.getLevel()
+				  << ", x noise=" << x.NoiseLevel << ")" << std::endl;
 		preprocessChebyshevRepeated(luts.reciprocalHint, cc, x, reciprocalCoeffs, 0, 256);
+	} else {
+		std::cout << "[evalIntegerDivision] reusing cached reciprocalHint PSBatch precompute" << std::endl;
 	}
 	evalChebyshevRepeatedApply(cc, x, luts.reciprocalHint);
 	binboot(x, x);
