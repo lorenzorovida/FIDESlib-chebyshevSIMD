@@ -1212,6 +1212,9 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		Ciphertext term(num.cc_);
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
 
+		out.copy(term);
+		return;
+
 		// term += broadcast(bit `bits` of x) * rot(den_norm, -bits)
 		std::fill(mask.begin(), mask.end(), 0.0);
 		for (int j = 0; j < zslots; ++j) {
