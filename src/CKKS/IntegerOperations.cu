@@ -1098,8 +1098,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	Ciphertext denNorm(num.cc_);
 	blindRotation(denNorm, den, s, bits, zslots, /*stride=*/0, cc);
 
-	out.copy(denNorm);
-	return;
+	
 
 	binboot(denNorm, denNorm);
 
@@ -1181,6 +1180,9 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	// --------------------------------------------------------
 	Ciphertext x(num.cc_);
 	x.copy(idx);
+
+	out.copy(x);
+	return;
 
 	// Same lazy-precompute-with-validation pattern as bitLengthDecompose
 	// above, but here `x` is used as the model BEFORE its own binboot
