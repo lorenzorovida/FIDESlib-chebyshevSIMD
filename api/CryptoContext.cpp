@@ -703,6 +703,36 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAdd(const Ciphertext<DCRTP
 	return result;
 }
 
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalBinaryOR(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2) {
+	FIDESlib::CudaNvtxRange r("API");
+
+	// Fall back to CPU.
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW("EvalAddInteger has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
+	}
+
+	// Load inputs onto GPU
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct1));
+
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct2));
+
+	// Make result from ct1, exactly like EvalAdd
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
+
+	auto res_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+
+	auto ct2_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
+
+	// Run the entire integer-add circuit on GPU
+	FIDESlib::CKKS::binaryOr(*res_gpu, *res_gpu, *ct2_gpu);
+
+	return result;
+}
+
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalAddInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits) {
 	FIDESlib::CudaNvtxRange r("API");
 

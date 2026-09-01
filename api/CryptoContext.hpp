@@ -208,6 +208,9 @@ template <> class CryptoContextImpl<DCRTPoly> {
 
  
 
+	// Binary operations
+	Ciphertext<DCRTPoly> EvalBinaryOR(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2);
+
 	// Integer operations
 	Ciphertext<DCRTPoly> EvalAddInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits);
 	Ciphertext<DCRTPoly> EvalEqualInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, std::vector<double> coeffsSinc, int depth);
