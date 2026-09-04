@@ -2,6 +2,7 @@
 #define API_CRYPTOCONTEXT_HPP
 
 #include <any>
+#include <array>
 #include <complex>
 #include <cstdint>
 #include <functional>
@@ -243,6 +244,40 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	// not read.
 	void DivIntegerPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int zslots, const PublicKey<DCRTPoly>& pk, int noise,
 	  const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& reciprocalCoeffs);
+
+	// EvalSquareRootInteger: ciphertext integer square root. `pk` is needed
+	// for the same reason EvalMultDivision needs it -- the tail of
+	// square_root_integer needs three genuinely-encrypted constants (ONE_FP,
+	// SQRT2_FP, bits+1), not just plaintext masks, to feed into
+	// evalIntegerSub/plain multiplications the way the CPU's
+	// encrypt_multi_int(...) calls do. Call
+	// SquareRootPrecomputations(..., bits, zslots, ...) once before the first
+	// EvalSquareRootInteger call with a given (bits, zslots) combination.
+	Ciphertext<DCRTPoly> EvalSquareRootInteger(const Ciphertext<DCRTPoly>& ct, int bits, int zslots, const PublicKey<DCRTPoly>& pk);
+
+	// One-time setup for EvalSquareRootInteger at a given (bits, zslots):
+	// encrypts the three constant ciphertexts (ONE_FP, SQRT2_FP, bits+1)
+	// EvalSquareRootInteger needs, and stashes the raw LUT coefficient
+	// columns so EvalSquareRootInteger can forward them into
+	// evalIntegerSquareRoot's lazy, self-validating PSBatch precompute (see
+	// the long comment on evalIntegerSquareRoot in IntegerOperations.cuh for
+	// why that precompute can't safely be done ahead of time against a
+	// hand-picked model ciphertext). `c` is only used as a template
+	// ciphertext for the constant encryptions (its .cc_/slots), the same way
+	// DivIntegerPrecomputations uses its `c` argument -- its data is not
+	// read. `bitLengthCoeffs`/`newtonSeedCoeffs` are the raw coefficient
+	// columns square_root_integer reads from
+	// "../coeffs/LUTs/<bits> bits/lut/p{1..7}-norm-247-LUT-DIVISION.txt" (+
+	// garbage padding to `bits` columns) and
+	// "../coeffs/LUTs/<bits> bits/square-root/LUT-SQUARE-ROOT-<bits>-BITS-<i>.txt"
+	// (+ garbage padding to bits*bits/2 columns, WITH the bits==64/bits==128
+	// in-place column patches from square_root_integer already applied --
+	// see preprocessSquareRootLUTs's doc comment). File I/O and the
+	// bits==64/128 patch are left to the caller, exactly like
+	// DivIntegerPrecomputations leaves file I/O to its caller.
+	void SquareRootPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int zslots, const PublicKey<DCRTPoly>& pk, int noise,
+	  const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& newtonSeedCoeffs);
+
 	Ciphertext<DCRTPoly> Multiplier4bits(const Ciphertext<DCRTPoly>& ctxtA, const Ciphertext<DCRTPoly>& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs);
 
 
@@ -313,6 +348,21 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	/// actually redone when the cached LUT's level/NoiseLevel no longer
 	/// matches -- see evalIntegerDivision).
 	std::unordered_map<uint64_t, std::pair<std::vector<std::vector<double>>, std::vector<std::vector<double>>>> div_integer_coeffs_cache;
+
+	/// @brief Cache of the three constant ciphertexts (ONE_FP, SQRT2_FP,
+	/// bits+1, in that order) used by EvalSquareRootInteger's Newton-Raphson
+	/// tail, keyed the same way as div_integer_one_cache. Populated by
+	/// SquareRootPrecomputations; consumed by EvalSquareRootInteger.
+	std::unordered_map<uint64_t, std::array<Ciphertext<DCRTPoly>, 3>> square_root_constants_cache;
+
+	/// @brief Cache of the raw LUT coefficient columns (bitLength,
+	/// newtonSeed) needed to (re)run evalIntegerSquareRoot's lazy PSBatch
+	/// precompute, keyed the same way as div_integer_coeffs_cache. Populated
+	/// by SquareRootPrecomputations; forwarded by EvalSquareRootInteger into
+	/// evalIntegerSquareRoot on every call (the precompute itself is only
+	/// actually redone when the cached LUT's level/NoiseLevel no longer
+	/// matches -- see evalIntegerSquareRoot).
+	std::unordered_map<uint64_t, std::pair<std::vector<std::vector<double>>, std::vector<std::vector<double>>>> square_root_coeffs_cache;
 
 	// ---- Copy helpers ----
 

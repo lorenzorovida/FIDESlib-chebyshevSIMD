@@ -54,6 +54,24 @@ struct DivIntegerLUTs {
 
 extern DivIntegerLUTs lutsDiv;
 
+// SquareRootIntegerLUTs: the two repeated-Chebyshev LUTs square_root_integer
+// needs. bitLengthDecompose plays the SAME role as DivIntegerLUTs'
+// bitLengthDecompose (decomposes a normalized bit-length hint into a 7-bit
+// binary index for blind_rotation), but is kept as its OWN cache here --
+// evalIntegerSquareRoot precomputes/replays it against its own `s`
+// ciphertext, which will generally sit at a different level/NoiseLevel than
+// div_integer's `s`, and the lazy-rebuild check (see evalIntegerDivision's
+// doc comment) keys off exactly that model level/NoiseLevel match. newtonSeed
+// is the LUT-SQUARE-ROOT-<bits>-BITS-<i> Newton-Raphson seed, analogous to
+// DivIntegerLUTs::reciprocalHint but with the bits-specific column
+// count/patching square root uses (see preprocessSquareRootLUTs).
+struct SquareRootIntegerLUTs {
+	ChebyshevRepeatedLUT bitLengthDecompose;
+	ChebyshevRepeatedLUT newtonSeed;
+};
+
+extern SquareRootIntegerLUTs lutsSquareRoot;
+
 // ----------------------------------------------------------------------
 // Repeated-Chebyshev-LUT precomputation, mirroring OpenFHE's
 // EvalChebyshevSeriesPSBatchRepeated(ctxt, coeffs, a, b, repeat).
@@ -147,6 +165,98 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
 void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, DivIntegerLUTs& luts, const Ciphertext& one,
   const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& reciprocalCoeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
+
+// evalIntegerSub: ciphertext - ciphertext subtraction, translated from
+// CKKSController::sub_integer(const Ctxt&, const Ctxt&, int, bool). Computes
+// a + ~b (plaintext one's-complement of b, masked to the low `bits+1` bits
+// of each bits*bits/2-sized group, matching the CPU's `ones` mask exactly)
+// via evalIntegerAdd, then re-masks the low `bits` bits of the result to
+// drop the carry-out slot. `cleanFirst` mirrors the CPU's `clean_first` flag
+// forwarded to add_integer (see evalIntegerAdd's `clean_and_reduce(add(a,b))`
+// vs `square(sub(a,b))` branch on the CPU -- NOTE: evalIntegerAdd above only
+// ever implements the `clean_first=false` path; `cleanFirst=true` is
+// accepted for interface parity with the CPU signature but currently
+// asserts, since no caller in this port needs it yet).
+void evalIntegerSub(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, int bits, int zslots, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, bool cleanFirst = false);
+
+// square_root_integer: ciphertext integer square root, translated from
+// CKKSController::square_root_integer(const Ctxt&, int, int).
+//
+// preprocessSquareRootLUTs is the sqrt analogue of preprocessDivIntegerLUTs:
+// it validates and stashes the raw coefficient columns needed for the two
+// repeated-Chebyshev LUTs (bitLengthDecompose, newtonSeed) into
+// `SquareRootIntegerLUTs`. Just like div_integer, evalIntegerSquareRoot does
+// NOT call this ahead of time against a hand-picked model ciphertext --
+// the actual PSBatch precompute happens lazily inside evalIntegerSquareRoot,
+// on first use (or whenever the cached LUT's level/NoiseLevel no longer
+// matches), directly against the internal `s`/`idx` ciphertexts themselves.
+// This mirrors evalIntegerDivision's lazy-precompute strategy exactly, and
+// for the exact same reason: a plaintext cache recorded by
+// evalChebyshevSeriesPSBatchPrecompute is only safe to replay against a
+// ciphertext with the SAME level/NoiseLevel it was recorded against, and
+// there's no way to guarantee a hand-picked model matches what `s`/`idx`
+// happen to be at the point they're consumed -- that depends on `c`'s own
+// level and everything inverseBitLength/blindRotation/evalIntegerMult do
+// upstream. `preprocessSquareRootLUTs` is still exposed here in case a
+// caller wants to warm the cache ahead of time with a ciphertext they are
+// certain will match, but for most callers just calling
+// evalIntegerSquareRoot directly and letting it self-warm on first use is
+// the safe default -- same guidance as evalIntegerDivision.
+//
+// `bitLengthCoeffs` are the p1..p7-norm-247-LUT-DIVISION.txt columns (+
+// (bits-7) garbage copies of p1) -- the SAME raw file layout div_integer
+// uses for its own bitLengthDecompose LUT (the CPU's square_root_integer
+// reloads these files itself rather than sharing div_integer's cache, and
+// this port preserves that -- the LUT cache objects are kept distinct, see
+// SquareRootIntegerLUTs). `newtonSeedCoeffs` are the raw, UN-patched
+// LUT-SQUARE-ROOT-<bits>-BITS-<i>.txt columns plus garbage padding, laid out
+// exactly as the CPU's square_root_integer reads them (bits-dependent column
+// count and padding file -- see the `bits == 64` / `bits == 128` / default
+// branches in the CPU reference); the bits==64/128 in-place column
+// reassignment the CPU does right after loading (`coeffs[0] = coeffs[12]`
+// etc.) must ALREADY be applied by the caller before calling this function
+// or evalIntegerSquareRoot, since that patching only depends on `bits`, not
+// on any ciphertext.
+void preprocessSquareRootLUTs(SquareRootIntegerLUTs& luts,
+  int bits,
+  int zslots,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+  Ciphertext& like,
+  const std::vector<std::vector<double>>& bitLengthCoeffs,
+  const std::vector<std::vector<double>>& newtonSeedCoeffs);
+
+// `one`/`sqrt2`/`bitsPlusOne`: genuine (non-trivial) encryptions of the
+// per-group constants square_root_integer's tail needs -- mirroring how
+// `one` is supplied to evalIntegerDivision, since FIDESlib::CKKS::Ciphertext
+// has no key material in scope to encrypt these itself:
+//   - `one`:  ONE_FP = 1 << (bits-1), bit-packed LSB-first per group (the
+//     CPU's `encrypt_multi_int({ONE_FP,...}, bits, parity->GetLevel())`).
+//   - `sqrt2`: SQRT2_FP = round(sqrt(2) * (1 << (bits-1))), same packing
+//     (`encrypt_multi_int({SQRT2_FP,...}, bits, parity->GetLevel())`). The
+//     128-bit case uses the CPU's literal hex constant
+//     0xb504f333f9de6484597d89b3754abe9f instead of the floating-point
+//     round-trip -- callers targeting bits==128 must encrypt that exact
+//     128-bit value.
+//   - `bitsPlusOne`: the constant `bits + 1`, bit-packed the same way (the
+//     CPU's `encrypt_multi_int({bits+1,...}, bits, y->GetLevel())`).
+// All three must be encrypted at a level at least as fresh as the point
+// they're consumed at (evalIntegerSquareRoot only ever drops them down, via
+// dropToLevel, and throws if the supplied level is too shallow) -- the
+// caller (see CryptoContextImpl<DCRTPoly>::SquareRootPrecomputations)
+// encrypts them at the top of the modulus chain (level 0) for exactly this
+// reason, same as DivIntegerPrecomputations does for its `one`.
+void evalIntegerSquareRoot(Ciphertext& out,
+  const Ciphertext& c,
+  int bits,
+  int zslots,
+  SquareRootIntegerLUTs& luts,
+  const Ciphertext& one,
+  const Ciphertext& sqrt2,
+  const Ciphertext& bitsPlusOne,
+  const std::vector<std::vector<double>>& bitLengthCoeffs,
+  const std::vector<std::vector<double>>& newtonSeedCoeffs,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
+
 void evalIntegerEqual(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int zslots, std::vector<double> coeffsSinc, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, int depth);
 void evalIntegerMult(Ciphertext& out,
   const Ciphertext& a,

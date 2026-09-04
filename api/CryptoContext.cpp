@@ -1297,6 +1297,154 @@ void CryptoContextImpl<DCRTPoly>::DivIntegerPrecomputations(const Ciphertext<DCR
 	std::cout << "Done preprocessing div_integer with " << bits << " bits! " << std::endl;
 }
 
+// ============================================================
+// bitPackMultiIntLSB
+//
+// GPU-side equivalent of CKKSController::encrypt_multi_int's encoding half:
+// bit-packs `value` LSB-first into `bits` slots, repeated identically across
+// every one of the `slots / (bits*bits/2)` groups (stride == bits*bits/2,
+// matching every other per-group layout in this codebase), zero-padded
+// within each group beyond `bits`. Encryption (the other half of
+// encrypt_multi_int) is left to the caller via MakeCKKSPackedPlaintext +
+// Encrypt, exactly like DivIntegerPrecomputations does for its `one` mask.
+// ============================================================
+static std::vector<double> bitPackMultiIntLSB(uint64_t value, int bits, int slots) {
+	const int stride = bits * bits / 2;
+	std::vector<double> out(slots, 0.0);
+	for (int base = 0; base + stride <= slots; base += stride) {
+		for (int i = 0; i < bits; ++i) {
+			out[base + i] = static_cast<double>((value >> i) & 1ULL);
+		}
+	}
+	return out;
+}
+
+void CryptoContextImpl<DCRTPoly>::SquareRootPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int zslots, const PublicKey<DCRTPoly>& pk, int noise,
+  const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& newtonSeedCoeffs) {
+	FIDESlib::CudaNvtxRange r("API");
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW("SquareRootPrecomputations has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
+	}
+
+	if (bits > 64) {
+		OPENFHE_THROW("SquareRootPrecomputations: bits > 64 cannot be represented in the uint64_t constants "
+					  "this function builds (ONE_FP = 1 << (bits-1) alone overflows for bits==128). The CPU's "
+					  "bits==128 path additionally hardcodes SQRT2_FP via a 128-bit literal "
+					  "(0xb504f333f9de6484597d89b3754abe9f) that has no uint64_t representation -- extend "
+					  "bitPackMultiIntLSB/this function to take a 128-bit (or two 64-bit half) value before "
+					  "calling this with bits==128.");
+	}
+
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
+
+	auto c_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
+
+	const uint64_t key = (static_cast<uint64_t>(bits) << 32) | static_cast<uint32_t>(zslots);
+
+	// ---- 1. Stash the raw LUT coefficient columns ----
+	// Mirrors DivIntegerPrecomputations' handling of bitLengthCoeffs: we do
+	// NOT run preprocessSquareRootLUTs here against `c` for the same reason
+	// -- its PSBatch precompute is tied to `c`'s exact level/NoiseLevel,
+	// which is not guaranteed to match what evalIntegerSquareRoot's internal
+	// `s`/`x` end up at. evalIntegerSquareRoot precomputes lazily, directly
+	// against `s`/`x` themselves; we just stash the raw columns here so it
+	// can.
+	this->square_root_coeffs_cache[key] = { bitLengthCoeffs, newtonSeedCoeffs };
+
+	// ---- 2. Constant ciphertexts: ONE_FP, SQRT2_FP, bits+1 ----
+	// Mirrors the CPU's three encrypt_multi_int(...) calls in
+	// square_root_integer (ONE_FP_CTXT, SQRT2_FP_CTXT, and the `bits+1`
+	// finalshift constant), bit-packed LSB-first and repeated identically
+	// across every group -- see bitPackMultiIntLSB.
+	//
+	// LEVEL: on the CPU these are all encrypted at `parity`/`y`'s level,
+	// itself the result of several binboot calls, i.e. a high, near-top
+	// level. Exactly like DivIntegerPrecomputations' `one`, these must be
+	// encrypted at the TOP of the modulus chain (level 0) so
+	// evalIntegerSquareRoot's dropToLevel calls (which only ever lower a
+	// ciphertext, never raise it) always have somewhere to drop to.
+	const uint64_t ONE_FP	 = uint64_t{ 1 } << (bits - 1);
+	const uint64_t SQRT2_FP = static_cast<uint64_t>(1.4142135623730951 * static_cast<double>(uint64_t{ 1 } << (bits - 1)));
+	const uint64_t BITS_PLUS_ONE = static_cast<uint64_t>(bits + 1);
+
+	auto makeConstCiphertext = [&](uint64_t value) -> Ciphertext<DCRTPoly> {
+		std::vector<double> packed = bitPackMultiIntLSB(value, bits, c_gpu->slots);
+		Plaintext pt				= this->MakeCKKSPackedPlaintext(packed, noise, 0, nullptr, c_gpu->slots);
+		return this->Encrypt(pt, pk);
+	};
+
+	this->square_root_constants_cache[key] = { makeConstCiphertext(ONE_FP), makeConstCiphertext(SQRT2_FP), makeConstCiphertext(BITS_PLUS_ONE) };
+
+	std::cout << "Done preprocessing square_root_integer with " << bits << " bits! " << std::endl;
+}
+
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSquareRootInteger(const Ciphertext<DCRTPoly>& ct, int bits, int zslots, const PublicKey<DCRTPoly>& pk) {
+	FIDESlib::CudaNvtxRange r("API");
+
+	// Fall back to CPU.
+	if (this->devices.empty()) {
+
+		OPENFHE_THROW("EvalSquareRootInteger has no CPU fallback with the OpenFHE "
+					  "library currently linked. Configure at least one GPU device, or "
+					  "link FIDESlib against lorenzorovida/openfhe-development-chebyshevSIMD "
+					  "to enable the CPU path.");
+	}
+
+	const uint64_t key = (static_cast<uint64_t>(bits) << 32) | static_cast<uint32_t>(zslots);
+
+	auto constsCached = this->square_root_constants_cache.find(key);
+	if (constsCached == this->square_root_constants_cache.end()) {
+		OPENFHE_THROW("EvalSquareRootInteger: no precomputation found for bits=" + std::to_string(bits) + ", zslots=" + std::to_string(zslots) +
+					  ". Call SquareRootPrecomputations(..., bits, zslots, ...) once before the first "
+					  "EvalSquareRootInteger call with this (bits, zslots) combination.");
+	}
+
+	auto coeffsCached = this->square_root_coeffs_cache.find(key);
+	if (coeffsCached == this->square_root_coeffs_cache.end()) {
+		OPENFHE_THROW("EvalSquareRootInteger: no LUT coefficients found for bits=" + std::to_string(bits) + ", zslots=" + std::to_string(zslots) +
+					  ". Call SquareRootPrecomputations(..., bits, zslots, ...) once before the first "
+					  "EvalSquareRootInteger call with this (bits, zslots) combination.");
+	}
+	const std::vector<std::vector<double>>& bitLengthCoeffs  = coeffsCached->second.first;
+	const std::vector<std::vector<double>>& newtonSeedCoeffs = coeffsCached->second.second;
+
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
+
+	Ciphertext<DCRTPoly>& one		   = constsCached->second[0];
+	Ciphertext<DCRTPoly>& sqrt2	   = constsCached->second[1];
+	Ciphertext<DCRTPoly>& bitsPlusOne = constsCached->second[2];
+	this->LoadCiphertext(one);
+	this->LoadCiphertext(sqrt2);
+	this->LoadCiphertext(bitsPlusOne);
+
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
+
+	auto res_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+
+	auto ct_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
+
+	auto one_gpu		 = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(one->gpu));
+	auto sqrt2_gpu	 = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(sqrt2->gpu));
+	auto bitsPlusOne_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(bitsPlusOne->gpu));
+
+	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
+	// `FIDESlib::CKKS::lutsSquareRoot` is a persistent cache: evalIntegerSquareRoot
+	// rebuilds its PSBatch precompute lazily, only when the internal s/idx
+	// ciphertexts' level/NoiseLevel no longer match what's cached (see the
+	// comment on evalIntegerSquareRoot in IntegerOperations.cuh) -- so
+	// bitLengthCoeffs/newtonSeedCoeffs must be forwarded on every call even
+	// though they're normally only actually used the first time.
+	FIDESlib::CKKS::evalIntegerSquareRoot(
+	  *res_gpu, *ct_gpu, bits, zslots, FIDESlib::CKKS::lutsSquareRoot, *one_gpu, *sqrt2_gpu, *bitsPlusOne_gpu, bitLengthCoeffs, newtonSeedCoeffs, context);
+
+	return result;
+}
+
 void CryptoContextImpl<DCRTPoly>::ProcessMultiplications(std::vector<std::vector<double>> coeffs, const Ciphertext<DCRTPoly>& c) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
