@@ -1684,6 +1684,9 @@ void evalIntegerSquareRoot(Ciphertext& out,
 	Ciphertext x(c.cc_);
 	x.copy(idx);
 
+	out.copy(x);
+	return;
+
 	if (!luts.newtonSeed.precomp || luts.newtonSeed.modelLevel != x.getLevel() || luts.newtonSeed.modelNoiseLevel != x.NoiseLevel) {
 		std::cout << "[evalIntegerSquareRoot] (re)building newtonSeed PSBatch precompute "
 					 "(cached level="
@@ -1765,9 +1768,10 @@ void evalIntegerSquareRoot(Ciphertext& out,
 	// --------------------------------------------------------
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
 
-	out.copy(x);
-	return;
-	
+	//TODO: here is already f'cked up
+	//out.copy(x);
+	//return;
+
 	for (int iter = 0; iter < newtonIters; ++iter) {
 
 		// x2 = mul_integer(x, x, bits, bits, zslots, zslots, true); x2 = rot(rot(x2, bits), -1)
