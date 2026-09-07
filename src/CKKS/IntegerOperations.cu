@@ -1946,6 +1946,11 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		// xpartial = mul_integer(x, term1_lo, bits, bits, zslots, zslots, true); xpartial = rot(xpartial, bits)
 		// xpartial = xpartial * {1 at low bits bits of each group}
 		// xpartial = add_integer(xpartial, term1_hi, bits, false)
+
+
+		out.copy(term1Lo);
+		return;
+		
 		Ciphertext xpartial(c.cc_);
 		{
 			Ciphertext xCopy(c.cc_);
@@ -1981,8 +1986,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		x.copy(xpartial);
 		binboot(x, x);
 
-		out.copy(x);
-		return;
+		
 
 		
 	}
