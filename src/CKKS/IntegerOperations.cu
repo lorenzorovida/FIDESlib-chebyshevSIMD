@@ -1871,6 +1871,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		Ciphertext inverted(c.cc_);
 		inverted.multScalar(mx2, 0, true);
 		inverted.addPt(makePerSlotPlaintext(cc, cc_, mask, inverted));
+		inverted.sub(mx2);
 
 		out.copy(inverted);
 		return;
