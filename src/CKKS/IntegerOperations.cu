@@ -1950,7 +1950,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 
 
 		//out.copy(term1Lo); Giusto
-		out.copy(term1Hi);
+		//out.copy(term1Hi); Giusto
 		return;
 
 		Ciphertext xpartial(c.cc_);
@@ -1968,6 +1968,9 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			rotated.rotate(xpartial, bits);
 			xpartial.copy(rotated);
 		}
+
+		out.copy(xpartial);
+		return;
 
 		std::fill(mask.begin(), mask.end(), 0.0);
 		for (int j = 0; j < zslots; ++j) {
