@@ -1875,9 +1875,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 
 		inverted.addPt(makePerSlotPlaintext(cc, cc_, mask, inverted));
 
-		out.copy(const3f);
-		return;
-		
+
 		Ciphertext term1(c.cc_);
 		{
 			Ciphertext const3fCopy(c.cc_);
