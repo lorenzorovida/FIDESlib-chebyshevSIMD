@@ -1578,9 +1578,6 @@ void evalIntegerSquareRoot(Ciphertext& out,
 	Ciphertext hatx(c.cc_);
 	inverseBitLength(hatx, c, bits, zslots, cc);
 
-	out.copy(hatx);
-	return;
-
 	// --------------------------------------------------------
 	// s = EvalChebyshevSeriesPSBatchRepeated(hatx, coeffs, -1, 1, repeat)
 	// s = binboot(s)
@@ -1768,6 +1765,9 @@ void evalIntegerSquareRoot(Ciphertext& out,
 	// --------------------------------------------------------
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
 
+	out.copy(x);
+	return;
+	
 	for (int iter = 0; iter < newtonIters; ++iter) {
 
 		// x2 = mul_integer(x, x, bits, bits, zslots, zslots, true); x2 = rot(rot(x2, bits), -1)
