@@ -1876,6 +1876,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		inverted.addPt(makePerSlotPlaintext(cc, cc_, mask, inverted));
 
 
+
 		Ciphertext term1(c.cc_);
 		{
 			Ciphertext const3fCopy(c.cc_);
@@ -1888,10 +1889,10 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			term1.copy(const3fCopy);
 		}
 
-		//QUA SEMBRA GIà SBAGLIATO :(
+		
 		binboot(term1, term1);
-		out.copy(term1);
-		return;
+		
+		//(15:53): GIUSTO term 1
 
 		// x, term1 := mask to low (bits+2) bits of each group
 		std::fill(mask.begin(), mask.end(), 0.0);
