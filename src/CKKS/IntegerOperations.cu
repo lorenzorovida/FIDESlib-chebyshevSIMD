@@ -1956,6 +1956,8 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		//out.copy(term1Lo); Giusto
 		//out.copy(term1Hi); Giusto
 
+		x.rescale();
+		term1Lo.rescale();
 
 		Ciphertext xpartial(c.cc_);
 		{
