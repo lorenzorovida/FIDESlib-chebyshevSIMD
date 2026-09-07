@@ -1699,10 +1699,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 
 	std::cout << "Prima del colpevole: " << x.getLevel() << ", " << x.NoiseLevel << std::endl;
 	evalChebyshevRepeatedApply(cc, x, luts.newtonSeed);
-
-
-	out.copy(x);
-	return;
+	
 	// --------------------------------------------------------
 	// Dead-slot masking, verbatim per bits (see square_root_integer's
 	// bits==16/32/64/128 blocks right after the PSBatch call). Slots at
