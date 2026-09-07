@@ -1868,7 +1868,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			}
 		}
 
-		std::copy << mask << std::endl;
+		
 
 		Ciphertext inverted(c.cc_);
 		inverted.multScalar(mx2, -1.0, true);
