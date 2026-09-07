@@ -1781,7 +1781,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		{
 			Ciphertext xLo(c.cc_);
 			xLo.copy(x);
-			xLo.dropToLevel(xLo.getLevel() - 1)
+			xLo.dropToLevel(xLo.getLevel() - 1);
 			
 			Ciphertext xHi(c.cc_);
 			xHi.copy(x);
