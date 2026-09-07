@@ -1872,14 +1872,12 @@ void evalIntegerSquareRoot(Ciphertext& out,
 
 		Ciphertext inverted(c.cc_);
 		inverted.multScalar(mx2, -1.0, true);
-		out.copy(inverted);
-		return;
-		
+
 		inverted.addPt(makePerSlotPlaintext(cc, cc_, mask, inverted));
 
-		out.copy(inverted);
+		out.copy(const3f);
 		return;
-
+		
 		Ciphertext term1(c.cc_);
 		{
 			Ciphertext const3fCopy(c.cc_);
