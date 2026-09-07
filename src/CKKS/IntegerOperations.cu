@@ -1696,6 +1696,8 @@ void evalIntegerSquareRoot(Ciphertext& out,
 	} else {
 		std::cout << "[evalIntegerSquareRoot] reusing cached newtonSeed PSBatch precompute" << std::endl;
 	}
+
+	std::cout << "Prima del colpevole: " << x.getLevel() << ", " << x.NoiseLevel << std::endl;
 	evalChebyshevRepeatedApply(cc, x, luts.newtonSeed);
 
 
