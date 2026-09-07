@@ -1684,8 +1684,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 	Ciphertext x(c.cc_);
 	x.copy(idx);
 
-	out.copy(x);
-	return;
+	//TODO: qua ok
 
 	if (!luts.newtonSeed.precomp || luts.newtonSeed.modelLevel != x.getLevel() || luts.newtonSeed.modelNoiseLevel != x.NoiseLevel) {
 		std::cout << "[evalIntegerSquareRoot] (re)building newtonSeed PSBatch precompute "
@@ -1699,6 +1698,9 @@ void evalIntegerSquareRoot(Ciphertext& out,
 	}
 	evalChebyshevRepeatedApply(cc, x, luts.newtonSeed);
 
+
+	out.copy(x);
+	return;
 	// --------------------------------------------------------
 	// Dead-slot masking, verbatim per bits (see square_root_integer's
 	// bits==16/32/64/128 blocks right after the PSBatch call). Slots at
