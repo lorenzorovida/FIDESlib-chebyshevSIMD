@@ -1956,8 +1956,6 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		//out.copy(term1Lo); Giusto
 		//out.copy(term1Hi); Giusto
 
-
-
 		binboot(x, x);
 		binboot(term1Lo, term1Lo);
 
@@ -1980,9 +1978,6 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			xpartial.copy(rotated);
 		}
 
-		//X PARTIAL é SPUTTANATO 
-		out.copy(xpartial);
-		return;
 
 		std::fill(mask.begin(), mask.end(), 0.0);
 		for (int j = 0; j < zslots; ++j) {
