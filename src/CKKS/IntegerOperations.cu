@@ -1981,6 +1981,9 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		x.copy(xpartial);
 		binboot(x, x);
 
+		out.copy(x);
+		return;
+
 		
 	}
 
