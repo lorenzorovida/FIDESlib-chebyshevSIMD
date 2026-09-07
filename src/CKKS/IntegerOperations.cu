@@ -1770,8 +1770,9 @@ void evalIntegerSquareRoot(Ciphertext& out,
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
 
 
-	out.copy(x);
-	return;
+	//QUESTO È al 100%
+	//out.copy(x);
+	//return;
 
 	for (int iter = 0; iter < newtonIters; ++iter) {
 
@@ -1784,6 +1785,8 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			Ciphertext xHi(c.cc_);
 			xHi.copy(xLo);
 			evalIntegerMult(x2, xLo, xHi, bits, bits, zslots, zslots, true, cc);
+			out.copy(x2);
+			return;
 		}
 		
 		{
