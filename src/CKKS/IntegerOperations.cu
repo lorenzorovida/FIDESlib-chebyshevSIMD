@@ -1770,6 +1770,9 @@ void evalIntegerSquareRoot(Ciphertext& out,
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
 
 
+	out.copy(x);
+	return;
+
 	for (int iter = 0; iter < newtonIters; ++iter) {
 
 		// x2 = mul_integer(x, x, bits, bits, zslots, zslots, true); x2 = rot(rot(x2, bits), -1)
@@ -1782,8 +1785,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			xHi.copy(xLo);
 			evalIntegerMult(x2, xLo, xHi, bits, bits, zslots, zslots, true, cc);
 		}
-		out.copy(x2);
-		return;
+		
 		{
 			Ciphertext rotated(c.cc_);
 			rotated.rotate(x2, bits);
