@@ -1951,7 +1951,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 
 		//out.copy(term1Lo); Giusto
 		//out.copy(term1Hi); Giusto
-		return;
+
 
 		Ciphertext xpartial(c.cc_);
 		{
