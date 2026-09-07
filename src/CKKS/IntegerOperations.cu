@@ -1872,6 +1872,9 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		inverted.multScalar(mx2, -1.0, true);
 		inverted.addPt(makePerSlotPlaintext(cc, cc_, mask, inverted));
 
+		out.copy(inverted);
+		return;
+
 		Ciphertext term1(c.cc_);
 		{
 			Ciphertext const3fCopy(c.cc_);
@@ -1883,6 +1886,8 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			evalIntegerAdd(const3fCopy, invertedCopy, bits * 2);
 			term1.copy(const3fCopy);
 		}
+
+		//QUA SEMBRA GIà SBAGLIATO :(
 		binboot(term1, term1);
 		out.copy(term1);
 		return;
