@@ -1788,8 +1788,6 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			xHi.dropToLevel(xHi.getLevel() - 1);
 
 			evalIntegerMult(x2, xLo, xHi, bits, bits, zslots, zslots, true, cc);
-			out.copy(x2);
-			return;
 		}
 		
 		{
@@ -1968,6 +1966,8 @@ void evalIntegerSquareRoot(Ciphertext& out,
 
 		x.copy(xpartial);
 		binboot(x, x);
+
+		out.copy(x);
 	}
 
 	// --------------------------------------------------------
