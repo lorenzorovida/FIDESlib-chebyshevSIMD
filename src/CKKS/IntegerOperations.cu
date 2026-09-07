@@ -1789,6 +1789,8 @@ void evalIntegerSquareRoot(Ciphertext& out,
 
 			evalIntegerMult(x2, xLo, xHi, bits, bits, zslots, zslots, true, cc);
 		}
+
+		//TODO x2 è giusto
 		
 		{
 			Ciphertext rotated(c.cc_);
@@ -1967,7 +1969,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		x.copy(xpartial);
 		binboot(x, x);
 
-		out.copy(x);
+		
 	}
 
 	// --------------------------------------------------------
