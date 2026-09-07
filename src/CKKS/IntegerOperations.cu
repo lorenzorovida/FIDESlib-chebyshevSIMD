@@ -1810,6 +1810,9 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			x2Copy.copy(x2);
 			x2Copy.dropToLevel(hcCopy.getLevel());
 			evalIntegerMult(mx2, hcCopy, x2Copy, bits, bits, zslots, zslots, true, cc);
+
+			out.copy(mx2);
+			return;
 		}
 		{
 			Ciphertext rotated(c.cc_);
