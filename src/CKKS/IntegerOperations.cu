@@ -1578,6 +1578,9 @@ void evalIntegerSquareRoot(Ciphertext& out,
 	Ciphertext hatx(c.cc_);
 	inverseBitLength(hatx, c, bits, zslots, cc);
 
+	out.copy(hatx);
+	return;
+
 	// --------------------------------------------------------
 	// s = EvalChebyshevSeriesPSBatchRepeated(hatx, coeffs, -1, 1, repeat)
 	// s = binboot(s)
