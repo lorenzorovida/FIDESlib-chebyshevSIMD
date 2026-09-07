@@ -1811,14 +1811,14 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			x2Copy.dropToLevel(hcCopy.getLevel());
 			evalIntegerMult(mx2, hcCopy, x2Copy, bits, bits, zslots, zslots, true, cc);
 
-			out.copy(mx2);
-			return;
 		}
 		{
 			Ciphertext rotated(c.cc_);
 			rotated.rotate(mx2, bits);
 			mx2.copy(rotated);
 		}
+
+		// (14:09) MX2 is correct
 
 		// const3f = encrypt_multi_int({3,...}, bits, mx2->GetLevel())
 		// const3f = rot(rot(const3f, -bits), 1)
@@ -1884,6 +1884,8 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			term1.copy(const3fCopy);
 		}
 		binboot(term1, term1);
+		out.copy(term1);
+		return;
 
 		// x, term1 := mask to low (bits+2) bits of each group
 		std::fill(mask.begin(), mask.end(), 0.0);
