@@ -1904,6 +1904,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		x.multPt(makePerSlotPlaintext(cc, cc_, mask, x));
 		term1.multPt(makePerSlotPlaintext(cc, cc_, mask, term1));
 
+
 		// term1_lo = term1 * {1 at low bits bits of each group}
 		Ciphertext term1Lo(c.cc_);
 		{
@@ -1948,9 +1949,10 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		// xpartial = add_integer(xpartial, term1_hi, bits, false)
 
 
-		out.copy(term1Lo);
+		//out.copy(term1Lo); Giusto
+		out.copy(term1Hi);
 		return;
-		
+
 		Ciphertext xpartial(c.cc_);
 		{
 			Ciphertext xCopy(c.cc_);
