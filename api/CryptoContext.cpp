@@ -1330,8 +1330,8 @@ void CryptoContextImpl<DCRTPoly>::SquareRootPrecomputations(const Ciphertext<DCR
 					  "to enable the CPU path.");
 	}
 
-	if (bits > 64) {
-		OPENFHE_THROW("SquareRootPrecomputations: bits > 64 cannot be represented in the uint64_t constants "
+	if (bits > 128) {
+		OPENFHE_THROW("SquareRootPrecomputations: bits > 128 cannot be represented in the uint64_t constants "
 					  "this function builds (ONE_FP = 1 << (bits-1) alone overflows for bits==128). The CPU's "
 					  "bits==128 path additionally hardcodes SQRT2_FP via a 128-bit literal "
 					  "(0xb504f333f9de6484597d89b3754abe9f) that has no uint64_t representation -- extend "
