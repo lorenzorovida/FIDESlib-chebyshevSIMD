@@ -1308,7 +1308,7 @@ void CryptoContextImpl<DCRTPoly>::DivIntegerPrecomputations(const Ciphertext<DCR
 // encrypt_multi_int) is left to the caller via MakeCKKSPackedPlaintext +
 // Encrypt, exactly like DivIntegerPrecomputations does for its `one` mask.
 // ============================================================
-static std::vector<double> bitPackMultiIntLSB(uint64_t value, int bits, int slots) {
+static std::vector<double> bitPackMultiIntLSB(__uint128_t value, int bits, int slots) {
 	const int stride = bits * bits / 2;
 	std::vector<double> out(slots, 0.0);
 	for (int base = 0; base + stride <= slots; base += stride) {
@@ -1367,11 +1367,11 @@ void CryptoContextImpl<DCRTPoly>::SquareRootPrecomputations(const Ciphertext<DCR
 	// encrypted at the TOP of the modulus chain (level 0) so
 	// evalIntegerSquareRoot's dropToLevel calls (which only ever lower a
 	// ciphertext, never raise it) always have somewhere to drop to.
-	const uint64_t ONE_FP	 = uint64_t{ 1 } << (bits - 1);
-	const uint64_t SQRT2_FP = static_cast<uint64_t>(1.4142135623730951 * static_cast<double>(uint64_t{ 1 } << (bits - 1)));
-	const uint64_t BITS_PLUS_ONE = static_cast<uint64_t>(bits + 1);
+	const __uint128_t ONE_FP	 = __uint128_t{ 1 } << (bits - 1);
+	const __uint128_t SQRT2_FP = static_cast<__uint128_t>(1.4142135623730951 * static_cast<double>(__uint128_t{ 1 } << (bits - 1)));
+	const __uint128_t BITS_PLUS_ONE = static_cast<__uint128_t>(bits + 1);
 
-	auto makeConstCiphertext = [&](uint64_t value) -> Ciphertext<DCRTPoly> {
+	auto makeConstCiphertext = [&](__uint128_t value) -> Ciphertext<DCRTPoly> {
 		std::vector<double> packed = bitPackMultiIntLSB(value, bits, c_gpu->slots);
 		Plaintext pt				= this->MakeCKKSPackedPlaintext(packed, noise, 0, nullptr, c_gpu->slots);
 		return this->Encrypt(pt, pk);
