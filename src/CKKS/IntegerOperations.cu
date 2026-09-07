@@ -1868,10 +1868,11 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			}
 		}
 
+		std::copy << mask << std::endl;
+
 		Ciphertext inverted(c.cc_);
-		inverted.multScalar(mx2, 0, true);
+		inverted.multScalar(mx2, -1.0, true);
 		inverted.addPt(makePerSlotPlaintext(cc, cc_, mask, inverted));
-		inverted.sub(mx2);
 
 		out.copy(inverted);
 		return;
