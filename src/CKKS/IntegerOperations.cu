@@ -1767,6 +1767,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 	//       x = binboot(xpartial)
 	// --------------------------------------------------------
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
+	newtonIters -= 1; // Sqrt takes n/2 bits
 
 
 	//QUESTO È al 100%
