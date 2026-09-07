@@ -1809,6 +1809,10 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			Ciphertext x2Copy(c.cc_);
 			x2Copy.copy(x2);
 			x2Copy.dropToLevel(hcCopy.getLevel());
+
+			std::cout << hcCopy.getLevel() << ", " << hcCopy.NoiseLevel << " -- " <<  x2Copy.getLevel() << ", " << x2Copy.NoiseLevel << std::endl;
+
+
 			evalIntegerMult(mx2, hcCopy, x2Copy, bits, bits, zslots, zslots, true, cc);
 
 		}
@@ -1955,12 +1959,15 @@ void evalIntegerSquareRoot(Ciphertext& out,
 
 		Ciphertext xpartial(c.cc_);
 		{
+			
 			Ciphertext xCopy(c.cc_);
 			xCopy.copy(x);
 			xCopy.dropToLevel(std::min(xCopy.getLevel(), term1Lo.getLevel()) - 1);
 			Ciphertext term1LoCopy(c.cc_);
 			term1LoCopy.copy(term1Lo);
 			term1LoCopy.dropToLevel(xCopy.getLevel());
+
+			std::cout << xCopy.getLevel() << ", " << xCopy.NoiseLevel << " -- " <<  term1LoCopy.getLevel() << ", " << term1LoCopy.NoiseLevel << std::endl;
 			evalIntegerMult(xpartial, xCopy, term1LoCopy, bits, bits, zslots, zslots, true, cc);
 		}
 		{
@@ -1969,6 +1976,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			xpartial.copy(rotated);
 		}
 
+		//X PARTIAL é SPUTTANATO 
 		out.copy(xpartial);
 		return;
 
