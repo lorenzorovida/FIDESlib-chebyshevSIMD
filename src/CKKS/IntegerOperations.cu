@@ -1697,7 +1697,6 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		std::cout << "[evalIntegerSquareRoot] reusing cached newtonSeed PSBatch precompute" << std::endl;
 	}
 
-	std::cout << "Prima del colpevole: " << x.getLevel() << ", " << x.NoiseLevel << std::endl;
 	evalChebyshevRepeatedApply(cc, x, luts.newtonSeed);
 
 	// --------------------------------------------------------
@@ -1809,9 +1808,6 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			Ciphertext x2Copy(c.cc_);
 			x2Copy.copy(x2);
 			x2Copy.dropToLevel(hcCopy.getLevel());
-
-			std::cout << hcCopy.getLevel() << ", " << hcCopy.NoiseLevel << " -- " <<  x2Copy.getLevel() << ", " << x2Copy.NoiseLevel << std::endl;
-
 
 			evalIntegerMult(mx2, hcCopy, x2Copy, bits, bits, zslots, zslots, true, cc);
 
@@ -1956,6 +1952,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		//out.copy(term1Lo); Giusto
 		//out.copy(term1Hi); Giusto
 
+		//TODO these have been added but in the CPU veriosn are not here....
 		binboot(x, x);
 		binboot(term1Lo, term1Lo);
 
@@ -1969,7 +1966,6 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			term1LoCopy.copy(term1Lo);
 			term1LoCopy.dropToLevel(xCopy.getLevel());
 
-			std::cout << xCopy.getLevel() << ", " << xCopy.NoiseLevel << " -- " <<  term1LoCopy.getLevel() << ", " << term1LoCopy.NoiseLevel << std::endl;
 			evalIntegerMult(xpartial, xCopy, term1LoCopy, bits, bits, zslots, zslots, true, cc);
 		}
 		{
@@ -1978,6 +1974,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			xpartial.copy(rotated);
 		}
 
+		//(17:04) X partial è giusto dopo i binboot
 
 		std::fill(mask.begin(), mask.end(), 0.0);
 		for (int j = 0; j < zslots; ++j) {
