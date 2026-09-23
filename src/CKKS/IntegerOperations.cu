@@ -1249,7 +1249,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		preprocessChebyshevRepeated(luts.bitLengthDecompose, cc, s, bitLengthCoeffs, -1, 1);
 		std::cout << "[evalIntegerDivision] done " << std::endl;
 	} else {
-		std::cout << "[evalIntegerDivision] reusing cached bitLengthDecompose PSBatch precompute" << std::endl;
+		//std::cout << "[evalIntegerDivision] reusing cached bitLengthDecompose PSBatch precompute" << std::endl;
 	}
 	evalChebyshevRepeatedApply(cc, s, luts.bitLengthDecompose);
 	binboot(s, s);
@@ -1361,10 +1361,13 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		preprocessChebyshevRepeated(luts.reciprocalHint, cc, x, reciprocalCoeffs, 0, 256);
 		std::cout << "[evalIntegerDivision] done " << std::endl;
 	} else {
-		std::cout << "[evalIntegerDivision] reusing cached reciprocalHint PSBatch precompute" << std::endl;
+		//std::cout << "[evalIntegerDivision] reusing cached reciprocalHint PSBatch precompute" << std::endl;
 	}
 	evalChebyshevRepeatedApply(cc, x, luts.reciprocalHint);
 	binboot(x, x);
+
+	out.copy(x);
+	return;
 
 	
 	// --------------------------------------------------------
