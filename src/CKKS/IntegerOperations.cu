@@ -1395,8 +1395,9 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
 
-		out.copy(term);
-		return;
+		//16:05 - è ok???
+		//out.copy(term);
+		//return;
 
 		// term += broadcast(bit `bits` of x) * rot(den_norm, -bits)
 		std::fill(mask.begin(), mask.end(), 0.0);
@@ -1452,6 +1453,9 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			evalIntegerAdd(term, lastBit, bits);
 			binboot(term, term);
 		}
+
+		out.copy(term);
+		return;
 
 		// term = complement(term) over the low (bits*2+1) bits of each group
 		std::fill(mask.begin(), mask.end(), 0.0);
