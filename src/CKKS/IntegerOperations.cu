@@ -1390,8 +1390,8 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 
 		Ciphertext term(num.cc_);
 
-		x.dropToLevel(x.getLevel() - 1);
-		denNorm.dropToLevel(denNorm.getLevel() - 1);
+		//x.dropToLevel(x.getLevel() - 1);
+		//denNorm.dropToLevel(denNorm.getLevel() - 1);
 
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
 
@@ -1519,7 +1519,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			Ciphertext term2(num.cc_);
 			term2.rotate(term, 2);
 
-			term2.dropToLevel(term2.getLevel() - 1);
+			//term2.dropToLevel(term2.getLevel() - 1);
 
 			Ciphertext newX(num.cc_);
 			evalIntegerMult(newX, x2, term2, bits, bits, zslots, zslots, true, cc);
