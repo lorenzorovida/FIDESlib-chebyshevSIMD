@@ -1385,9 +1385,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	// --------------------------------------------------------
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
 
-	out.copy(denNorm);
-	return;
-	
+
 	for (int iter = 0; iter < newtonIters - 1; ++iter) {
 
 		Ciphertext term(num.cc_);
@@ -1398,6 +1396,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
 
 		out.copy(term);
+		return;
 
 		// term += broadcast(bit `bits` of x) * rot(den_norm, -bits)
 		std::fill(mask.begin(), mask.end(), 0.0);
