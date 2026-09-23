@@ -1481,8 +1481,8 @@ std::string u128ToString(__uint128_t v) {
 void CryptoContextImpl<DCRTPoly>::PlainDivisionPrecomputations(const Ciphertext<DCRTPoly>& c,
   int bits,
   int zslots,
-  const PublicKey<DCRTPoly>& pk,
-  int noise,
+  const PublicKey<DCRTPoly>& /*pk: non piu' usata*/,
+  int /*noise: non piu' usato*/,
   const std::vector<__uint128_t>& divisors) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
@@ -1496,15 +1496,11 @@ void CryptoContextImpl<DCRTPoly>::PlainDivisionPrecomputations(const Ciphertext<
 		int bitLength			   = 0;
 		std::vector<double> packed = FIDESlib::CKKS::integerReciprocalMask(den, bits, zslots, c_gpu->slots, bitLength);
 
-		// Cifrato DIRETTAMENTE al livello degli operandi di evalIntegerMult
-		// (OpenFHE kIntegerOpsOpenFHELevel = 12), esattamente come gli input
-		// dei test di EvalMultInteger e come il CPU (encrypt(encode(r,
-		// num->GetLevel()))). Cifrarlo al livello 0 e abbassarlo dopo con
-		// dropToLevel(..., false) fa uscire la moltiplicazione a zero.
-		Plaintext pt = this->MakeCKKSPackedPlaintext(packed, noise, FIDESlib::CKKS::kIntegerOpsOpenFHELevel, nullptr, c_gpu->slots);
-		Ciphertext<DCRTPoly> ct = this->Encrypt(pt, pk);
-
-		this->plain_division_cache[plainDivKey(bits, zslots, den)] = PlainDivisorEntry{ ct, bitLength };
+		// Solo i bit del reciproco: la ciphertext viene costruita sul device,
+		// dentro evalIntegerDivisionByPlain, a partire dal numeratore stesso
+		// ((num - num) + plaintext), cosi' ha lo stesso identico livello,
+		// scala e NoiseLevel di num.
+		this->plain_division_cache[plainDivKey(bits, zslots, den)] = PlainDivisorEntry{ std::move(packed), bitLength };
 	}
 
 	std::cout << "Done preprocessing plaintext division with " << bits << " bits (" << divisors.size() << " divisors)" << std::endl;
@@ -1523,17 +1519,15 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalDivIntegerPlain(const Ciph
 	}
 
 	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
-	this->LoadCiphertext(it->second.reciprocal);
 
 	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
 
-	auto res_gpu   = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
-	auto ct_gpu	   = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
-	auto recip_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(it->second.reciprocal->gpu));
+	auto res_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto ct_gpu	 = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
 
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
-	FIDESlib::CKKS::evalIntegerDivisionByPlain(*res_gpu, *ct_gpu, *recip_gpu, it->second.bitLength, bits, zslots, context);
+	FIDESlib::CKKS::evalIntegerDivisionByPlain(*res_gpu, *ct_gpu, it->second.reciprocalMask, it->second.bitLength, bits, zslots, context);
 
 	return result;
 }
@@ -1630,9 +1624,6 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalUniswapV3Example(const Uni
 		this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(*c));
 	}
 	this->LoadCiphertext(oneIt->second);
-	this->LoadCiphertext(d1.reciprocal);
-	this->LoadCiphertext(d2.reciprocal);
-	this->LoadCiphertext(dFe.reciprocal);
 
 	auto gpu = [&](const Ciphertext<DCRTPoly>& c) {
 		return std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
@@ -1645,9 +1636,6 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalUniswapV3Example(const Uni
 	auto mFx	 = gpu(inputs.m_fx);
 	auto gDen	 = gpu(inputs.g_den);
 	auto one	 = gpu(oneIt->second);
-	auto r1		 = gpu(d1.reciprocal);
-	auto r2		 = gpu(d2.reciprocal);
-	auto rFee	 = gpu(dFe.reciprocal);
 
 	FIDESlib::CKKS::UniswapV3GPUInputs gin;
 	gin.g_num_inv_L_fx = gNumInv.get();
@@ -1663,9 +1651,9 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalUniswapV3Example(const Uni
 	k.shiftDown			  = kUniswapV3ShiftDown;
 	k.shiftUp			  = kUniswapV3ShiftUp;
 	k.addBits			  = kUniswapV3AddBits;
-	k.divPrec1			  = { r1.get(), d1.bitLength };
-	k.divPrec2			  = { r2.get(), d2.bitLength };
-	k.divFee			  = { rFee.get(), dFe.bitLength };
+	k.divPrec1			  = { &d1.reciprocalMask, d1.bitLength };
+	k.divPrec2			  = { &d2.reciprocalMask, d2.bitLength };
+	k.divFee			  = { &dFe.reciprocalMask, dFe.bitLength };
 	k.divOne			  = one.get();
 	k.divBitLengthCoeffs  = &coeffsIt->second.first;
 	k.divReciprocalCoeffs = &coeffsIt->second.second;

@@ -305,8 +305,10 @@ template <> class CryptoContextImpl<DCRTPoly> {
 
 	// ---- Divisione per costante in chiaro (CPU: div_integer(Ctxt, uint128_t, bits, zslots)) ----
 
-	/// @brief Cifra una volta (con `pk`, al livello OpenFHE 12 degli operandi interi) il reciproco di ciascun divisore e lo
-	/// mette in cache per (bits, zslots, den). `c` serve solo come modello (slots).
+	/// @brief Calcola una volta i bit del reciproco di ciascun divisore e li mette in cache per
+	/// (bits, zslots, den). `c` serve solo come modello (slots). `pk` e `noise` non sono piu'
+	/// usati (il reciproco viene costruito sul device a partire dal numeratore, nello stesso
+	/// stato di livello/scala): restano nella firma per compatibilita'.
 	/// Rotation keys necessarie per ogni den: -bits e bits + bit_width(den).
 	void PlainDivisionPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int zslots, const PublicKey<DCRTPoly>& pk, int noise, const std::vector<__uint128_t>& divisors);
 	/// @brief floor(ct / den) su interi a `bits` bit. Richiede PlainDivisionPrecomputations.
@@ -421,9 +423,9 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	/// matches -- see evalIntegerSquareRoot).
 	std::unordered_map<uint64_t, std::pair<std::vector<std::vector<double>>, std::vector<std::vector<double>>>> square_root_coeffs_cache;
 
-	/// @brief Reciproco cifrato di un divisore in chiaro + bit_width(den).
+	/// @brief Bit del reciproco di un divisore in chiaro + bit_width(den).
 	struct PlainDivisorEntry {
-		Ciphertext<DCRTPoly> reciprocal;
+		std::vector<double> reciprocalMask; // bit di R_low, lunghezza = slots
 		int bitLength = 0;
 	};
 

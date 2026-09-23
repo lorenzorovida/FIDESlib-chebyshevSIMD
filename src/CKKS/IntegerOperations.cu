@@ -2871,14 +2871,19 @@ std::vector<double> integerReciprocalMask(__uint128_t den, int bits, int zslots,
 //   result = rot(result, bits + bit_width(den));
 //   result = mult(result, mask_low_bits);
 //
-// `reciprocal` e' la cifratura di integerReciprocalMask(den, ...), fatta una
-// volta da PlainDivisionPrecomputations DIRETTAMENTE al livello OpenFHE
-// kIntegerOpsOpenFHELevel (12), come il CPU la cifra al livello di num e come
-// sono cifrati gli input dei test di EvalMultInteger. NON va cifrata al
-// livello 0 e poi abbassata con dropToLevel(..., false): in evalIntegerMult
-// quella combinazione produce un operando che vale zero (il risultato
-// degenera in floor(num / 2^L)). Qui passa da prepareIntegerOperand come
-// `num`: no-op se e' gia' al livello giusto.
+// Il reciproco NON e' una ciphertext cifrata a parte: e' costruito qui da
+// numOp stesso come
+//
+//   x = (numOp - numOp) + plaintext(R_low)
+//
+// cioe' una cifratura "banale" con esattamente lo stesso livello, la stessa
+// scala e lo stesso NoiseLevel di numOp (stesso schema di const3f in
+// evalIntegerSquareRoot). Il moltiplicatore a 4 bit e' una LUT molto sensibile
+// alla scala: se i due operandi di evalIntegerMult non sono nello stesso stato
+// il prodotto viene corrotto slot per slot. Con due cifrature separate
+// (reciproco al livello 0 poi abbassato, oppure cifrato al livello 12 mentre
+// num veniva da un altro livello) il prodotto usciva nullo o spazzatura.
+// `reciprocalMask` = integerReciprocalMask(den, bits, zslots, slots, L).
 // `num` puo' arrivare fresco o direttamente da un binboot.
 //
 // La maschera finale usa rescale=true: l'uscita esce al livello OpenFHE 12
@@ -2889,7 +2894,7 @@ std::vector<double> integerReciprocalMask(__uint128_t den, int bits, int zslots,
 // ============================================================
 void evalIntegerDivisionByPlain(Ciphertext& out,
   const Ciphertext& num,
-  const Ciphertext& reciprocal,
+  const std::vector<double>& reciprocalMask,
   int denBitLength,
   int bits,
   int zslots,
@@ -2898,11 +2903,20 @@ void evalIntegerDivisionByPlain(Ciphertext& out,
 	FIDESlib::CKKS::Context& cc_ = num.cc_;
 	const int stride			 = bits * bits / 2;
 
+	if (static_cast<int>(reciprocalMask.size()) != static_cast<int>(num.slots)) {
+		throw std::invalid_argument("evalIntegerDivisionByPlain: reciprocalMask size (" + std::to_string(reciprocalMask.size()) +
+									") != num.slots (" + std::to_string(static_cast<int>(num.slots)) +
+									"); rerun PlainDivisionPrecomputations with a ciphertext of the same shape");
+	}
+
 	Ciphertext numOp(cc_);
 	prepareIntegerOperand(numOp, num);
 
+	// x = 0 + R_low, nello stesso identico stato di numOp
 	Ciphertext x(cc_);
-	prepareIntegerOperand(x, reciprocal);
+	x.copy(numOp);
+	x.sub(numOp);
+	x.addPt(makePerSlotPlaintext(cc, cc_, reciprocalMask, x));
 
 	// result = mul_integer(num, x, bits, bits, 1, 1, true)
 	Ciphertext result(cc_);
@@ -2972,7 +2986,7 @@ void evalUniswapV3(Ciphertext& out,
 	if (!in.g_num_inv_L_fx || !in.user_amount || !in.inv_sqrt_P0_fx || !in.numerator || !in.m_fx || !in.g_den) {
 		throw std::invalid_argument("evalUniswapV3: all six input ciphertexts must be provided");
 	}
-	if (!k.divPrec1.reciprocal || !k.divPrec2.reciprocal || !k.divFee.reciprocal) {
+	if (!k.divPrec1.reciprocalMask || !k.divPrec2.reciprocalMask || !k.divFee.reciprocalMask) {
 		throw std::invalid_argument("evalUniswapV3: missing plaintext-divisor reciprocals (PlainDivisionPrecomputations)");
 	}
 	if (!k.divOne || !k.divBitLengthCoeffs || !k.divReciprocalCoeffs) {
@@ -3018,8 +3032,8 @@ void evalUniswapV3(Ciphertext& out,
 	// --------------------------------------------------------
 	{
 		Ciphertext q(cc_);
-		evalIntegerDivisionByPlain(q, term2, *k.divPrec1.reciprocal, k.divPrec1.bitLength, bits, zslots, cc);
-		evalIntegerDivisionByPlain(term2, q, *k.divPrec2.reciprocal, k.divPrec2.bitLength, bits, zslots, cc);
+		evalIntegerDivisionByPlain(q, term2, *k.divPrec1.reciprocalMask, k.divPrec1.bitLength, bits, zslots, cc);
+		evalIntegerDivisionByPlain(term2, q, *k.divPrec2.reciprocalMask, k.divPrec2.bitLength, bits, zslots, cc);
 	}
 	if (trace && trace->term2_fx) {
 		trace->term2_fx->copy(term2);
@@ -3091,7 +3105,7 @@ void evalUniswapV3(Ciphertext& out,
 		evalIntegerMult(amount, a, b, bits, bits, zslots, zslots, false, cc);
 	}
 
-	evalIntegerDivisionByPlain(out, amount, *k.divFee.reciprocal, k.divFee.bitLength, bits, zslots, cc);
+	evalIntegerDivisionByPlain(out, amount, *k.divFee.reciprocalMask, k.divFee.bitLength, bits, zslots, cc);
 }
 
 std::vector<double> rotateMask(const std::vector<double>& mask, int shift) {
