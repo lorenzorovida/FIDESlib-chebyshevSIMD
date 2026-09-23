@@ -1366,9 +1366,10 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	evalChebyshevRepeatedApply(cc, x, luts.reciprocalHint);
 	binboot(x, x);
 
-	out.copy(x);
-	return;
 
+	//23 sept, 14:22, 128-bits here is correct
+	//out.copy(x);
+	//return;
 	
 	// --------------------------------------------------------
 	// Newton-Raphson refinement loop:
@@ -1531,6 +1532,9 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		}
 
 	}
+
+	out.copy(x);
+	return;
 
 
 	// --------------------------------------------------------
