@@ -1496,9 +1496,12 @@ void CryptoContextImpl<DCRTPoly>::PlainDivisionPrecomputations(const Ciphertext<
 		int bitLength			   = 0;
 		std::vector<double> packed = FIDESlib::CKKS::integerReciprocalMask(den, bits, zslots, c_gpu->slots, bitLength);
 
-		// Livello 0 (cima della catena), come `one` in DivIntegerPrecomputations:
-		// evalIntegerDivisionByPlain lo abbassa al livello di num a ogni uso.
-		Plaintext pt			= this->MakeCKKSPackedPlaintext(packed, noise, 0, nullptr, c_gpu->slots);
+		// Cifrato DIRETTAMENTE al livello degli operandi di evalIntegerMult
+		// (OpenFHE kIntegerOpsOpenFHELevel = 12), esattamente come gli input
+		// dei test di EvalMultInteger e come il CPU (encrypt(encode(r,
+		// num->GetLevel()))). Cifrarlo al livello 0 e abbassarlo dopo con
+		// dropToLevel(..., false) fa uscire la moltiplicazione a zero.
+		Plaintext pt = this->MakeCKKSPackedPlaintext(packed, noise, FIDESlib::CKKS::kIntegerOpsOpenFHELevel, nullptr, c_gpu->slots);
 		Ciphertext<DCRTPoly> ct = this->Encrypt(pt, pk);
 
 		this->plain_division_cache[plainDivKey(bits, zslots, den)] = PlainDivisorEntry{ ct, bitLength };

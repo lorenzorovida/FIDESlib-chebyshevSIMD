@@ -305,7 +305,7 @@ template <> class CryptoContextImpl<DCRTPoly> {
 
 	// ---- Divisione per costante in chiaro (CPU: div_integer(Ctxt, uint128_t, bits, zslots)) ----
 
-	/// @brief Cifra una volta (livello 0, con `pk`) il reciproco di ciascun divisore e lo
+	/// @brief Cifra una volta (con `pk`, al livello OpenFHE 12 degli operandi interi) il reciproco di ciascun divisore e lo
 	/// mette in cache per (bits, zslots, den). `c` serve solo come modello (slots).
 	/// Rotation keys necessarie per ogni den: -bits e bits + bit_width(den).
 	void PlainDivisionPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int zslots, const PublicKey<DCRTPoly>& pk, int noise, const std::vector<__uint128_t>& divisors);

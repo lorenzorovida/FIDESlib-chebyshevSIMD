@@ -228,7 +228,8 @@ int bitWidthU128(__uint128_t v);
 std::vector<double> integerReciprocalMask(__uint128_t den, int bits, int zslots, int slots, int& denBitLength);
 
 // `reciprocal`: cifratura di integerReciprocalMask(den, ...) fatta al livello
-// 0 (vedi CryptoContextImpl::PlainDivisionPrecomputations). `num` puo' essere
+// OpenFHE kIntegerOpsOpenFHELevel, cioe' allo stesso livello degli operandi di
+// evalIntegerMult (vedi CryptoContextImpl::PlainDivisionPrecomputations). `num` puo' essere
 // fresco o uscire da un binboot. L'uscita e' al livello OpenFHE 12 con
 // NoiseLevel 1, quindi riutilizzabile direttamente in evalIntegerMult.
 // Rotation keys necessarie: -bits e bits + denBitLength.

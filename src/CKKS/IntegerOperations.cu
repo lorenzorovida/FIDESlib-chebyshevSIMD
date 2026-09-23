@@ -2871,11 +2871,15 @@ std::vector<double> integerReciprocalMask(__uint128_t den, int bits, int zslots,
 //   result = rot(result, bits + bit_width(den));
 //   result = mult(result, mask_low_bits);
 //
-// `reciprocal` e' la cifratura (fatta una volta, al livello 0, da
-// PlainDivisionPrecomputations) di integerReciprocalMask(den, ...): qui viene
-// solo abbassata al livello di `num`, come si fa con `one` nella divisione
-// ct/ct. `num` puo' arrivare fresco o direttamente da un binboot:
-// prepareIntegerOperand lo porta al livello giusto per evalIntegerMult.
+// `reciprocal` e' la cifratura di integerReciprocalMask(den, ...), fatta una
+// volta da PlainDivisionPrecomputations DIRETTAMENTE al livello OpenFHE
+// kIntegerOpsOpenFHELevel (12), come il CPU la cifra al livello di num e come
+// sono cifrati gli input dei test di EvalMultInteger. NON va cifrata al
+// livello 0 e poi abbassata con dropToLevel(..., false): in evalIntegerMult
+// quella combinazione produce un operando che vale zero (il risultato
+// degenera in floor(num / 2^L)). Qui passa da prepareIntegerOperand come
+// `num`: no-op se e' gia' al livello giusto.
+// `num` puo' arrivare fresco o direttamente da un binboot.
 //
 // La maschera finale usa rescale=true: l'uscita esce al livello OpenFHE 12
 // con NoiseLevel 1, cioe' gia' pronta per un'altra evalIntegerMult (serve
@@ -2897,14 +2901,8 @@ void evalIntegerDivisionByPlain(Ciphertext& out,
 	Ciphertext numOp(cc_);
 	prepareIntegerOperand(numOp, num);
 
-	if (reciprocal.getLevel() < numOp.getLevel()) {
-		throw std::invalid_argument("evalIntegerDivisionByPlain: `reciprocal` was encrypted at a lower level than num; "
-									"PlainDivisionPrecomputations must encrypt it at the top of the modulus chain (level 0)");
-	}
-
 	Ciphertext x(cc_);
-	x.copy(reciprocal);
-	x.dropToLevel(numOp.getLevel(), false);
+	prepareIntegerOperand(x, reciprocal);
 
 	// result = mul_integer(num, x, bits, bits, 1, 1, true)
 	Ciphertext result(cc_);
