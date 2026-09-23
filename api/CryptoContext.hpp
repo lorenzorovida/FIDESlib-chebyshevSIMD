@@ -6,8 +6,10 @@
 #include <complex>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <shared_mutex>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -21,6 +23,29 @@
 
 
 namespace fideslib {
+
+/// @brief Input cifrati dell'esempio Uniswap v3 (main.cpp: experiment_uniswap_v3).
+/// Interi a 128 bit, bit-packed LSB-first come encrypt_multi_int(..., 128, lvl),
+/// su tutti gli slot del ciphertext. g_den_Y_prec e g_num non compaiono perche'
+/// il CPU non li usa nel calcolo (997 e' usato come divisore in chiaro).
+/// Livello di cifratura consigliato: OpenFHE <= 12 (es. 10 come nel CPU).
+struct UniswapV3Inputs {
+	Ciphertext<DCRTPoly> g_num_inv_L_fx;
+	Ciphertext<DCRTPoly> user_amount;
+	Ciphertext<DCRTPoly> inv_sqrt_P0_fx;
+	Ciphertext<DCRTPoly> numerator;
+	Ciphertext<DCRTPoly> m_fx;
+	Ciphertext<DCRTPoly> g_den;
+};
+
+/// @brief Intermedi opzionali di EvalUniswapV3Example (stessi punti delle stampe
+/// del CPU). Vengono riempiti sul device durante la chiamata e si decifrano dopo.
+struct UniswapV3Trace {
+	Ciphertext<DCRTPoly> term2_fx;	// stampalo come intero a 64 bit, come il CPU
+	Ciphertext<DCRTPoly> u_fx;		// 64 bit
+	Ciphertext<DCRTPoly> X_post_fx; // 128 bit, gia' << 32
+	Ciphertext<DCRTPoly> diff_fx;	// 128 bit
+};
 
 /// @brief Specialization of CryptoContext for the DCRTPoly representation.
 template <> class CryptoContextImpl<DCRTPoly> {
@@ -278,6 +303,38 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	void SquareRootPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int zslots, const PublicKey<DCRTPoly>& pk, int noise,
 	  const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& newtonSeedCoeffs);
 
+	// ---- Divisione per costante in chiaro (CPU: div_integer(Ctxt, uint128_t, bits, zslots)) ----
+
+	/// @brief Cifra una volta (livello 0, con `pk`) il reciproco di ciascun divisore e lo
+	/// mette in cache per (bits, zslots, den). `c` serve solo come modello (slots).
+	/// Rotation keys necessarie per ogni den: -bits e bits + bit_width(den).
+	void PlainDivisionPrecomputations(const Ciphertext<DCRTPoly>& c, int bits, int zslots, const PublicKey<DCRTPoly>& pk, int noise, const std::vector<__uint128_t>& divisors);
+	/// @brief floor(ct / den) su interi a `bits` bit. Richiede PlainDivisionPrecomputations.
+	Ciphertext<DCRTPoly> EvalDivIntegerPlain(const Ciphertext<DCRTPoly>& ct, __uint128_t den, int bits, int zslots);
+
+	/// @brief ct1 - ct2 su interi a `bits` bit (risultato mascherato ai `bits` bit bassi).
+	/// carryIn = true -> sottrazione esatta; false -> ct1 - ct2 - 1 (come square_root_integer).
+	Ciphertext<DCRTPoly> EvalSubInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, bool carryIn = true);
+
+	// ---- Esempio Uniswap v3 interamente su GPU ----
+
+	/// @brief Rotazioni specifiche dell'esempio (21, -32, -128 e 128 + bit_width dei tre
+	/// divisori in chiaro). Vanno passate a EvalRotateKeyGen PRIMA di LoadContext, insieme
+	/// a quelle che usi gia' per EvalMultInteger / EvalMultDivision a 128 bit.
+	static std::vector<int32_t> GetUniswapV3RotationIndices();
+
+	/// @brief Setup una tantum dell'esempio: cifra i reciproci di 5^10, 5^11 e 997.
+	/// Prerequisiti (come per i test a 128 bit): ProcessArrayPrecomputations(c, 128, ...)
+	/// come ULTIMA chiamata di quel tipo, ProcessMultiplications(...) e
+	/// DivIntegerPrecomputations(c, 128, zslots, pk, noise, ...).
+	void UniswapV3Precomputations(const Ciphertext<DCRTPoly>& c, const PublicKey<DCRTPoly>& pk, int noise, int zslots = 1);
+
+	/// @brief Tutto experiment_uniswap_v3() in una sola chiamata: gli input vengono caricati
+	/// sul device (no-op se lo sono gia'), poi l'intera catena di operazioni gira sulla GPU
+	/// senza passare dall'host. Restituisce amount_fx (128 bit). Se `trace` != nullptr ci
+	/// mette anche gli intermedi, da decifrare dopo per il confronto con il CPU.
+	Ciphertext<DCRTPoly> EvalUniswapV3Example(const UniswapV3Inputs& inputs, UniswapV3Trace* trace = nullptr);
+
 	Ciphertext<DCRTPoly> Multiplier4bits(const Ciphertext<DCRTPoly>& ctxtA, const Ciphertext<DCRTPoly>& ctxtB, int repetitions, std::vector<std::vector<double>> coeffs);
 
 
@@ -363,6 +420,18 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	/// actually redone when the cached LUT's level/NoiseLevel no longer
 	/// matches -- see evalIntegerSquareRoot).
 	std::unordered_map<uint64_t, std::pair<std::vector<std::vector<double>>, std::vector<std::vector<double>>>> square_root_coeffs_cache;
+
+	/// @brief Reciproco cifrato di un divisore in chiaro + bit_width(den).
+	struct PlainDivisorEntry {
+		Ciphertext<DCRTPoly> reciprocal;
+		int bitLength = 0;
+	};
+
+	/// @brief Cache di PlainDivisionPrecomputations, chiave (bits, zslots, den_hi, den_lo).
+	std::map<std::tuple<int, int, uint64_t, uint64_t>, PlainDivisorEntry> plain_division_cache;
+
+	/// @brief zslots con cui e' stato chiamato UniswapV3Precomputations (0 = non ancora).
+	int uniswap_v3_zslots = 0;
 
 	// ---- Copy helpers ----
 

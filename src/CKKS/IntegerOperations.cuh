@@ -13,6 +13,12 @@
 
 namespace FIDESlib::CKKS {
 
+// Livello OpenFHE a cui evalIntegerMult si aspetta i suoi operandi: e' il
+// `level = 12` di ProcessArrayPrecomputations (maschere di processArray) e
+// ProcessMultiplications registra la PSBatch del moltiplicatore a 4 bit a
+// 12 + 3 = 15. Se cambi uno dei due, cambia anche questa costante.
+constexpr int kIntegerOpsOpenFHELevel = 12;
+
 struct ProcessArrayPrecomputation {
 	struct Entry {
 		int shift;
@@ -72,6 +78,10 @@ struct SquareRootIntegerLUTs {
 
 extern SquareRootIntegerLUTs lutsSquareRoot;
 
+// Cache LUT separata per la divisione ct/ct di evalUniswapV3 (vedi il
+// commento sulla definizione in IntegerOperations.cu).
+extern DivIntegerLUTs lutsDivUniswap;
+
 // ----------------------------------------------------------------------
 // Repeated-Chebyshev-LUT precomputation, mirroring OpenFHE's
 // EvalChebyshevSeriesPSBatchRepeated(ctxt, coeffs, a, b, repeat).
@@ -99,6 +109,12 @@ void evalChebyshevRepeatedApply(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
 // the bootstrap circuit first, exactly like the inline call sites already
 // in this file (see evalIntegerEqual / multiplier4bits / evalIntegerMult).
 void binboot(Ciphertext& out, const Ciphertext& c);
+
+// Copia `src` in `dst` e la porta al livello OpenFHE kIntegerOpsOpenFHELevel
+// (NoiseLevel 1), quello che evalIntegerMult si aspetta. Va bene sia per
+// input freschi (cifrati a livello OpenFHE <= 12) sia per uscite di binboot.
+// Lancia std::invalid_argument se `src` e' gia' piu' profondo.
+void prepareIntegerOperand(Ciphertext& dst, const Ciphertext& src);
 
 // inverse_bit_length / blind_rotation: building blocks for div_integer and
 // square_root_integer. See CKKSController::inverse_bit_length /
@@ -166,6 +182,12 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
   const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& reciprocalCoeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
 void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 
+// Come evalIntegerAdd ma con carry in ingresso = 1 (CPU: add_integer(...,
+// carry_in = true)). `layoutBits` e' la dimensione degli interi nel layout
+// dei dati (stride = layoutBits^2 / 2), che puo' differire da `bits` quando si
+// somma su una finestra piu' corta/lunga del layout.
+void evalIntegerAddCarryIn(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int layoutBits, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
+
 // evalIntegerSub: ciphertext - ciphertext subtraction, translated from
 // CKKSController::sub_integer(const Ctxt&, const Ctxt&, int, bool). Computes
 // a + ~b (plaintext one's-complement of b, masked to the low `bits+1` bits
@@ -177,7 +199,98 @@ void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits);
 // ever implements the `clean_first=false` path; `cleanFirst=true` is
 // accepted for interface parity with the CPU signature but currently
 // asserts, since no caller in this port needs it yet).
-void evalIntegerSub(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, int bits, int zslots, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, bool cleanFirst = false);
+//
+// `carryIn`: false -> a + ~b = a - b - 1 (comportamento storico, usato da
+// evalIntegerSquareRoot come il CPU `sub_integer(..., false, false)`);
+// true -> a - b esatto (CPU sub_integer con carryin = true).
+void evalIntegerSub(Ciphertext& out,
+  const Ciphertext& a,
+  const Ciphertext& b,
+  int bits,
+  int zslots,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+  bool cleanFirst = false,
+  bool carryIn	  = false);
+
+// ----------------------------------------------------------------------
+// Divisione intera con divisore in chiaro (CPU:
+// CKKSController::div_integer(const Ctxt&, uint128_t, int, int)).
+// ----------------------------------------------------------------------
+
+int bitWidthU128(__uint128_t v);
+
+// Bit (LSB-first) della parte bassa R_low del reciproco
+// R = ceil(2^(bits + bit_width(den)) / den), replicati sui primi `zslots`
+// gruppi di stride bits*bits/2, in un vettore lungo `slots`. Il bit alto di R
+// (posizione `bits`, sempre 1) non e' incluso: evalIntegerDivisionByPlain lo
+// aggiunge come num << bits, esattamente come il CPU. Restituisce anche
+// bit_width(den) in `denBitLength`. Lancia per den potenza di 2.
+std::vector<double> integerReciprocalMask(__uint128_t den, int bits, int zslots, int slots, int& denBitLength);
+
+// `reciprocal`: cifratura di integerReciprocalMask(den, ...) fatta al livello
+// 0 (vedi CryptoContextImpl::PlainDivisionPrecomputations). `num` puo' essere
+// fresco o uscire da un binboot. L'uscita e' al livello OpenFHE 12 con
+// NoiseLevel 1, quindi riutilizzabile direttamente in evalIntegerMult.
+// Rotation keys necessarie: -bits e bits + denBitLength.
+void evalIntegerDivisionByPlain(Ciphertext& out,
+  const Ciphertext& num,
+  const Ciphertext& reciprocal,
+  int denBitLength,
+  int bits,
+  int zslots,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc);
+
+// ----------------------------------------------------------------------
+// Esempio Uniswap v3 (main.cpp: experiment_uniswap_v3) interamente su GPU.
+// ----------------------------------------------------------------------
+
+struct PlainDivisorGPU {
+	const Ciphertext* reciprocal = nullptr;
+	int bitLength				 = 0;
+};
+
+struct UniswapV3GPUInputs {
+	const Ciphertext* g_num_inv_L_fx = nullptr;
+	const Ciphertext* user_amount	 = nullptr;
+	const Ciphertext* inv_sqrt_P0_fx = nullptr;
+	const Ciphertext* numerator		 = nullptr;
+	const Ciphertext* m_fx			 = nullptr;
+	const Ciphertext* g_den			 = nullptr;
+};
+
+struct UniswapV3GPUConstants {
+	int bits	  = 128;
+	int zslots	  = 1;
+	int shiftDown = 21; // 1e21 = 2^21 * 5^21: la parte 2^21 e' un >> 21
+	int shiftUp	  = 32; // X_post_fx << 32
+	int addBits	  = 64; // u_fx = add_integer(term2_fx, inv_sqrt_P0_fx, 64)
+
+	PlainDivisorGPU divPrec1; // 5^10 = 9765625
+	PlainDivisorGPU divPrec2; // 5^11 = 48828125
+	PlainDivisorGPU divFee;	  // g_num = 997
+
+	// Divisione ct/ct a `bits` bit (DivIntegerPrecomputations)
+	const Ciphertext* divOne										= nullptr;
+	const std::vector<std::vector<double>>* divBitLengthCoeffs		= nullptr;
+	const std::vector<std::vector<double>>* divReciprocalCoeffs	= nullptr;
+};
+
+// Copie facoltative dei risultati intermedi (restano sul device; si possono
+// decifrare DOPO la chiamata per confrontarli con le stampe del CPU).
+struct UniswapV3GPUTrace {
+	Ciphertext* term2_fx  = nullptr;
+	Ciphertext* u_fx	  = nullptr;
+	Ciphertext* X_post_fx = nullptr;
+	Ciphertext* diff_fx	  = nullptr;
+};
+
+// `out` = amount_fx. `luts`: passare lutsDivUniswap.
+void evalUniswapV3(Ciphertext& out,
+  const UniswapV3GPUInputs& in,
+  const UniswapV3GPUConstants& k,
+  DivIntegerLUTs& luts,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+  UniswapV3GPUTrace* trace = nullptr);
 
 // square_root_integer: ciphertext integer square root, translated from
 // CKKSController::square_root_integer(const Ctxt&, int, int).

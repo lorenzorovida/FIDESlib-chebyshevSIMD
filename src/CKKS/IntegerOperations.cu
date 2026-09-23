@@ -1,6 +1,7 @@
 #include "CKKS/Ciphertext.cuh"
 #include "CKKS/IntegerOperations.cuh"
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -25,6 +26,13 @@ std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
 std::vector<std::vector<double>> coeffs4BitsMultiplier;
 DivIntegerLUTs lutsDiv;
 SquareRootIntegerLUTs lutsSquareRoot;
+// Cache LUT dedicata alla divisione ct/ct a 128 bit dell'esempio Uniswap v3.
+// Tenuta separata da lutsDiv perche' la ricostruzione lazy di
+// evalIntegerDivision controlla solo level/NoiseLevel, non `bits`: se nello
+// stesso processo si e' gia' fatta una EvalMultDivision a 32/64 bit, lutsDiv
+// potrebbe contenere i coefficienti di un'altra dimensione registrati allo
+// stesso livello e verrebbero riusati per errore.
+DivIntegerLUTs lutsDivUniswap;
 
 // ============================================================
 // evalIntegerMult recombination masks (mask1 / mask2)
@@ -131,6 +139,55 @@ void binboot(Ciphertext& out, const Ciphertext& c) {
 	}
 
 	BootstrapStCFirstBits(out, out.slots, false);
+}
+
+// ============================================================
+// prepareIntegerOperand / alignLevels
+//
+// evalIntegerMult va alimentato a un livello ben preciso: le maschere di
+// processArray sono codificate al livello OpenFHE 12
+// (ProcessArrayPrecomputations, `int level = 12`) e la PSBatch del
+// moltiplicatore a 4 bit e' registrata al livello 15 = 12 + 3
+// (ProcessMultiplications). Nel codice gia' funzionante (div / sqrt) gli
+// operandi arrivano da un binboot e vengono abbassati di 1 livello, cioe'
+// portati esattamente li'. Qui centralizziamo la stessa regola cosi'
+// l'esempio Uniswap puo' concatenare le operazioni senza passare dall'host:
+//   - input freschi (cifrati a livello OpenFHE <= 12) -> scendono a 12
+//   - uscite di binboot (livello OpenFHE 11)            -> scendono a 12
+//   - piu' profondi di 12                                -> errore esplicito
+// ============================================================
+void prepareIntegerOperand(Ciphertext& dst, const Ciphertext& src) {
+	if (&dst != &src) {
+		dst.copy(src);
+	}
+
+	if (dst.NoiseLevel == 2) {
+		dst.rescale();
+	}
+
+	const int target = static_cast<int>(dst.cc.L) - kIntegerOpsOpenFHELevel;
+
+	if (dst.getLevel() < target) {
+		throw std::invalid_argument("prepareIntegerOperand: operand is deeper than OpenFHE level " + std::to_string(kIntegerOpsOpenFHELevel) +
+									" (FIDESlib level " + std::to_string(dst.getLevel()) + " < " + std::to_string(target) +
+									"); bootstrap it (binboot) or encrypt the input at a fresher level");
+	}
+
+	if (dst.getLevel() > target) {
+		dst.dropToLevel(target);
+	}
+}
+
+// Porta due ciphertext allo stesso livello (il minore dei due), come fanno a
+// mano i blocchi di evalIntegerSquareRoot prima di evalIntegerAdd.
+static void alignLevels(Ciphertext& a, Ciphertext& b) {
+	const int lvl = std::min(a.getLevel(), b.getLevel());
+	if (a.getLevel() > lvl) {
+		a.dropToLevel(lvl);
+	}
+	if (b.getLevel() > lvl) {
+		b.dropToLevel(lvl);
+	}
 }
 
 // ============================================================
@@ -419,7 +476,9 @@ void blindRotation(Ciphertext& out, const Ciphertext& a, const Ciphertext& index
 	out.copy(result);
 }
 
-void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
+// Corpo comune di evalIntegerAdd / evalIntegerAddCarryIn. Con
+// carryInCC == nullptr e' byte-per-byte il vecchio evalIntegerAdd.
+static void evalIntegerAddImpl(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int layoutBits, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>* carryInCC) {
 	if (bits <= 0) {
 		throw std::invalid_argument("evalIntegerAdd: bits must be > 0");
 	}
@@ -449,6 +508,28 @@ void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
 	Ciphertext g(ctxtA.cc_);
 	g.copy(ctxtA);
 	g.mult(ctxtB);
+
+	/*
+	 * if (carry_in) g = add(g, encode(rot(carry_mask, 1), g->GetLevel()));
+	 *
+	 * carry_mask ha 1 nello slot 0 di ogni gruppo; ruotato a sinistra di 1
+	 * diventa 1 nell'ultimo slot (stride-1) di ogni gruppo, cioe' "g[-1] = 1"
+	 * rispetto al gruppo successivo. Il prefix-scan e il rot(g, -1) finale lo
+	 * portano come carry in ingresso al bit 0. Il CPU lo mette su TUTTI i
+	 * gruppi (N / (bits*bits)), non solo sui zslots usati: idem qui.
+	 */
+	if (carryInCC != nullptr) {
+		const int slots	 = static_cast<int>(g.slots);
+		const int stride = layoutBits * layoutBits / 2;
+		const int groups = std::max(1, slots / stride);
+
+		std::vector<double> carry(slots, 0.0);
+		for (int j = 0; j < groups; ++j) {
+			carry[(j * stride + stride - 1) % slots] = 1.0;
+		}
+
+		g.addPt(makePerSlotPlaintext(*carryInCC, ctxtA.cc_, carry, g));
+	}
 
 	/*
 	 * for (int i = 1; i < bits; i *= 2)
@@ -508,6 +589,14 @@ void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
 	ctxtA.square();
 }
 
+void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
+	evalIntegerAddImpl(ctxtA, ctxtB, bits, bits, nullptr);
+}
+
+void evalIntegerAddCarryIn(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits, int layoutBits, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+	evalIntegerAddImpl(ctxtA, ctxtB, bits, layoutBits, &cc);
+}
+
 // ============================================================
 // sub_integer
 //
@@ -525,8 +614,15 @@ void evalIntegerAdd(Ciphertext& ctxtA, Ciphertext& ctxtB, int bits) {
 // then add_integer's usual two's-complement machinery does the rest; finally
 // re-mask down to just the low `bits` bits to strip the carry-out garbage
 // add_integer leaves behind.
+//
+// carryIn: il CPU ha sub_integer(a, b, bits, clean_first, carryin). Con
+// carryin=false (il caso di square_root_integer, che passa esplicitamente
+// `false, false`) il risultato e' a + ~b = a - b - 1. Con carryin=true il
+// "+1" del complemento a due entra come carry nel sommatore e si ottiene
+// esattamente a - b: e' quello che serve a Uniswap (diff_fx = m_fx - X_post_fx).
+// Default false per non cambiare il comportamento dei chiamanti esistenti.
 // ============================================================
-void evalIntegerSub(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, int bits, int zslots, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, bool cleanFirst) {
+void evalIntegerSub(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, int bits, int zslots, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, bool cleanFirst, bool carryIn) {
 	if (cleanFirst) {
 		throw std::invalid_argument("evalIntegerSub: cleanFirst=true is not implemented (no caller needs it yet; "
 									"evalIntegerAdd only implements the clean_first=false path)");
@@ -555,7 +651,11 @@ void evalIntegerSub(Ciphertext& out, const Ciphertext& a, const Ciphertext& b, i
 	// --------------------------------------------------------
 	Ciphertext aCopy(a.cc_);
 	aCopy.copy(a);
-	evalIntegerAdd(aCopy, inverted, bits);
+	if (carryIn) {
+		evalIntegerAddCarryIn(aCopy, inverted, bits, bits, cc);
+	} else {
+		evalIntegerAdd(aCopy, inverted, bits);
+	}
 
 	// --------------------------------------------------------
 	// Mask down to the low `bits` bits of each group (drop add_integer's
@@ -2667,6 +2767,333 @@ void bintodec(lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& out, 
 	res.add(rotm4);
 
 	out.copy(res);
+}
+
+// ============================================================
+// Reciproco per la divisione con divisore in chiaro (host)
+//
+// CPU reference: CKKSController::div_integer(const Ctxt&, uint128_t, int, int)
+// usa reciprocal(den, bits) da Utils.h e il commento della variante Ptxt dice
+// "den = (1 << (bits + b.bit_length())) // b". Qui:
+//
+//   L = bit_width(den),  k = bits + L,  R = ceil(2^k / den)
+//
+// Per den non potenza di 2, R sta in (2^bits, 2^(bits+1)): il bit `bits` e'
+// sempre 1 (e' il "last bit of the reciprocal (which is always on)" che il
+// CPU aggiunge a parte come num << bits) e i `bits` bit bassi sono R_low.
+// Con R arrotondato per ECCESSO, floor(num * R / 2^k) == floor(num / den)
+// per ogni num < 2^bits; con l'arrotondamento per difetto (floor) il
+// risultato e' sbagliato di 1 quando den divide num.
+//
+// 2^k non sta in un __uint128_t per bits = 128, quindi il quoziente e'
+// calcolato bit per bit con una long division (il resto resta < den).
+// ============================================================
+int bitWidthU128(__uint128_t v) {
+	int w = 0;
+	while (v != 0) {
+		++w;
+		v >>= 1;
+	}
+	return w;
+}
+
+std::vector<double> integerReciprocalMask(__uint128_t den, int bits, int zslots, int slots, int& denBitLength) {
+	if (bits <= 0 || bits > 128) {
+		throw std::invalid_argument("integerReciprocalMask: bits must be in (0, 128]");
+	}
+	if (den < 2 || (den & (den - 1)) == 0) {
+		throw std::invalid_argument("integerReciprocalMask: den must not be a power of two (use a rotation instead)");
+	}
+
+	const int L = bitWidthU128(den);
+	if (L > 127) {
+		throw std::invalid_argument("integerReciprocalMask: den must be < 2^127");
+	}
+
+	const int k = bits + L;
+
+	// q = floor(2^k / den); dividendo = 1 seguito da k zeri.
+	std::vector<int> q(k + 1, 0);
+	__uint128_t rem = 0;
+	for (int i = k; i >= 0; --i) {
+		rem = (rem << 1) | static_cast<__uint128_t>(i == k ? 1 : 0);
+		if (rem >= den) {
+			rem -= den;
+			q[i] = 1;
+		}
+	}
+
+	// ceil
+	if (rem != 0) {
+		int i = 0;
+		while (i <= k && q[i] == 1) {
+			q[i] = 0;
+			++i;
+		}
+		if (i <= k) {
+			q[i] = 1;
+		}
+	}
+
+	if (q[bits] != 1) {
+		throw std::logic_error("integerReciprocalMask: reciprocal top bit is not at position `bits`");
+	}
+	for (int i = bits + 1; i <= k; ++i) {
+		if (q[i] != 0) {
+			throw std::logic_error("integerReciprocalMask: reciprocal wider than bits+1");
+		}
+	}
+
+	const int stride = bits * bits / 2;
+	if (zslots <= 0 || zslots * stride > slots) {
+		throw std::invalid_argument("integerReciprocalMask: zslots * bits*bits/2 exceeds the slot count");
+	}
+
+	std::vector<double> out(slots, 0.0);
+	for (int j = 0; j < zslots; ++j) {
+		for (int i = 0; i < bits; ++i) {
+			out[j * stride + i] = static_cast<double>(q[i]);
+		}
+	}
+
+	denBitLength = L;
+	return out;
+}
+
+// ============================================================
+// div_integer con divisore in chiaro
+//
+// CPU reference (CKKSController::div_integer(const Ctxt&, uint128_t, int, int)):
+//
+//   Ctxt x = encrypt(encode(reciprocal(den, bits), num->GetLevel()));
+//   Ctxt result = mul_integer(num, x, bits, bits, 1, 1, true);
+//   result = binboot(add_integer(result, rot(num, -bits), bits, false));
+//   result = rot(result, bits + bit_width(den));
+//   result = mult(result, mask_low_bits);
+//
+// `reciprocal` e' la cifratura (fatta una volta, al livello 0, da
+// PlainDivisionPrecomputations) di integerReciprocalMask(den, ...): qui viene
+// solo abbassata al livello di `num`, come si fa con `one` nella divisione
+// ct/ct. `num` puo' arrivare fresco o direttamente da un binboot:
+// prepareIntegerOperand lo porta al livello giusto per evalIntegerMult.
+//
+// La maschera finale usa rescale=true: l'uscita esce al livello OpenFHE 12
+// con NoiseLevel 1, cioe' gia' pronta per un'altra evalIntegerMult (serve
+// nella catena /5^10 -> /5^11 di Uniswap).
+//
+// Rotation keys: -bits e bits + bit_width(den).
+// ============================================================
+void evalIntegerDivisionByPlain(Ciphertext& out,
+  const Ciphertext& num,
+  const Ciphertext& reciprocal,
+  int denBitLength,
+  int bits,
+  int zslots,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+
+	FIDESlib::CKKS::Context& cc_ = num.cc_;
+	const int stride			 = bits * bits / 2;
+
+	Ciphertext numOp(cc_);
+	prepareIntegerOperand(numOp, num);
+
+	if (reciprocal.getLevel() < numOp.getLevel()) {
+		throw std::invalid_argument("evalIntegerDivisionByPlain: `reciprocal` was encrypted at a lower level than num; "
+									"PlainDivisionPrecomputations must encrypt it at the top of the modulus chain (level 0)");
+	}
+
+	Ciphertext x(cc_);
+	x.copy(reciprocal);
+	x.dropToLevel(numOp.getLevel(), false);
+
+	// result = mul_integer(num, x, bits, bits, 1, 1, true)
+	Ciphertext result(cc_);
+	evalIntegerMult(result, numOp, x, bits, bits, zslots, zslots, true, cc);
+
+	// result = binboot(add_integer(result, rot(num, -bits), bits, false))
+	// (num << bits aggiunge il bit alto del reciproco, sempre a 1)
+	Ciphertext numShift(cc_);
+	numShift.rotate(num, -bits);
+	alignLevels(result, numShift);
+	evalIntegerAdd(result, numShift, bits);
+	binboot(result, result);
+
+	// result = rot(result, bits + L)   -> >> (bits + L)
+	{
+		Ciphertext rotated(cc_);
+		rotated.rotate(result, bits + denBitLength);
+		result.copy(rotated);
+	}
+
+	// result = result * {1 sui `bits` bit bassi di ogni gruppo}
+	std::vector<double> mask(num.slots, 0.0);
+	for (int j = 0; j < zslots; ++j) {
+		for (int i = 0; i < bits; ++i) {
+			mask[i + j * stride] = 1.0;
+		}
+	}
+	result.multPt(makePerSlotPlaintext(cc, cc_, mask, result), true);
+
+	out.copy(result);
+}
+
+// ============================================================
+// Uniswap v3: tutta la pipeline di experiment_uniswap_v3() (main.cpp) in
+// un'unica chiamata sul device. Nessun passaggio dall'API / host tra una
+// primitiva e l'altra: si lavora direttamente su FIDESlib::CKKS::Ciphertext.
+//
+// CPU reference:
+//   term2_fx  = mul_integer(user_amount, g_num_inv_L_fx, 128, 128, 1, 1, false);
+//   term2_fx  = rot(term2_fx, 21);                               // >> 21
+//   term2_fx  = div_integer(term2_fx, 9765625, 128, 1);          // / 5^10
+//   term2_fx  = div_integer(term2_fx, 48828125, 128, 1);         // / 5^11
+//   u_fx      = binboot(add_integer(term2_fx, inv_sqrt_P0_fx, 64));
+//   X_post_fx = binboot(div_integer(numerator, u_fx, 128, 1));
+//   X_post_fx = rot(X_post_fx, -32);                             // << 32
+//   diff_fx   = binboot(sub_integer(m_fx, X_post_fx, 128));
+//   amount_fx = mul_integer(diff_fx, g_den, 128, 128, 1, 1, false);
+//   amount_fx = div_integer(amount_fx, 997, 128, 1);
+//
+// Uniche differenze volute rispetto al CPU:
+//   - dopo il >> 21 si rimaschera ai `bits` bit bassi. Con piu' gruppi e'
+//     equivalente al CPU (gli slot che rientrano in coda vengono dal gruppo
+//     successivo, che e' a zero); con un solo gruppo evita che i 21 bit
+//     bassi scartati rientrino in coda e sporchino rot(num, -bits) nella
+//     divisione successiva. Costo zero in livelli: quel livello andava perso
+//     comunque in prepareIntegerOperand.
+//   - la sottrazione usa il carry-in esplicito (a - b esatto): vedi
+//     evalIntegerSub.
+// ============================================================
+void evalUniswapV3(Ciphertext& out,
+  const UniswapV3GPUInputs& in,
+  const UniswapV3GPUConstants& k,
+  DivIntegerLUTs& luts,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
+  UniswapV3GPUTrace* trace) {
+
+	if (!in.g_num_inv_L_fx || !in.user_amount || !in.inv_sqrt_P0_fx || !in.numerator || !in.m_fx || !in.g_den) {
+		throw std::invalid_argument("evalUniswapV3: all six input ciphertexts must be provided");
+	}
+	if (!k.divPrec1.reciprocal || !k.divPrec2.reciprocal || !k.divFee.reciprocal) {
+		throw std::invalid_argument("evalUniswapV3: missing plaintext-divisor reciprocals (PlainDivisionPrecomputations)");
+	}
+	if (!k.divOne || !k.divBitLengthCoeffs || !k.divReciprocalCoeffs) {
+		throw std::invalid_argument("evalUniswapV3: missing ciphertext-division precomputations (DivIntegerPrecomputations)");
+	}
+
+	FIDESlib::CKKS::Context& cc_ = in.user_amount->cc_;
+	const int bits				 = k.bits;
+	const int zslots			 = k.zslots;
+	const int stride			 = bits * bits / 2;
+
+	std::vector<double> lowBitsMask(in.user_amount->slots, 0.0);
+	for (int j = 0; j < zslots; ++j) {
+		for (int i = 0; i < bits; ++i) {
+			lowBitsMask[i + j * stride] = 1.0;
+		}
+	}
+
+	// --------------------------------------------------------
+	// 1) term2_fx = mul_integer(user_amount, g_num_inv_L_fx, 128, 128, 1, 1, false)
+	// --------------------------------------------------------
+	Ciphertext term2(cc_);
+	{
+		Ciphertext a(cc_);
+		Ciphertext b(cc_);
+		prepareIntegerOperand(a, *in.user_amount);
+		prepareIntegerOperand(b, *in.g_num_inv_L_fx);
+		evalIntegerMult(term2, a, b, bits, bits, zslots, zslots, false, cc);
+	}
+
+	// --------------------------------------------------------
+	// 2) term2_fx = rot(term2_fx, 21)   (1e21 = 2^21 * 5^21: parte 2^21)
+	// --------------------------------------------------------
+	{
+		Ciphertext rotated(cc_);
+		rotated.rotate(term2, k.shiftDown);
+		term2.copy(rotated);
+		term2.multPt(makePerSlotPlaintext(cc, cc_, lowBitsMask, term2), true);
+	}
+
+	// --------------------------------------------------------
+	// 3) term2_fx /= 5^10; term2_fx /= 5^11
+	// --------------------------------------------------------
+	{
+		Ciphertext q(cc_);
+		evalIntegerDivisionByPlain(q, term2, *k.divPrec1.reciprocal, k.divPrec1.bitLength, bits, zslots, cc);
+		evalIntegerDivisionByPlain(term2, q, *k.divPrec2.reciprocal, k.divPrec2.bitLength, bits, zslots, cc);
+	}
+	if (trace && trace->term2_fx) {
+		trace->term2_fx->copy(term2);
+	}
+
+	// --------------------------------------------------------
+	// 4) u_fx = binboot(add_integer(term2_fx, inv_sqrt_P0_fx, 64))
+	// --------------------------------------------------------
+	Ciphertext u(cc_);
+	{
+		u.copy(term2);
+		Ciphertext inv(cc_);
+		inv.copy(*in.inv_sqrt_P0_fx);
+		alignLevels(u, inv);
+		evalIntegerAdd(u, inv, k.addBits);
+		binboot(u, u);
+	}
+	if (trace && trace->u_fx) {
+		trace->u_fx->copy(u);
+	}
+
+	// --------------------------------------------------------
+	// 5) X_post_fx = binboot(div_integer(numerator, u_fx, 128, 1))
+	//    X_post_fx = rot(X_post_fx, -32)
+	// --------------------------------------------------------
+	Ciphertext xpost(cc_);
+	{
+		Ciphertext numer(cc_);
+		Ciphertext den(cc_);
+		prepareIntegerOperand(numer, *in.numerator);
+		prepareIntegerOperand(den, u);
+
+		evalIntegerDivision(xpost, numer, den, bits, zslots, luts, *k.divOne, *k.divBitLengthCoeffs, *k.divReciprocalCoeffs, cc);
+		binboot(xpost, xpost);
+
+		Ciphertext rotated(cc_);
+		rotated.rotate(xpost, -k.shiftUp);
+		xpost.copy(rotated);
+	}
+	if (trace && trace->X_post_fx) {
+		trace->X_post_fx->copy(xpost);
+	}
+
+	// --------------------------------------------------------
+	// 6) diff_fx = binboot(sub_integer(m_fx, X_post_fx, 128))
+	// --------------------------------------------------------
+	Ciphertext diff(cc_);
+	{
+		Ciphertext m(cc_);
+		m.copy(*in.m_fx);
+		alignLevels(m, xpost);
+		evalIntegerSub(diff, m, xpost, bits, zslots, cc, /*cleanFirst=*/false, /*carryIn=*/true);
+		binboot(diff, diff);
+	}
+	if (trace && trace->diff_fx) {
+		trace->diff_fx->copy(diff);
+	}
+
+	// --------------------------------------------------------
+	// 7) amount_fx = mul_integer(diff_fx, g_den, 128, 128, 1, 1, false)
+	//    amount_fx = div_integer(amount_fx, 997, 128, 1)
+	// --------------------------------------------------------
+	Ciphertext amount(cc_);
+	{
+		Ciphertext a(cc_);
+		Ciphertext b(cc_);
+		prepareIntegerOperand(a, diff);
+		prepareIntegerOperand(b, *in.g_den);
+		evalIntegerMult(amount, a, b, bits, bits, zslots, zslots, false, cc);
+	}
+
+	evalIntegerDivisionByPlain(out, amount, *k.divFee.reciprocal, k.divFee.bitLength, bits, zslots, cc);
 }
 
 std::vector<double> rotateMask(const std::vector<double>& mask, int shift) {

@@ -1445,6 +1445,257 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSquareRootInteger(const Ci
 	return result;
 }
 
+// ============================================================
+// Divisione per costante in chiaro / sottrazione / esempio Uniswap v3
+// ============================================================
+
+namespace {
+
+// Costanti di experiment_uniswap_v3() (main.cpp).
+constexpr int kUniswapV3Bits		  = 128;
+constexpr __uint128_t kUniswapV3Div5p10 = 9765625;	 // 5^10
+constexpr __uint128_t kUniswapV3Div5p11 = 48828125; // 5^11   (1e21 = 2^21 * 5^10 * 5^11)
+constexpr __uint128_t kUniswapV3FeeNum  = 997;		 // g_num
+constexpr int kUniswapV3ShiftDown	  = 21;
+constexpr int kUniswapV3ShiftUp		  = 32;
+constexpr int kUniswapV3AddBits		  = 64;
+
+std::tuple<int, int, uint64_t, uint64_t> plainDivKey(int bits, int zslots, __uint128_t den) {
+	return { bits, zslots, static_cast<uint64_t>(den >> 64), static_cast<uint64_t>(den) };
+}
+
+std::string u128ToString(__uint128_t v) {
+	if (v == 0) {
+		return "0";
+	}
+	std::string s;
+	while (v != 0) {
+		s.insert(s.begin(), static_cast<char>('0' + static_cast<int>(v % 10)));
+		v /= 10;
+	}
+	return s;
+}
+
+} // namespace
+
+void CryptoContextImpl<DCRTPoly>::PlainDivisionPrecomputations(const Ciphertext<DCRTPoly>& c,
+  int bits,
+  int zslots,
+  const PublicKey<DCRTPoly>& pk,
+  int noise,
+  const std::vector<__uint128_t>& divisors) {
+	FIDESlib::CudaNvtxRange r("API");
+	if (this->devices.empty()) {
+		OPENFHE_THROW("PlainDivisionPrecomputations has no CPU fallback. Configure at least one GPU device.");
+	}
+
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
+	auto c_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
+
+	for (const __uint128_t den : divisors) {
+		int bitLength			   = 0;
+		std::vector<double> packed = FIDESlib::CKKS::integerReciprocalMask(den, bits, zslots, c_gpu->slots, bitLength);
+
+		// Livello 0 (cima della catena), come `one` in DivIntegerPrecomputations:
+		// evalIntegerDivisionByPlain lo abbassa al livello di num a ogni uso.
+		Plaintext pt			= this->MakeCKKSPackedPlaintext(packed, noise, 0, nullptr, c_gpu->slots);
+		Ciphertext<DCRTPoly> ct = this->Encrypt(pt, pk);
+
+		this->plain_division_cache[plainDivKey(bits, zslots, den)] = PlainDivisorEntry{ ct, bitLength };
+	}
+
+	std::cout << "Done preprocessing plaintext division with " << bits << " bits (" << divisors.size() << " divisors)" << std::endl;
+}
+
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalDivIntegerPlain(const Ciphertext<DCRTPoly>& ct, __uint128_t den, int bits, int zslots) {
+	FIDESlib::CudaNvtxRange r("API");
+	if (this->devices.empty()) {
+		OPENFHE_THROW("EvalDivIntegerPlain has no CPU fallback. Configure at least one GPU device.");
+	}
+
+	auto it = this->plain_division_cache.find(plainDivKey(bits, zslots, den));
+	if (it == this->plain_division_cache.end()) {
+		OPENFHE_THROW("EvalDivIntegerPlain: no precomputation for den=" + u128ToString(den) + ", bits=" + std::to_string(bits) + ", zslots=" +
+					  std::to_string(zslots) + ". Call PlainDivisionPrecomputations first.");
+	}
+
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct));
+	this->LoadCiphertext(it->second.reciprocal);
+
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct);
+
+	auto res_gpu   = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto ct_gpu	   = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct->gpu));
+	auto recip_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(it->second.reciprocal->gpu));
+
+	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
+	FIDESlib::CKKS::evalIntegerDivisionByPlain(*res_gpu, *ct_gpu, *recip_gpu, it->second.bitLength, bits, zslots, context);
+
+	return result;
+}
+
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalSubInteger(const Ciphertext<DCRTPoly>& ct1, const Ciphertext<DCRTPoly>& ct2, int bits, int zslots, bool carryIn) {
+	FIDESlib::CudaNvtxRange r("API");
+	if (this->devices.empty()) {
+		OPENFHE_THROW("EvalSubInteger has no CPU fallback. Configure at least one GPU device.");
+	}
+
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct1));
+	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(ct2));
+
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*ct1);
+
+	auto res_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(result->gpu));
+	auto ct1_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct1->gpu));
+	auto ct2_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(ct2->gpu));
+
+	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
+	FIDESlib::CKKS::evalIntegerSub(*res_gpu, *ct1_gpu, *ct2_gpu, bits, zslots, context, /*cleanFirst=*/false, carryIn);
+
+	return result;
+}
+
+std::vector<int32_t> CryptoContextImpl<DCRTPoly>::GetUniswapV3RotationIndices() {
+	const int bits = kUniswapV3Bits;
+	return {
+		kUniswapV3ShiftDown,
+		-kUniswapV3ShiftUp,
+		-bits, // rot(num, -bits) nella divisione per costante
+		bits + FIDESlib::CKKS::bitWidthU128(kUniswapV3Div5p10), // 152
+		bits + FIDESlib::CKKS::bitWidthU128(kUniswapV3Div5p11), // 154
+		bits + FIDESlib::CKKS::bitWidthU128(kUniswapV3FeeNum),	 // 138
+	};
+}
+
+void CryptoContextImpl<DCRTPoly>::UniswapV3Precomputations(const Ciphertext<DCRTPoly>& c, const PublicKey<DCRTPoly>& pk, int noise, int zslots) {
+	FIDESlib::CudaNvtxRange r("API");
+	if (this->devices.empty()) {
+		OPENFHE_THROW("UniswapV3Precomputations has no CPU fallback. Configure at least one GPU device.");
+	}
+
+	this->PlainDivisionPrecomputations(c, kUniswapV3Bits, zslots, pk, noise, { kUniswapV3Div5p10, kUniswapV3Div5p11, kUniswapV3FeeNum });
+	this->uniswap_v3_zslots = zslots;
+
+	const uint64_t key = (static_cast<uint64_t>(kUniswapV3Bits) << 32) | static_cast<uint32_t>(zslots);
+	if (this->div_integer_one_cache.find(key) == this->div_integer_one_cache.end()) {
+		std::cerr << "[UniswapV3Precomputations] warning: DivIntegerPrecomputations(c, " << kUniswapV3Bits << ", " << zslots
+				  << ", ...) not done yet; it is required before EvalUniswapV3Example." << std::endl;
+	}
+}
+
+Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalUniswapV3Example(const UniswapV3Inputs& inputs, UniswapV3Trace* trace) {
+	FIDESlib::CudaNvtxRange r("API");
+	if (this->devices.empty()) {
+		OPENFHE_THROW("EvalUniswapV3Example has no CPU fallback. Configure at least one GPU device.");
+	}
+	if (this->uniswap_v3_zslots == 0) {
+		OPENFHE_THROW("EvalUniswapV3Example: call UniswapV3Precomputations(...) first.");
+	}
+
+	const int bits	   = kUniswapV3Bits;
+	const int zslots   = this->uniswap_v3_zslots;
+	const uint64_t key = (static_cast<uint64_t>(bits) << 32) | static_cast<uint32_t>(zslots);
+
+	// ---- Precomputazioni della divisione ct/ct a 128 bit ----
+	auto oneIt	  = this->div_integer_one_cache.find(key);
+	auto coeffsIt = this->div_integer_coeffs_cache.find(key);
+	if (oneIt == this->div_integer_one_cache.end() || coeffsIt == this->div_integer_coeffs_cache.end()) {
+		OPENFHE_THROW("EvalUniswapV3Example: call DivIntegerPrecomputations(c, " + std::to_string(bits) + ", " + std::to_string(zslots) +
+					  ", pk, noise, ...) first.");
+	}
+
+	// ---- Reciproci dei divisori in chiaro ----
+	auto findDivisor = [&](__uint128_t den) -> PlainDivisorEntry& {
+		auto it = this->plain_division_cache.find(plainDivKey(bits, zslots, den));
+		if (it == this->plain_division_cache.end()) {
+			OPENFHE_THROW("EvalUniswapV3Example: missing reciprocal for den=" + u128ToString(den) + ". Call UniswapV3Precomputations first.");
+		}
+		return it->second;
+	};
+	PlainDivisorEntry& d1  = findDivisor(kUniswapV3Div5p10);
+	PlainDivisorEntry& d2  = findDivisor(kUniswapV3Div5p11);
+	PlainDivisorEntry& dFe = findDivisor(kUniswapV3FeeNum);
+
+	// ---- Caricamento sul device (no-op per cio' che e' gia' caricato) ----
+	const Ciphertext<DCRTPoly>* ins[] = { &inputs.g_num_inv_L_fx, &inputs.user_amount, &inputs.inv_sqrt_P0_fx, &inputs.numerator, &inputs.m_fx, &inputs.g_den };
+	for (const Ciphertext<DCRTPoly>* c : ins) {
+		if (!*c) {
+			OPENFHE_THROW("EvalUniswapV3Example: all six input ciphertexts must be set.");
+		}
+		this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(*c));
+	}
+	this->LoadCiphertext(oneIt->second);
+	this->LoadCiphertext(d1.reciprocal);
+	this->LoadCiphertext(d2.reciprocal);
+	this->LoadCiphertext(dFe.reciprocal);
+
+	auto gpu = [&](const Ciphertext<DCRTPoly>& c) {
+		return std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
+	};
+
+	auto gNumInv = gpu(inputs.g_num_inv_L_fx);
+	auto userAmt = gpu(inputs.user_amount);
+	auto invSqrt = gpu(inputs.inv_sqrt_P0_fx);
+	auto numer	 = gpu(inputs.numerator);
+	auto mFx	 = gpu(inputs.m_fx);
+	auto gDen	 = gpu(inputs.g_den);
+	auto one	 = gpu(oneIt->second);
+	auto r1		 = gpu(d1.reciprocal);
+	auto r2		 = gpu(d2.reciprocal);
+	auto rFee	 = gpu(dFe.reciprocal);
+
+	FIDESlib::CKKS::UniswapV3GPUInputs gin;
+	gin.g_num_inv_L_fx = gNumInv.get();
+	gin.user_amount	   = userAmt.get();
+	gin.inv_sqrt_P0_fx = invSqrt.get();
+	gin.numerator	   = numer.get();
+	gin.m_fx		   = mFx.get();
+	gin.g_den		   = gDen.get();
+
+	FIDESlib::CKKS::UniswapV3GPUConstants k;
+	k.bits				  = bits;
+	k.zslots			  = zslots;
+	k.shiftDown			  = kUniswapV3ShiftDown;
+	k.shiftUp			  = kUniswapV3ShiftUp;
+	k.addBits			  = kUniswapV3AddBits;
+	k.divPrec1			  = { r1.get(), d1.bitLength };
+	k.divPrec2			  = { r2.get(), d2.bitLength };
+	k.divFee			  = { rFee.get(), dFe.bitLength };
+	k.divOne			  = one.get();
+	k.divBitLengthCoeffs  = &coeffsIt->second.first;
+	k.divReciprocalCoeffs = &coeffsIt->second.second;
+
+	// ---- Output (e intermedi) come ciphertext API con storage sul device ----
+	Ciphertext<DCRTPoly> result = std::make_shared<CiphertextImpl<DCRTPoly>>(*inputs.user_amount);
+	auto res_gpu				= gpu(result);
+
+	FIDESlib::CKKS::UniswapV3GPUTrace gtrace;
+	std::shared_ptr<FIDESlib::CKKS::Ciphertext> tTerm2, tU, tXpost, tDiff;
+	if (trace != nullptr) {
+		trace->term2_fx	 = std::make_shared<CiphertextImpl<DCRTPoly>>(*inputs.user_amount);
+		trace->u_fx		 = std::make_shared<CiphertextImpl<DCRTPoly>>(*inputs.user_amount);
+		trace->X_post_fx = std::make_shared<CiphertextImpl<DCRTPoly>>(*inputs.user_amount);
+		trace->diff_fx	 = std::make_shared<CiphertextImpl<DCRTPoly>>(*inputs.user_amount);
+		tTerm2			 = gpu(trace->term2_fx);
+		tU				 = gpu(trace->u_fx);
+		tXpost			 = gpu(trace->X_post_fx);
+		tDiff			 = gpu(trace->diff_fx);
+		gtrace.term2_fx	 = tTerm2.get();
+		gtrace.u_fx		 = tU.get();
+		gtrace.X_post_fx = tXpost.get();
+		gtrace.diff_fx	 = tDiff.get();
+	}
+
+	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
+
+	// Unica chiamata: da qui in poi tutto resta sulla GPU.
+	FIDESlib::CKKS::evalUniswapV3(*res_gpu, gin, k, FIDESlib::CKKS::lutsDivUniswap, context, trace != nullptr ? &gtrace : nullptr);
+
+	return result;
+}
+
 void CryptoContextImpl<DCRTPoly>::ProcessMultiplications(std::vector<std::vector<double>> coeffs, const Ciphertext<DCRTPoly>& c) {
 	FIDESlib::CudaNvtxRange r("API");
 	if (this->devices.empty()) {
