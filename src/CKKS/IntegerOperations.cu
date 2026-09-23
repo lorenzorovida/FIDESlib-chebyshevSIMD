@@ -1454,8 +1454,9 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			binboot(term, term);
 		}
 
-		out.copy(term);
-		return;
+		//qua giusto?
+		//out.copy(term);
+		//return;
 
 		// term = complement(term) over the low (bits*2+1) bits of each group
 		std::fill(mask.begin(), mask.end(), 0.0);
