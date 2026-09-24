@@ -1523,8 +1523,9 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			Ciphertext term2(num.cc_);
 			term2.rotate(term, 2);
 
-			//term2.dropToLevel(term2.getLevel() - 1);
-
+			term2.dropToLevel(18);
+			x2.dropToLevel(18);
+			
 			Ciphertext newX(num.cc_);
 			evalIntegerMult(newX, x2, term2, bits, bits, zslots, zslots, true, cc);
 			x.copy(newX);
