@@ -1551,8 +1551,8 @@ void evalIntegerDivision(Ciphertext& out,
 		// return;
 	}
 
-	out.copy(x);
-	return;
+	//out.copy(x);
+	//return;
 
 	// --------------------------------------------------------
 	// result = mul_integer(rot(num, 2), rot(x, 2), bits, bits, zslots, zslots, true)
