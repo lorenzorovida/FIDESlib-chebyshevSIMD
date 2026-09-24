@@ -1525,7 +1525,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 
 
 			term2.dropToLevel(term2.getLevel() - 1);
-			x2.dropToLevel(x2.getLevel() - 1);
+			//x2.dropToLevel(x2.getLevel() - 1);
 
 			
 			Ciphertext newX(num.cc_);
@@ -1551,11 +1551,14 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			x.rotate(xRotated, -4);
 		}
 
-		out.copy(x);
-		return;
+		//Correct?!!=!==!=!= 16:25
+		//out.copy(x);
+		//return;
 
 	}
-
+	
+	out.copy(x);
+	return;
 
 
 
