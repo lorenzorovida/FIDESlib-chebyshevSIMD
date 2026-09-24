@@ -28,7 +28,8 @@ namespace fideslib {
 /// Interi a 128 bit, bit-packed LSB-first come encrypt_multi_int(..., 128, lvl),
 /// su tutti gli slot del ciphertext. g_den_Y_prec e g_num non compaiono perche'
 /// il CPU non li usa nel calcolo (997 e' usato come divisore in chiaro).
-/// Livello di cifratura consigliato: OpenFHE <= 12 (es. 10 come nel CPU).
+/// Livello di cifratura consigliato: lo stesso dei tuoi test di EvalMultInteger
+/// (FIDESlib::CKKS::kIntegerOpsOpenFHELevel = 13, cioe' livello FIDESlib 18 con L = 31).
 struct UniswapV3Inputs {
 	Ciphertext<DCRTPoly> g_num_inv_L_fx;
 	Ciphertext<DCRTPoly> user_amount;
@@ -325,10 +326,13 @@ template <> class CryptoContextImpl<DCRTPoly> {
 	/// a quelle che usi gia' per EvalMultInteger / EvalMultDivision a 128 bit.
 	static std::vector<int32_t> GetUniswapV3RotationIndices();
 
-	/// @brief Setup una tantum dell'esempio: cifra i reciproci di 5^10, 5^11 e 997.
-	/// Prerequisiti (come per i test a 128 bit): ProcessArrayPrecomputations(c, 128, ...)
-	/// come ULTIMA chiamata di quel tipo, ProcessMultiplications(...) e
-	/// DivIntegerPrecomputations(c, 128, zslots, pk, noise, ...).
+	/// @brief Setup una tantum dell'esempio: prepara i reciproci di 5^10, 5^11 e 997 e
+	/// riscalda la cache LUT della divisione ct/ct a 128 bit con una divisione fittizia,
+	/// cosi' il costo della precomputazione PSBatch non finisce dentro EvalUniswapV3Example.
+	/// Va chiamata DOPO, nell'ordine: LoadContext (con le rotation key),
+	/// ProcessArrayPrecomputations(c, 128, ...) come ULTIMA chiamata di quel tipo,
+	/// ProcessMultiplications(...) e DivIntegerPrecomputations(c, 128, zslots, pk, noise, ...)
+	/// con lo STESSO zslots passato qui.
 	void UniswapV3Precomputations(const Ciphertext<DCRTPoly>& c, const PublicKey<DCRTPoly>& pk, int noise, int zslots = 1);
 
 	/// @brief Tutto experiment_uniswap_v3() in una sola chiamata: gli input vengono caricati
