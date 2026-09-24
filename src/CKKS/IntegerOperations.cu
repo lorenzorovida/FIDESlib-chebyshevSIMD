@@ -1394,7 +1394,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 
 		Ciphertext term(num.cc_);
 
-		x.dropToLevel(x.getLevel() - 1);
+		x.dropToLevel(18);
 		denNorm.dropToLevel(denNorm.getLevel() - 1);
 
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
