@@ -29,6 +29,31 @@ Left alone, since they don't change the output on these inputs (checked in Pytho
 The CPU repo had the same bug as #1 (`return x;` in ct/ct `div_integer`, added in fa364f7). It is fixed on
 `advanced-arithmetic-fhe` branch `jpp_improvements`. Use that branch, or 25fe37e, as the CPU reference.
 
+## Open issue: the Newton-loop multiply is still wrong on GPU
+
+Reported after a GPU test: `evalIntegerMult(newX, x2, term2, bits, bits, zslots, zslots, true, cc)`,
+the 128-bit multiply inside the Newton loop, gives a wrong result. The suspicion is ciphertext levels.
+
+- **First, which commit was tested?** On `uniswapv3` (2c046ce) this is a known level bug: the `dropToLevel` calls before
+  this multiply were commented out. `x2` and `term2` then arrive at OpenFHE level 11 (straight from binboot), not
+  the level 12 that the processArray masks are encoded at. Fix #2 on this branch adds `prepareIntegerOperand` there.
+- **If it still fails on this branch:** the next suspect is the 4-bit multiplier PSBatch (`cacheChebyshev4BitsMultiplier`).
+  It is recorded once by `ProcessMultiplications`, with the model ciphertext forced to `SetLevel(15)`. `multiplier4bits`
+  applied it without any level check, unlike `bitLengthDecompose`, `reciprocalHint` and `newtonSeed`, which each compare
+  `modelLevel`/`modelNoiseLevel`. A PSBatch applied at a different level or NoiseLevel uses plaintexts encoded for the wrong
+  level, which gives garbage rather than an error.
+- **Diagnostics added on this branch (print-only, no behaviour change):**
+  - `[level-check] evalIntegerMult(bits=128) operand a|b: ...` means an operand of a top-level multiply is not at
+    OpenFHE level 12 with NoiseLevel 1.
+  - `[level-check] multiplier4bits: ...` means the PSBatch is being applied at a level or NoiseLevel other than the one
+    it was recorded at.
+
+  Run `--ring 16 --uniswapv3` once and send the `[level-check]` lines, in order. The first Newton multiply
+  (`x * denNorm`) is reported to work, so compare its lines with the failing `x2 * term2`. If they differ, that
+  difference is the bug. If there are no `[level-check]` lines at all, the levels are fine and the problem is in the
+  values. In that case, dump the decrypted `x2` and `term2` (first 8192 slots) and diff them against the CPU's
+  `rot(x, 2)` and `rot(term, 2)` in `div_integer` (`CKKSController.cpp:1131`).
+
 ## Validate on a CUDA machine
 
 ```sh
@@ -58,7 +83,8 @@ Expected values (plain uint128 arithmetic of the CPU pipeline; see the Python be
 
 ## Checklist: confirm, or report back which line fails
 
-- [ ] Both repos compile (nvcc has never seen these edits).
+- [ ] Both repos compile (nvcc has never seen these edits, including the `[level-check]` diagnostics).
+- [ ] No `[level-check]` lines are printed, or they are reported back (see the open issue above).
 - [ ] The Debug run finishes with no assert. An assert inside `adjustPlaintextToCiphertext` or `multPt` means a level mismatch is left: bug #2 is incomplete.
 - [ ] `term2_fx` and `u_fx` match. That covers the multiply, the two plaintext divisions and the add. If they're off, look at #4 or the `>>21` step.
 - [ ] `X_post_fx` matches. That covers the ct/ct division, bugs #1 to #3. If it's lower by exactly 2^32, the quotient is one short: the Newton iteration count (#3) or the final correction step.
