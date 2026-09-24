@@ -744,6 +744,10 @@ void evalIntegerMult(Ciphertext& out,
 	// Size of basic multiplier.
 	const int base_mult = 8;
 
+	std::cout << "Level a: " << a.getLevel() << std::endl;
+	std::cout << "Level b: " << b.getLevel() << std::endl;
+
+
 	FIDESlib::CKKS::Context& cc_ = a.cc_;
 
 	Ciphertext result(a.cc_);
