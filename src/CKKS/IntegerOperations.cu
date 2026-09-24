@@ -1386,12 +1386,17 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
 
 
-	for (int iter = 0; iter < newtonIters - 1; ++iter) {
+	// CPU runs ceil(log2(bits / LUT_BITS)) iterations (4 at 128 bits); `newtonIters - 1`
+	// leaves a ~64-bit-accurate reciprocal at 128 bits.
+	for (int iter = 0; iter < newtonIters; ++iter) {
 
 		Ciphertext term(num.cc_);
 
-		//x.dropToLevel(x.getLevel() - 1);
-		//denNorm.dropToLevel(denNorm.getLevel() - 1);
+		// x / denNorm come out of binboot at OpenFHE level 11; evalIntegerMult's
+		// processArray masks are encoded at level 12 and FLEXIBLEAUTO multPt
+		// silently skips a plaintext that is deeper than the ciphertext.
+		prepareIntegerOperand(x, x);
+		prepareIntegerOperand(denNorm, denNorm);
 
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
 
@@ -1519,7 +1524,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			Ciphertext term2(num.cc_);
 			term2.rotate(term, 2);
 
-			//term2.dropToLevel(term2.getLevel() - 1);
+			prepareIntegerOperand(term2, term2);
 
 			Ciphertext newX(num.cc_);
 			evalIntegerMult(newX, x2, term2, bits, bits, zslots, zslots, true, cc);
@@ -1541,10 +1546,6 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 
 	}
 
-	out.copy(x);
-	return;
-
-
 	// --------------------------------------------------------
 	// result = mul_integer(rot(num, 2), rot(x, 2), bits, bits, zslots, zslots, true)
 	// result = rot(rot(rot(rot(result, -1), -1), -1), -1)
@@ -1558,7 +1559,8 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		Ciphertext x2(num.cc_);
 		x2.rotate(x, 2);
 
-		x2.dropToLevel(x2.getLevel() - 1);
+		prepareIntegerOperand(num2, num2);
+		prepareIntegerOperand(x2, x2);
 		evalIntegerMult(result, num2, x2, bits, bits, zslots, zslots, true, cc);
 	}
 
@@ -2940,7 +2942,7 @@ void evalIntegerDivisionByPlain(Ciphertext& out,
 	// result = binboot(add_integer(result, rot(num, -bits), bits, false))
 	// (num << bits aggiunge il bit alto del reciproco, sempre a 1)
 	Ciphertext numShift(cc_);
-	numShift.rotate(num, -bits);
+	numShift.rotate(numOp, -bits);
 	alignLevels(result, numShift);
 	evalIntegerAdd(result, numShift, bits);
 	binboot(result, result);
@@ -3006,6 +3008,13 @@ void evalUniswapV3(Ciphertext& out,
 	}
 	if (!k.divOne || !k.divBitLengthCoeffs || !k.divReciprocalCoeffs) {
 		throw std::invalid_argument("evalUniswapV3: missing ciphertext-division precomputations (DivIntegerPrecomputations)");
+	}
+	// Every mask below is sized from user_amount->slots; an input encrypted with
+	// fewer slots (the CPU driver never pads m_fx) misaligns silently.
+	for (const Ciphertext* c : { in.g_num_inv_L_fx, in.inv_sqrt_P0_fx, in.numerator, in.m_fx, in.g_den }) {
+		if (c->slots != in.user_amount->slots) {
+			throw std::invalid_argument("evalUniswapV3: all inputs must be encrypted with the same slot count (pad every input to N/2 slots)");
+		}
 	}
 
 	FIDESlib::CKKS::Context& cc_ = in.user_amount->cc_;
