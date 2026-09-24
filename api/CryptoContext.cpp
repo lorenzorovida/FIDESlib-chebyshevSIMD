@@ -1,5 +1,4 @@
 #include "CryptoContext.hpp"
-#include <chrono>
 #include "CKKS/AccumulateBroadcast.cuh"
 #include "CKKS/ApproxModEval.cuh"
 #include "CKKS/ApproxModEvalBatch.cuh"
@@ -1577,68 +1576,10 @@ void CryptoContextImpl<DCRTPoly>::UniswapV3Precomputations(const Ciphertext<DCRT
 	this->uniswap_v3_zslots = zslots;
 
 	const uint64_t key = (static_cast<uint64_t>(kUniswapV3Bits) << 32) | static_cast<uint32_t>(zslots);
-	auto oneIt		   = this->div_integer_one_cache.find(key);
-	auto coeffsIt	   = this->div_integer_coeffs_cache.find(key);
-	if (oneIt == this->div_integer_one_cache.end() || coeffsIt == this->div_integer_coeffs_cache.end()) {
+	if (this->div_integer_one_cache.find(key) == this->div_integer_one_cache.end()) {
 		std::cerr << "[UniswapV3Precomputations] warning: DivIntegerPrecomputations(c, " << kUniswapV3Bits << ", " << zslots
-				  << ", ...) not done yet; it is required before EvalUniswapV3Example. Skipping the division LUT warm-up: "
-					 "the first EvalUniswapV3Example will build it (and take much longer)."
-				  << std::endl;
-		return;
+				  << ", ...) not done yet; it is required before EvalUniswapV3Example." << std::endl;
 	}
-
-	// --------------------------------------------------------------------
-	// Riscaldamento della cache LUT della divisione ct/ct (lutsDivUniswap).
-	//
-	// DivIntegerPrecomputations salva solo `one` e i coefficienti grezzi: le
-	// precomputazioni PSBatch delle due LUT (bitLengthDecompose e
-	// reciprocalHint) vanno registrate contro i ciphertext interni `s` e `x`
-	// al loro livello esatto, quindi evalIntegerDivision le costruisce alla
-	// prima chiamata. Senza questo passo quel costo (pesante a 128 bit: la LUT
-	// del reciproco ha 128*128/2 colonne) finiva dentro la prima
-	// EvalUniswapV3Example. Qui facciamo una divisione fittizia 7 / 3 con
-	// operandi nello stesso stato di quelli della pipeline (livello degli
-	// operandi interi): `s` e `x` escono da un binboot, quindi hanno lo stesso
-	// livello che avranno nella chiamata vera e la cache viene riusata.
-	//
-	// Prerequisiti (come per EvalUniswapV3Example): rotation key caricate,
-	// ProcessArrayPrecomputations(c, 128, ...) e ProcessMultiplications(...).
-	// --------------------------------------------------------------------
-	this->LoadCiphertext(const_cast<Ciphertext<DCRTPoly>&>(c));
-	auto c_gpu		= std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(c->gpu));
-	const int slots = static_cast<int>(c_gpu->slots);
-
-	Plaintext ptNum = this->MakeCKKSPackedPlaintext(bitPackMultiIntLSB(7, kUniswapV3Bits, slots), noise, FIDESlib::CKKS::kIntegerOpsOpenFHELevel, nullptr, slots);
-	Plaintext ptDen = this->MakeCKKSPackedPlaintext(bitPackMultiIntLSB(3, kUniswapV3Bits, slots), noise, FIDESlib::CKKS::kIntegerOpsOpenFHELevel, nullptr, slots);
-	Ciphertext<DCRTPoly> dummyNum = this->Encrypt(ptNum, pk);
-	Ciphertext<DCRTPoly> dummyDen = this->Encrypt(ptDen, pk);
-
-	this->LoadCiphertext(dummyNum);
-	this->LoadCiphertext(dummyDen);
-	this->LoadCiphertext(oneIt->second);
-
-	Ciphertext<DCRTPoly> dummyRes = std::make_shared<CiphertextImpl<DCRTPoly>>(*dummyNum);
-
-	auto res_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(dummyRes->gpu));
-	auto num_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(dummyNum->gpu));
-	auto den_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(dummyDen->gpu));
-	auto one_gpu = std::static_pointer_cast<FIDESlib::CKKS::Ciphertext>(this->GetDeviceCiphertext(oneIt->second->gpu));
-
-	// Stessa preparazione degli operandi che fa evalUniswapV3 prima della divisione.
-	FIDESlib::CKKS::Ciphertext numOp(num_gpu->cc_);
-	FIDESlib::CKKS::Ciphertext denOp(den_gpu->cc_);
-	FIDESlib::CKKS::prepareIntegerOperand(numOp, *num_gpu);
-	FIDESlib::CKKS::prepareIntegerOperand(denOp, *den_gpu);
-
-	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
-
-	std::cout << "[UniswapV3Precomputations] warming up the 128-bit division LUT cache..." << std::endl;
-	const auto t0 = std::chrono::steady_clock::now();
-	FIDESlib::CKKS::evalIntegerDivision(*res_gpu, numOp, denOp, kUniswapV3Bits, zslots, FIDESlib::CKKS::lutsDivUniswap, *one_gpu,
-	  coeffsIt->second.first, coeffsIt->second.second, context);
-	this->Synchronize();
-	const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
-	std::cout << "[UniswapV3Precomputations] division LUT cache ready (" << ms << " ms)" << std::endl;
 }
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalUniswapV3Example(const UniswapV3Inputs& inputs, UniswapV3Trace* trace) {
