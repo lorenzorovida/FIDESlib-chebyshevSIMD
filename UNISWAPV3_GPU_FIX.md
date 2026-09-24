@@ -54,6 +54,22 @@ the 128-bit multiply inside the Newton loop, gives a wrong result. The suspicion
   values. In that case, dump the decrypted `x2` and `term2` (first 8192 slots) and diff them against the CPU's
   `rot(x, 2)` and `rot(term, 2)` in `div_integer` (`CKKSController.cpp:1131`).
 
+## Open issue: segfault at exit (not investigated yet)
+
+The batched 128-bit ops run (`./AdvancedFHEGPU --ring 16 --bits 128`) prints every timing, including Quotient, the last
+operation, and then segfaults. This was seen on an RTX PRO 6000 and reported on other GPUs too. Quotient is the last thing in
+`random_operations_batched`, after which `main` returns. So the likely cause is teardown: static globals that hold device
+memory (`integerMultMaskCache`, `cacheChebyshev4BitsMultiplier`, `precomp8`…`precomp128b`, `lutsDiv`, and the host's global
+`cc`) are destroyed after the CUDA context. That is a hypothesis, not yet confirmed. Get a backtrace:
+
+```
+cd build && gdb -batch -ex run -ex bt --args ./AdvancedFHEGPU --ring 16 --bits 128
+```
+
+If `bt` shows `__run_exit_handlers`, a `~Plaintext`/`~RNSPoly`/`~Ciphertext` destructor or `cudaFree`, it is teardown.
+The fix is to clear those caches explicitly before `main` returns. A stopgap is `std::cout.flush(); std::_Exit(0);`.
+Timings printed before the crash are valid, and `scripts/run_benchmarks.sh` in the host repo records the crash as `failed_runs`.
+
 ## Validate on a CUDA machine
 
 ```sh
