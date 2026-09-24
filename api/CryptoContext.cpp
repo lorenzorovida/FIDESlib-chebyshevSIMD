@@ -1576,10 +1576,12 @@ void CryptoContextImpl<DCRTPoly>::UniswapV3Precomputations(const Ciphertext<DCRT
 	this->uniswap_v3_zslots = zslots;
 
 	const uint64_t key = (static_cast<uint64_t>(kUniswapV3Bits) << 32) | static_cast<uint32_t>(zslots);
-	if (this->div_integer_one_cache.find(key) == this->div_integer_one_cache.end()) {
+	if (this->div_integer_one_cache.find(key) == this->div_integer_one_cache.end() ||
+		this->div_integer_coeffs_cache.find(key) == this->div_integer_coeffs_cache.end()) {
 		std::cerr << "[UniswapV3Precomputations] warning: DivIntegerPrecomputations(c, " << kUniswapV3Bits << ", " << zslots
 				  << ", ...) not done yet; it is required before EvalUniswapV3Example." << std::endl;
 	}
+
 }
 
 Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalUniswapV3Example(const UniswapV3Inputs& inputs, UniswapV3Trace* trace) {
@@ -1682,7 +1684,7 @@ Ciphertext<DCRTPoly> CryptoContextImpl<DCRTPoly>::EvalUniswapV3Example(const Uni
 	auto& context = std::any_cast<lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(this->cpu);
 
 	// Unica chiamata: da qui in poi tutto resta sulla GPU.
-	FIDESlib::CKKS::evalUniswapV3(*res_gpu, gin, k, FIDESlib::CKKS::lutsDivUniswap, context, trace != nullptr ? &gtrace : nullptr);
+	FIDESlib::CKKS::evalUniswapV3(*res_gpu, gin, k, FIDESlib::CKKS::lutsDiv, context, trace != nullptr ? &gtrace : nullptr);
 
 	return result;
 }
