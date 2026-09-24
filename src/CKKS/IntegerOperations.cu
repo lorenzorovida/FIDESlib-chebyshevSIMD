@@ -1526,7 +1526,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			term2.dropToLevel(18);
 			x2.dropToLevel(18);
 
-			out.copy(x2);
+			out.copy(term2);
 			return;
 			
 			Ciphertext newX(num.cc_);
