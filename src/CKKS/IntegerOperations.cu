@@ -1531,9 +1531,10 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			Ciphertext newX(num.cc_);
 			evalIntegerMult(newX, x2, term2, bits, bits, zslots, zslots, true, cc);
 
-			out.copy(newX);
-			return;
-			
+			//GIUSTO??? TUTTI I BIT
+			//out.copy(newX);
+			//return;
+
 			x.copy(newX);
 		}
 
@@ -1550,10 +1551,12 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			x.rotate(xRotated, -4);
 		}
 
+		out.copy(x);
+		return;
+
 	}
 
-	out.copy(x);
-	return;
+
 
 
 	// --------------------------------------------------------
