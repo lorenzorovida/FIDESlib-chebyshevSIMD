@@ -168,9 +168,8 @@ void prepareIntegerOperand(Ciphertext& dst, const Ciphertext& src) {
 	const int target = static_cast<int>(dst.cc.L) - kIntegerOpsOpenFHELevel;
 
 	if (dst.getLevel() < target) {
-		throw std::invalid_argument("prepareIntegerOperand: operand is deeper than OpenFHE level " + std::to_string(kIntegerOpsOpenFHELevel) +
-									" (FIDESlib level " + std::to_string(dst.getLevel()) + " < " + std::to_string(target) +
-									"); bootstrap it (binboot) or encrypt the input at a fresher level");
+		throw std::invalid_argument("prepareIntegerOperand: operand is deeper than OpenFHE level " + std::to_string(kIntegerOpsOpenFHELevel) + " (FIDESlib level " +
+		  std::to_string(dst.getLevel()) + " < " + std::to_string(target) + "); bootstrap it (binboot) or encrypt the input at a fresher level");
 	}
 
 	if (dst.getLevel() > target) {
@@ -239,10 +238,10 @@ void preprocessChebyshevRepeated(ChebyshevRepeatedLUT& lut, lbcrypto::CryptoCont
 		tiled.insert(tiled.end(), coeffs.begin(), coeffs.end());
 	}
 
-	lut.coeffs	= coeffs; // keep the caller's original (un-tiled) base set for reference
-	lut.repeat	= static_cast<int>(repeat);
-	lut.a		= a;
-	lut.b		= b;
+	lut.coeffs			= coeffs; // keep the caller's original (un-tiled) base set for reference
+	lut.repeat			= static_cast<int>(repeat);
+	lut.a				= a;
+	lut.b				= b;
 	lut.modelLevel		= c.getLevel();
 	lut.modelNoiseLevel = c.NoiseLevel;
 	lut.precomp			= evalChebyshevSeriesPSBatchPrecompute(cc, c, tiled, a, b);
@@ -747,7 +746,6 @@ void evalIntegerMult(Ciphertext& out,
 	std::cout << "Level a: " << a.getLevel() << std::endl;
 	std::cout << "Level b: " << b.getLevel() << std::endl;
 
-
 	FIDESlib::CKKS::Context& cc_ = a.cc_;
 
 	Ciphertext result(a.cc_);
@@ -1210,8 +1208,16 @@ void preprocessDivIntegerLUTs(DivIntegerLUTs& luts,
 	preprocessChebyshevRepeated(luts.reciprocalHint, cc, like, reciprocalCoeffs, 0, 256);
 }
 
-void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertext& den, int bits, int zslots, DivIntegerLUTs& luts, const Ciphertext& one,
-  const std::vector<std::vector<double>>& bitLengthCoeffs, const std::vector<std::vector<double>>& reciprocalCoeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
+void evalIntegerDivision(Ciphertext& out,
+  const Ciphertext& num,
+  const Ciphertext& den,
+  int bits,
+  int zslots,
+  DivIntegerLUTs& luts,
+  const Ciphertext& one,
+  const std::vector<std::vector<double>>& bitLengthCoeffs,
+  const std::vector<std::vector<double>>& reciprocalCoeffs,
+  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 
 	const int LUT_BITS			 = 8;
 	FIDESlib::CKKS::Context& cc_ = num.cc_;
@@ -1233,7 +1239,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	Ciphertext s(num.cc_);
 	s.copy(b);
 
-	//TODO: inverseButLength è giusto
+	// TODO: inverseButLength è giusto
 
 	// Lazy precompute, on first use (or if a previous call cached this LUT
 	// against a different level/NoiseLevel than `s` actually has right now)
@@ -1253,12 +1259,10 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		preprocessChebyshevRepeated(luts.bitLengthDecompose, cc, s, bitLengthCoeffs, -1, 1);
 		std::cout << "[evalIntegerDivision] done " << std::endl;
 	} else {
-		//std::cout << "[evalIntegerDivision] reusing cached bitLengthDecompose PSBatch precompute" << std::endl;
+		// std::cout << "[evalIntegerDivision] reusing cached bitLengthDecompose PSBatch precompute" << std::endl;
 	}
 	evalChebyshevRepeatedApply(cc, s, luts.bitLengthDecompose);
 	binboot(s, s);
-
-	
 
 	// --------------------------------------------------------
 	// den_norm = blind_rotation(den, s, bits, zslots)   // den << (bits - bitlen(den))
@@ -1267,11 +1271,7 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	Ciphertext denNorm(num.cc_);
 	blindRotation(denNorm, den, s, bits, zslots, /*stride=*/0, cc);
 
-	
-
 	binboot(denNorm, denNorm);
-
-	
 
 	// --------------------------------------------------------
 	// den_norm_rot = rot(den_norm, bits - 1 - LUT_BITS)
@@ -1365,16 +1365,15 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 		preprocessChebyshevRepeated(luts.reciprocalHint, cc, x, reciprocalCoeffs, 0, 256);
 		std::cout << "[evalIntegerDivision] done " << std::endl;
 	} else {
-		//std::cout << "[evalIntegerDivision] reusing cached reciprocalHint PSBatch precompute" << std::endl;
+		// std::cout << "[evalIntegerDivision] reusing cached reciprocalHint PSBatch precompute" << std::endl;
 	}
 	evalChebyshevRepeatedApply(cc, x, luts.reciprocalHint);
 	binboot(x, x);
 
+	// 23 sept, 14:22, 128-bits here is correct
+	// out.copy(x);
+	// return;
 
-	//23 sept, 14:22, 128-bits here is correct
-	//out.copy(x);
-	//return;
-	
 	// --------------------------------------------------------
 	// Newton-Raphson refinement loop:
 	//   for iter in [0, ceil(log2(bits/LUT_BITS))):
@@ -1388,20 +1387,19 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 	//       x = rot(rot(rot(rot(rot(x, bits), -1), -1), -1), -1)
 	// --------------------------------------------------------
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
-
+	denNorm.dropToLevel(denNorm.getLevel() - 1);
 
 	for (int iter = 0; iter < newtonIters - 1; ++iter) {
 
 		Ciphertext term(num.cc_);
 
 		x.dropToLevel(18);
-		denNorm.dropToLevel(denNorm.getLevel() - 1);
 
 		evalIntegerMult(term, x, denNorm, bits, bits, zslots, zslots, true, cc);
 
-		//16:05 - è ok???
-		//out.copy(term);
-		//return;
+		// 16:05 - è ok???
+		// out.copy(term);
+		// return;
 
 		// term += broadcast(bit `bits` of x) * rot(den_norm, -bits)
 		std::fill(mask.begin(), mask.end(), 0.0);
@@ -1458,9 +1456,9 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			binboot(term, term);
 		}
 
-		//qua giusto?
-		//out.copy(term);
-		//return;
+		// qua giusto?
+		// out.copy(term);
+		// return;
 
 		// term = complement(term) over the low (bits*2+1) bits of each group
 		std::fill(mask.begin(), mask.end(), 0.0);
@@ -1497,9 +1495,8 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			// invalid drop target has previously shown up as a CUDA "illegal
 			// memory access" rather than a clean error).
 			if (one.getLevel() < term.getLevel()) {
-				throw std::invalid_argument(
-				  "evalIntegerDivision: `one` was encrypted at a lower level than term's post-bootstrap "
-				  "level; DivIntegerPrecomputations must encrypt it at the top of the modulus chain (level 0)");
+				throw std::invalid_argument("evalIntegerDivision: `one` was encrypted at a lower level than term's post-bootstrap "
+											"level; DivIntegerPrecomputations must encrypt it at the top of the modulus chain (level 0)");
 			}
 
 			Ciphertext oneAtLevel(num.cc_);
@@ -1523,17 +1520,15 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			Ciphertext term2(num.cc_);
 			term2.rotate(term, 2);
 
-
 			term2.dropToLevel(term2.getLevel() - 1);
-			//x2.dropToLevel(x2.getLevel() - 1);
+			// x2.dropToLevel(x2.getLevel() - 1);
 
-			
 			Ciphertext newX(num.cc_);
 			evalIntegerMult(newX, x2, term2, bits, bits, zslots, zslots, true, cc);
 
-			//GIUSTO??? TUTTI I BIT
-			//out.copy(newX);
-			//return;
+			// GIUSTO??? TUTTI I BIT
+			// out.copy(newX);
+			// return;
 
 			x.copy(newX);
 		}
@@ -1551,16 +1546,13 @@ void evalIntegerDivision(Ciphertext& out, const Ciphertext& num, const Ciphertex
 			x.rotate(xRotated, -4);
 		}
 
-		//Correct?!!=!==!=!= 16:25
-		//out.copy(x);
-		//return;
-
+		// Correct?!!=!==!=!= 16:25
+		// out.copy(x);
+		// return;
 	}
-	
+
 	out.copy(x);
 	return;
-
-
 
 	// --------------------------------------------------------
 	// result = mul_integer(rot(num, 2), rot(x, 2), bits, bits, zslots, zslots, true)
@@ -1816,7 +1808,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 	Ciphertext x(c.cc_);
 	x.copy(idx);
 
-	//TODO: qua ok
+	// TODO: qua ok
 
 	if (!luts.newtonSeed.precomp || luts.newtonSeed.modelLevel != x.getLevel() || luts.newtonSeed.modelNoiseLevel != x.NoiseLevel) {
 		std::cout << "[evalIntegerSquareRoot] (re)building newtonSeed PSBatch precompute "
@@ -1900,11 +1892,9 @@ void evalIntegerSquareRoot(Ciphertext& out,
 	// --------------------------------------------------------
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS))) - 1;
 
-
-
-	//QUESTO È al 100%
-	//out.copy(x);
-	//return;
+	// QUESTO È al 100%
+	// out.copy(x);
+	// return;
 
 	for (int iter = 0; iter < newtonIters; ++iter) {
 
@@ -1914,7 +1904,7 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			Ciphertext xLo(c.cc_);
 			xLo.copy(x);
 			xLo.dropToLevel(xLo.getLevel() - 1);
-			
+
 			Ciphertext xHi(c.cc_);
 			xHi.copy(x);
 			xHi.dropToLevel(xHi.getLevel() - 1);
@@ -1922,8 +1912,8 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			evalIntegerMult(x2, xLo, xHi, bits, bits, zslots, zslots, true, cc);
 		}
 
-		//TODO x2 è giusto
-		
+		// TODO x2 è giusto
+
 		{
 			Ciphertext rotated(c.cc_);
 			rotated.rotate(x2, bits);
@@ -1943,7 +1933,6 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			x2Copy.dropToLevel(hcCopy.getLevel());
 
 			evalIntegerMult(mx2, hcCopy, x2Copy, bits, bits, zslots, zslots, true, cc);
-
 		}
 		{
 			Ciphertext rotated(c.cc_);
@@ -2001,14 +1990,10 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			}
 		}
 
-		
-
 		Ciphertext inverted(c.cc_);
 		inverted.multScalar(mx2, -1.0, true);
 
 		inverted.addPt(makePerSlotPlaintext(cc, cc_, mask, inverted));
-
-
 
 		Ciphertext term1(c.cc_);
 		{
@@ -2022,9 +2007,8 @@ void evalIntegerSquareRoot(Ciphertext& out,
 			term1.copy(const3fCopy);
 		}
 
-		
 		binboot(term1, term1);
-		
+
 		//(15:53): GIUSTO term 1
 
 		// x, term1 := mask to low (bits+2) bits of each group
@@ -2036,7 +2020,6 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		}
 		x.multPt(makePerSlotPlaintext(cc, cc_, mask, x));
 		term1.multPt(makePerSlotPlaintext(cc, cc_, mask, term1));
-
 
 		// term1_lo = term1 * {1 at low bits bits of each group}
 		Ciphertext term1Lo(c.cc_);
@@ -2081,17 +2064,16 @@ void evalIntegerSquareRoot(Ciphertext& out,
 		// xpartial = xpartial * {1 at low bits bits of each group}
 		// xpartial = add_integer(xpartial, term1_hi, bits, false)
 
+		// out.copy(term1Lo); Giusto
+		// out.copy(term1Hi); Giusto
 
-		//out.copy(term1Lo); Giusto
-		//out.copy(term1Hi); Giusto
-
-		//TODO these have been added but in the CPU veriosn are not here....
+		// TODO these have been added but in the CPU veriosn are not here....
 		binboot(x, x);
 		binboot(term1Lo, term1Lo);
 
 		Ciphertext xpartial(c.cc_);
 		{
-			
+
 			Ciphertext xCopy(c.cc_);
 			xCopy.copy(x);
 			xCopy.dropToLevel(std::min(xCopy.getLevel(), term1Lo.getLevel()) - 1);
@@ -2127,10 +2109,6 @@ void evalIntegerSquareRoot(Ciphertext& out,
 
 		x.copy(xpartial);
 		binboot(x, x);
-
-		
-
-		
 	}
 
 	// --------------------------------------------------------
@@ -2936,9 +2914,8 @@ void evalIntegerDivisionByPlain(Ciphertext& out,
 	const int stride			 = bits * bits / 2;
 
 	if (static_cast<int>(reciprocalMask.size()) != static_cast<int>(num.slots)) {
-		throw std::invalid_argument("evalIntegerDivisionByPlain: reciprocalMask size (" + std::to_string(reciprocalMask.size()) +
-									") != num.slots (" + std::to_string(static_cast<int>(num.slots)) +
-									"); rerun PlainDivisionPrecomputations with a ciphertext of the same shape");
+		throw std::invalid_argument("evalIntegerDivisionByPlain: reciprocalMask size (" + std::to_string(reciprocalMask.size()) + ") != num.slots (" +
+		  std::to_string(static_cast<int>(num.slots)) + "); rerun PlainDivisionPrecomputations with a ciphertext of the same shape");
 	}
 
 	Ciphertext numOp(cc_);
@@ -3008,12 +2985,7 @@ void evalIntegerDivisionByPlain(Ciphertext& out,
 //   - la sottrazione usa il carry-in esplicito (a - b esatto): vedi
 //     evalIntegerSub.
 // ============================================================
-void evalUniswapV3(Ciphertext& out,
-  const UniswapV3GPUInputs& in,
-  const UniswapV3GPUConstants& k,
-  DivIntegerLUTs& luts,
-  lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc,
-  UniswapV3GPUTrace* trace) {
+void evalUniswapV3(Ciphertext& out, const UniswapV3GPUInputs& in, const UniswapV3GPUConstants& k, DivIntegerLUTs& luts, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, UniswapV3GPUTrace* trace) {
 
 	if (!in.g_num_inv_L_fx || !in.user_amount || !in.inv_sqrt_P0_fx || !in.numerator || !in.m_fx || !in.g_den) {
 		throw std::invalid_argument("evalUniswapV3: all six input ciphertexts must be provided");
