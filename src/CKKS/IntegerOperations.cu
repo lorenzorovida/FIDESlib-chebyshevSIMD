@@ -35,9 +35,11 @@ static int cache4BitsModelLevel = -1, cache4BitsModelNoise = -1;
 static void checkMultOperand(const char* name, const Ciphertext& c, int bits) {
 	const int target = static_cast<int>(c.cc.L) - kIntegerOpsOpenFHELevel;
 	if (c.getLevel() != target || c.NoiseLevel != 1) {
+		/*
 		std::cerr << "[level-check] evalIntegerMult(bits=" << bits << ") operand " << name << ": OpenFHE level "
 				  << (c.cc.L - c.getLevel()) << " NoiseLevel " << c.NoiseLevel << ", expected level " << kIntegerOpsOpenFHELevel
 				  << " NoiseLevel 1" << std::endl;
+		*/
 	}
 }
 DivIntegerLUTs lutsDiv;
@@ -2543,9 +2545,11 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 	// A PSBatch applied at a level/noise other than the recorded one uses plaintexts
 	// encoded for the wrong level: garbage, not an error. Make it loud.
 	if (result.getLevel() != cache4BitsModelLevel || result.NoiseLevel != cache4BitsModelNoise) {
+		/*
 		std::cerr << "[level-check] multiplier4bits: input at OpenFHE level " << (result.cc.L - result.getLevel()) << " NoiseLevel "
 				  << result.NoiseLevel << ", PSBatch recorded at OpenFHE level " << (result.cc.L - cache4BitsModelLevel)
 				  << " NoiseLevel " << cache4BitsModelNoise << std::endl;
+		*/
 	}
 
 	evalChebyshevSeriesPSBatchApply(cc, result, cacheChebyshev4BitsMultiplier, coeffs4BitsMultiplier, -1, 1);
