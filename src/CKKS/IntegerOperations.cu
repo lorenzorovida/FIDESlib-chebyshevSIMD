@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <unordered_map>
@@ -24,6 +25,21 @@ ProcessArrayPrecomputation precomp128b;
 
 std::shared_ptr<PSBatchPrecompute> cacheChebyshev4BitsMultiplier;
 std::vector<std::vector<double>> coeffs4BitsMultiplier;
+// Level/NoiseLevel the 4-bit multiplier PSBatch was recorded at (ProcessMultiplications,
+// SetLevel(15)). Unlike the other LUTs, it used to be applied without checking this.
+static int cache4BitsModelLevel = -1, cache4BitsModelNoise = -1;
+
+// Debug for the Newton-loop 128-bit mult: print whenever an operand of a
+// top-level evalIntegerMult is not at OpenFHE level kIntegerOpsOpenFHELevel with
+// NoiseLevel 1, the state the level-12 processArray masks were encoded for.
+static void checkMultOperand(const char* name, const Ciphertext& c, int bits) {
+	const int target = static_cast<int>(c.cc.L) - kIntegerOpsOpenFHELevel;
+	if (c.getLevel() != target || c.NoiseLevel != 1) {
+		std::cerr << "[level-check] evalIntegerMult(bits=" << bits << ") operand " << name << ": OpenFHE level "
+				  << (c.cc.L - c.getLevel()) << " NoiseLevel " << c.NoiseLevel << ", expected level " << kIntegerOpsOpenFHELevel
+				  << " NoiseLevel 1" << std::endl;
+	}
+}
 DivIntegerLUTs lutsDiv;
 SquareRootIntegerLUTs lutsSquareRoot;
 // Cache LUT dedicata alla divisione ct/ct a 128 bit dell'esempio Uniswap v3.
@@ -739,6 +755,11 @@ void evalIntegerMult(Ciphertext& out,
   bool overflow,
   lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc) {
 	const int rep_size = bits * bits / 2;
+
+	if (bits == bits_original) { // top-level call only; the recursion passes a/b through unchanged
+		checkMultOperand("a", a, bits);
+		checkMultOperand("b", b, bits);
+	}
 
 	// Size of basic multiplier.
 	const int base_mult = 8;
@@ -1564,7 +1585,8 @@ void evalIntegerDivision(Ciphertext& out,
 		Ciphertext x2(num.cc_);
 		x2.rotate(x, 2);
 
-		x2.dropToLevel(x2.getLevel() - 1);
+		prepareIntegerOperand(num2, num2);
+		prepareIntegerOperand(x2, x2);
 		evalIntegerMult(result, num2, x2, bits, bits, zslots, zslots, true, cc);
 	}
 
@@ -2470,6 +2492,8 @@ void preprocessProcessArray(int bits,
 
 void preprocessChebyshevMultiplication(std::vector<std::vector<double>> coeffs, lbcrypto::CryptoContext<lbcrypto::DCRTPoly>& cc, Ciphertext& c) {
 	cacheChebyshev4BitsMultiplier = evalChebyshevSeriesPSBatchPrecompute(cc, c, coeffs, -1, 1);
+	cache4BitsModelLevel		  = c.getLevel();
+	cache4BitsModelNoise		  = c.NoiseLevel;
 
 	coeffs4BitsMultiplier = coeffs;
 }
@@ -2515,6 +2539,14 @@ void multiplier4bits(Ciphertext& result, Ciphertext& ctxtA, Ciphertext& ctxtB, i
 	result.addPt(minusOnePt);
 
 	// QUA RESULT è GIUSTO
+
+	// A PSBatch applied at a level/noise other than the recorded one uses plaintexts
+	// encoded for the wrong level: garbage, not an error. Make it loud.
+	if (result.getLevel() != cache4BitsModelLevel || result.NoiseLevel != cache4BitsModelNoise) {
+		std::cerr << "[level-check] multiplier4bits: input at OpenFHE level " << (result.cc.L - result.getLevel()) << " NoiseLevel "
+				  << result.NoiseLevel << ", PSBatch recorded at OpenFHE level " << (result.cc.L - cache4BitsModelLevel)
+				  << " NoiseLevel " << cache4BitsModelNoise << std::endl;
+	}
 
 	evalChebyshevSeriesPSBatchApply(cc, result, cacheChebyshev4BitsMultiplier, coeffs4BitsMultiplier, -1, 1);
 
@@ -2931,7 +2963,7 @@ void evalIntegerDivisionByPlain(Ciphertext& out,
 	// result = binboot(add_integer(result, rot(num, -bits), bits, false))
 	// (num << bits aggiunge il bit alto del reciproco, sempre a 1)
 	Ciphertext numShift(cc_);
-	numShift.rotate(num, -bits);
+	numShift.rotate(numOp, -bits);
 	alignLevels(result, numShift);
 	evalIntegerAdd(result, numShift, bits);
 	binboot(result, result);
@@ -2992,6 +3024,13 @@ void evalUniswapV3(Ciphertext& out, const UniswapV3GPUInputs& in, const UniswapV
 	}
 	if (!k.divOne || !k.divBitLengthCoeffs || !k.divReciprocalCoeffs) {
 		throw std::invalid_argument("evalUniswapV3: missing ciphertext-division precomputations (DivIntegerPrecomputations)");
+	}
+	// Every mask below is sized from user_amount->slots; an input encrypted with
+	// fewer slots (the CPU driver never pads m_fx) misaligns silently.
+	for (const Ciphertext* c : { in.g_num_inv_L_fx, in.inv_sqrt_P0_fx, in.numerator, in.m_fx, in.g_den }) {
+		if (c->slots != in.user_amount->slots) {
+			throw std::invalid_argument("evalUniswapV3: all inputs must be encrypted with the same slot count (pad every input to N/2 slots)");
+		}
 	}
 
 	FIDESlib::CKKS::Context& cc_ = in.user_amount->cc_;
