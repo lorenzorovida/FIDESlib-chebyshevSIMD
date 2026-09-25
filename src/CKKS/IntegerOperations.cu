@@ -1386,7 +1386,7 @@ void evalIntegerDivision(Ciphertext& out,
 	const int newtonIters = static_cast<int>(std::ceil(std::log2(static_cast<double>(bits) / LUT_BITS)));
 	denNorm.dropToLevel(denNorm.getLevel() - 1);
 
-	for (int iter = 0; iter < newtonIters - 1; ++iter) {
+	for (int iter = 0; iter < newtonIters; ++iter) {
 
 		Ciphertext term(num.cc_);
 
